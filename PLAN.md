@@ -26,7 +26,8 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 | Capa | Elección | Origen |
 |---|---|---|
 | App | Next.js (App Router), TypeScript estricto | OPR-1 |
-| Datos de opsRUN | Supabase autohospedado en el servidor dedicado de PINCH, junto a BzzzBX (no Supabase en la nube) | OPR-1 |
+| Dónde corre | En el mismo servidor que BzzzBX, al lado de la caja y no dentro: repo, base, deploy y vuelta atrás propios. Con BzzzBX solo habla por el contrato de OPR-6 ([ADR 0002](docs/adr/0002-opsrun-al-lado-de-la-caja.md)) | OPR-1 |
+| Datos de opsRUN | Supabase autohospedado propio en el servidor dedicado de PINCH, junto a BzzzBX (no Supabase en la nube ni el de la caja) | OPR-1 |
 | Login | Pendiente de OPR-2 | OPR-2 |
 | Integración | BzzzBX: lectura con actualizaciones en menos de 1 minuto, instrucciones con confirmación, write-back | OPR-6, OPR-22, OPR-23, OPR-24 |
 | Tests | Vitest (unitarios, jsdom), pgTAP con `supabase test db` (base) y Playwright (E2E contra el build de producción y el Supabase local). Corren en CI en cada PR | OPR-1 (confirmado) |
