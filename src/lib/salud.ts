@@ -1,20 +1,13 @@
 /**
- * Salud de la base de opsRUN: llama a public.opsrun_health().
+ * Salud de la base de opsRUN: lee opsrun.opsrun_health() como opsrun_app.
  *
- * Recibe el cliente en vez de crearlo, para probarla sin servidor.
+ * Recibe la consulta en vez de hacerla, para probarla sin base.
  */
 export type Salud =
   | { conectada: true; versionEsquema: string | null }
   | { conectada: false; error: string };
 
-type RespuestaRpc = {
-  data: unknown;
-  error: { message: string } | null;
-};
-
-export type ClienteSalud = {
-  rpc: (fn: "opsrun_health") => PromiseLike<RespuestaRpc>;
-};
+export const CONSULTA_SALUD = "select status, schema_version from opsrun.opsrun_health()";
 
 type FilaSalud = { status: string; schema_version: string | null };
 
@@ -27,12 +20,9 @@ function esFilaSalud(valor: unknown): valor is FilaSalud {
   );
 }
 
-export async function leerSalud(cliente: ClienteSalud): Promise<Salud> {
+export async function leerSalud(consultar: () => Promise<unknown[]>): Promise<Salud> {
   try {
-    const { data, error } = await cliente.rpc("opsrun_health");
-    if (error) return { conectada: false, error: error.message };
-
-    const fila = Array.isArray(data) ? data[0] : data;
+    const [fila] = await consultar();
     if (!esFilaSalud(fila) || fila.status !== "ok") {
       return { conectada: false, error: "Respuesta inesperada de opsrun_health" };
     }

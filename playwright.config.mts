@@ -7,7 +7,8 @@ const PUERTO = 3100;
 const enCI = Boolean(process.env.CI);
 
 // E2E contra el build de producción (lo mismo que se despliega), conectado al
-// Supabase local. Requiere `supabase start` antes.
+// Supabase local. Requiere `supabase start` antes; el servidor deja la base
+// lista (alta local y migraciones) antes del build.
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -20,7 +21,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm build && pnpm start --port ${PUERTO}`,
+    command: `pnpm db:prepare && pnpm build && pnpm start --port ${PUERTO}`,
     url: `http://127.0.0.1:${PUERTO}`,
     reuseExistingServer: !enCI,
     timeout: 180_000,
