@@ -1,8 +1,8 @@
 # OPR-20 — Modelo de datos de opsRUN
 
 - **Tarjeta:** OPR-20 (P1 · Data model and opsRUN store)
-- **Estado:** spec para revisión. Sin migración todavía: se implementa cuando OPR-1 esté fusionada.
-- **Decisiones:** [ADR 0001](../adr/0001-modelo-de-datos.md)
+- **Estado:** spec para revisión, ajustado a la [ADR 0003](../adr/0003-supabase-de-la-caja.md): opsRUN usa el Supabase de la caja, en sus propios esquemas y con sus propios roles, según las convenciones de las vecinas de Bzzz (D77 §2.8). Los esquemas y los roles los crea el alta de opsRUN en Bzzz, no las migraciones. La migración se escribe cuando OPR-1 deje la conexión directa y el script que imita el alta en local y en CI (§2).
+- **Decisiones:** [ADR 0001](../adr/0001-modelo-de-datos.md), [ADR 0003](../adr/0003-supabase-de-la-caja.md)
 - **Tarjetas que guardan datos aquí:** OPR-15, OPR-17, OPR-18, OPR-19, OPR-21, OPR-23, OPR-24, OPR-26 a OPR-32, OPR-34 a OPR-37.
 
 ## 1. Alcance
@@ -43,13 +43,13 @@ Fuera de alcance:
 | Alerts y Alerts de la barra superior (OPR-34) | Needs action, Waiting, Resolved, quién y cómo, repeticiones | `alert_occurrence`, `cleaner_confirmation` |
 | Audit (OPR-35) | Todo evento, con persona y motivo | `audit_event` |
 | Sign-in (OPR-21) | Operadores y su enlace al login | `operator` |
-| Rosie (OPR-38) | Lo que lee de opsRUN | vistas `writeback.v1_*` |
+| Rosie (OPR-38) | Lo que lee de opsRUN | vistas `opsrun_writeback.v1_*` |
 
 ## 2. Convenciones
 
 | Tema | Regla |
 |---|---|
-| Esquemas | `public`: tablas y funciones RPC expuestas. `private`: helpers no expuestos por la API. `writeback`: vistas para BzzzBX (§7). |
+| Esquemas | `opsrun`: tablas, vistas de lectura y funciones de escritura que invoca `opsrun_app`. `opsrun_private`: helpers y triggers, que solo alcanza `opsrun_migrador`. `opsrun_writeback`: vistas `v1_*` para BzzzBX (§7). Nada en `public`, que es de Supabase (ADR 0003). Los tres esquemas los crea el alta de opsRUN en Bzzz, con dueño `opsrun_migrador`; la migración no ejecuta `create schema`. "De opsRUN" es todo esquema llamado `opsrun` o `opsrun_*`, y todo rol llamado `opsrun_*`. |
 | Claves | `uuid` con `gen_random_uuid()` para entidades. `bigint generated always as identity` para `audit_event`, que sirve de cursor. |
 | Crosswalk IDs | Columnas `bzzzbx_<entidad>_id text`. El formato lo fija OPR-6; mientras tanto, `text` sin suponer forma. Nunca se guarda el nombre, la dirección ni otro atributo de la entidad. |
 | Tiempo | Todo instante es `timestamptz` en UTC. La fecha del servicio (`date`) y la ventana (`time`) son locales a la operación; la zona horaria la fija OPR-4. |
@@ -70,6 +70,32 @@ check ((actor_kind = 'operator') = (actor_operator_id is not null))
 
 `system` es opsRUN actuando solo (por ejemplo, el aviso Scheduled automático). `ai` es una sugerencia o lectura de la IA. `bzzzbx` es un hecho observado en los sistemas de PINCH.
 
+### Roles y actor de la transacción
+
+El navegador nunca habla con la base: no hay PostgREST en la caja (ADR 0003). El servidor de Next se conecta directo a Postgres.
+
+| Rol | Qué es | Qué alcanza |
+|---|---|---|
+| `opsrun_migrador` | Dueño de `opsrun`, `opsrun_private` y `opsrun_writeback` y de todo lo que contienen; aplica las migraciones. `LOGIN`, `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, `CONNECTION LIMIT 1` (lo fija el alta de Bzzz), sin pertenecer a ningún rol y sin `CREATE` en la base. La credencial no está en el repo. | Sus esquemas. No toca los de otras apps ni los de Supabase. |
+| `opsrun_app` | El servidor de Next. `LOGIN`, con los mismos atributos; la credencial no está en el repo. | `USAGE` en `opsrun`, `SELECT` en sus tablas y vistas, `EXECUTE` en sus funciones de escritura. Nada más. |
+| `bzzz_writeback_opsrun` | Rol de la caja (los suyos empiezan por `bzzz_`): BzzzBX leyendo el write-back de opsRUN. Entra solo desde la red interna de la caja, nunca desde la de opsRUN. | `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`, que concede la migración de opsRUN. Nada más. |
+| `anon`, `authenticated`, `service_role`, roles de otras apps | De Supabase o de las demás apps de la caja. | Nada en los esquemas de opsRUN. |
+
+Ningún rol de opsRUN pertenece a otro rol: no hereda de `authenticated`, `anon`, `service_role`, `postgres` ni de los roles de otras apps.
+
+**Quién crea esquemas y roles.** El guion de la caja, a partir del alta de opsRUN en Bzzz, que declara sus esquemas y sus roles. Las migraciones de opsRUN no ejecutan `create schema` ni `create role`, así que no necesitan `CREATEROLE` ni `CREATE` en la base. Solo crean objetos dentro de `opsrun`, `opsrun_private` y `opsrun_writeback`, y conceden sobre ellos a `opsrun_app` y a `bzzz_writeback_opsrun`. Las funciones `security definer` quedan con dueño `opsrun_migrador`, así que no pueden más que él. opsRUN no necesita nada fuera de sus esquemas: ni disparadores en `auth`, ni `supabase_realtime`, ni grants a `authenticated`.
+
+**En local y en CI no hay alta de Bzzz.** Un script de prueba de este repo la imita antes de las migraciones: crea los tres esquemas con dueño `opsrun_migrador` y los roles `opsrun_migrador`, `opsrun_app` y `bzzz_writeback_opsrun` con los atributos de arriba. Así las migraciones y los guards ven la misma base que en la caja. El script lo construye OPR-1, que también fija cómo se aplican las migraciones como `opsrun_migrador` en local.
+
+La caja comprueba por su lado que los roles `opsrun_*` sean exactamente los declarados, que ninguno herede ni tenga `USAGE` en esquemas ajenos y que `opsrun_migrador` no cree nada fuera de lo suyo (V13 a V15 de Bzzz). Esas comprobaciones complementan los guards de §8; no los sustituyen.
+
+**Actor de la transacción.** El servidor declara quién actúa, en cada transacción, con `set_config(…, true)` (vale solo para esa transacción):
+
+- un operador: valida la sesión contra el GoTrue de la caja y fija `opsrun.auth_user_id` con el id del usuario;
+- el sistema (intake, read layer, resultados de IA y de instrucciones): fija `opsrun.system_actor` con el nombre del proceso.
+
+Nunca los dos a la vez. La base no confía en nada más: las funciones de escritura leen el actor de ahí y lo escriben en Audit.
+
 ## 3. Tablas
 
 ### 3.1 `operator` — usuarios de Operations y Finance (OPR-21)
@@ -77,7 +103,7 @@ check ((actor_kind = 'operator') = (actor_operator_id is not null))
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | uuid pk | Id estable. Audit, Assigned to y los filtros apuntan aquí. |
-| `auth_user_id` | uuid null unique → `auth.users(id)` on delete set null | Se enlaza al primer login, con cualquier método que decida OPR-2. |
+| `auth_user_id` | uuid null unique | Usuario del GoTrue de la caja. Se enlaza al primer login, con cualquier método que decida OPR-2. Sin FK a `auth.users`: ese esquema es de Supabase y `opsrun_migrador` no lo alcanza. |
 | `email` | text not null | Único sobre `lower(email)`. Sirve para enlazar el login; no sale por el write-back. |
 | `display_name` | text not null | El nombre que se ve en Audit y en Assigned to. |
 | `team` | `operator_team` enum (`operations`, `finance`) | Informativo. En V1.1 beta no cambia los permisos (propuesta por defecto de OPR-2). |
@@ -85,7 +111,13 @@ check ((actor_kind = 'operator') = (actor_operator_id is not null))
 
 Si OPR-2 decide limitar acciones por rol, se agrega la tabla `operator_permission (operator_id, permission)` y un chequeo en las funciones de escritura. `operator` no cambia.
 
-Helper: `private.current_operator_id()` (security definer, `stable`) devuelve el `id` del operador activo cuyo `auth_user_id = auth.uid()`, o `null`. `private.require_operator()` hace lo mismo pero lanza error si es `null`.
+Helpers, en `opsrun_private` (solo los llaman las funciones de escritura, que corren como `opsrun_migrador`):
+
+- `opsrun_private.current_operator_id()` (`stable`) devuelve el `id` del operador activo cuyo `auth_user_id` es `opsrun.auth_user_id`, o `null`.
+- `opsrun_private.require_operator()` hace lo mismo, pero lanza error si es `null` o si la transacción también declara un actor de sistema.
+- `opsrun_private.require_system()` devuelve `opsrun.system_actor` y lanza error si está vacío o si la transacción también declara un operador.
+
+`auth_user_id` apunta al usuario del GoTrue de la caja; la base no lee `auth.users` ni usa `auth.uid()`, así que `opsrun_app` no necesita nada en el esquema `auth`.
 
 ### 3.2 `request` — la request y, una vez programada, su job (OPR-15, OPR-28 a OPR-32)
 
@@ -341,8 +373,8 @@ Catálogo `audit_event_type (code pk, label, requires_reason bool, source audit_
 
 Inmutable:
 
-- no se otorga UPDATE, DELETE ni TRUNCATE a ningún rol;
-- un trigger `BEFORE UPDATE OR DELETE` (por fila) y otro `BEFORE TRUNCATE` (por sentencia) lanzan error para todos, incluidos `service_role` y `postgres`;
+- no se otorga UPDATE, DELETE ni TRUNCATE a ningún rol, tampoco a `opsrun_migrador` (la migración se los revoca);
+- un trigger `BEFORE UPDATE OR DELETE` (por fila) y otro `BEFORE TRUNCATE` (por sentencia) lanzan error para todos, incluidos `opsrun_app`, `opsrun_migrador` y los superusuarios;
 - una corrección es un evento nuevo, no una edición.
 
 Las entradas de Audit de OPR-29 ("Delayed · not started by 1:00 PM", "Started · Delayed cleared") son `alert_opened` y `alert_resolved` de OPS-010 con su `label`.
@@ -351,24 +383,25 @@ Las entradas de Audit de OPR-29 ("Delayed · not started by 1:00 PM", "Started �
 
 ## 4. Escrituras: solo por funciones SQL
 
-- `anon` y `authenticated` no tienen INSERT, UPDATE, DELETE ni TRUNCATE sobre ninguna tabla. Solo tienen SELECT, filtrado por RLS.
-- **Escrituras del operador:** funciones `public.<verbo>_<objeto>` con `security definer` y `set search_path = ''`. Cada una:
-  1. llama a `private.require_operator()`;
-  2. valida el estado (por ejemplo, el gate de Schedule);
-  3. exige `reason` cuando el tipo lo pide;
-  4. escribe el dato, la `instruction` si aplica y su `audit_event` **en la misma transacción**.
-- **Escrituras del sistema** (intake de correo, hechos observados, resultados de IA y de instrucciones, ocurrencias de alertas): funciones en el esquema `private`, ejecutables solo por `service_role`, llamadas desde el servidor de Next.js. También escriben su `audit_event`.
+- Ningún rol tiene INSERT, UPDATE, DELETE ni TRUNCATE sobre las tablas de opsRUN, salvo `opsrun_migrador`. `opsrun_app` solo tiene SELECT y EXECUTE sobre las funciones de escritura.
+- Las funciones de escritura viven en `opsrun`, son `security definer` con dueño `opsrun_migrador` (corren como él) y llevan `set search_path = ''`. Hay dos clases, según el actor de la transacción (§2):
+  - **Escrituras del operador**, `opsrun.<verbo>_<objeto>`. Cada una:
+    1. llama a `opsrun_private.require_operator()`;
+    2. valida el estado (por ejemplo, el gate de Schedule);
+    3. exige `reason` cuando el tipo lo pide;
+    4. escribe el dato, la `instruction` si aplica y su `audit_event` **en la misma transacción**.
+  - **Escrituras del sistema** (intake de correo, hechos observados, resultados de IA y de instrucciones, ocurrencias de alertas). Cada una llama a `opsrun_private.require_system()` y también escribe su `audit_event`.
 - Primeras funciones previstas, que cada tarjeta completa al construirse:
 
-| Función | Tarjeta |
-|---|---|
-| `assign_request`, `confirm_details`, `update_request_detail`, `confirm_sender`, `ask_cleaner`, `decide_cleaner_reply`, `confirm_cleaner_by_phone`, `schedule_request` | OPR-28 |
-| `reschedule_job`, `cancel_job` | OPR-29 |
-| `end_job_manually`, `clear_alert` | OPR-30 |
-| `mark_oss`, `approve_job` | OPR-31 |
-| `enter_po`, `validate_job` | OPR-32 |
-| `add_note`, `send_email`, `send_text` | OPR-16, OPR-17, OPR-27 |
-| `private.ingest_request_email`, `private.link_message`, `private.record_observed_event`, `private.upsert_alert_occurrence`, `private.record_ai_analysis`, `private.resolve_instruction` | Sistema |
+| Función | Actor | Tarjeta |
+|---|---|---|
+| `assign_request`, `confirm_details`, `update_request_detail`, `confirm_sender`, `ask_cleaner`, `decide_cleaner_reply`, `confirm_cleaner_by_phone`, `schedule_request` | operador | OPR-28 |
+| `reschedule_job`, `cancel_job` | operador | OPR-29 |
+| `end_job_manually`, `clear_alert` | operador | OPR-30 |
+| `mark_oss`, `approve_job` | operador | OPR-31 |
+| `enter_po`, `validate_job` | operador | OPR-32 |
+| `add_note`, `send_email`, `send_text` | operador | OPR-16, OPR-17, OPR-27 |
+| `ingest_request_email`, `link_message`, `record_observed_event`, `upsert_alert_occurrence`, `record_ai_analysis`, `resolve_instruction` | sistema | OPR-15, OPR-22, OPR-23, OPR-34, OPR-36 |
 
 ## 5. Cómo se calcula la etapa del tablero
 
@@ -384,32 +417,37 @@ No hay columna `stage`. La read layer (OPR-22) la calcula con los hechos de opsR
 
 Un job cancelado sale del tablero según el estado de BzzzBX; la cancelación queda en Audit. Si §11 confirma que End manually o Approve se escriben en PINCH, la condición pasa a leer el estado de BzzzBX y la columna de opsRUN queda solo como registro.
 
-## 6. RLS prevista
+## 6. Permisos y RLS
 
-| Objeto | anon | authenticated (operador activo) | authenticated sin operador | service_role | `bzzzbx_reader` |
-|---|---|---|---|---|---|
-| Tablas de `public` | nada | SELECT de todas las filas | 0 filas | todo (bypass), salvo modificar `audit_event` | nada |
-| `audit_event` | nada | SELECT | 0 filas | INSERT y SELECT | nada |
-| Funciones `public` de escritura | sin EXECUTE | EXECUTE (validan operador dentro) | error de `require_operator` | — | nada |
-| Funciones `private` | nada | nada | nada | EXECUTE | nada |
-| Vistas `writeback` | nada | nada | nada | SELECT | SELECT |
+| Objeto | `opsrun_migrador` | `opsrun_app` | `bzzz_writeback_opsrun` | Cualquier otro rol (`anon`, `authenticated`, `service_role`, otras apps, `PUBLIC`) |
+|---|---|---|---|---|
+| Esquema `opsrun` | dueño | USAGE | nada | nada |
+| Tablas y vistas de `opsrun` | todo, salvo modificar `audit_event` | SELECT | nada | nada |
+| Funciones de escritura de `opsrun` | dueño | EXECUTE (validan el actor dentro) | nada | nada |
+| Esquema `opsrun_private` y sus funciones | dueño | nada | nada | nada |
+| Esquema `opsrun_writeback` y sus vistas `v1_*` | dueño | nada | USAGE y SELECT | nada |
 
-Política única de lectura, igual en todas las tablas de V1.1 beta (todos los operadores ven todo):
+Los esquemas y los roles ya existen cuando corre la migración (§2); ella solo crea los objetos y concede lo de esta tabla. Los permisos son la frontera. Además, RLS va activa en toda tabla de `opsrun` como respaldo, con una sola política:
 
 ```sql
-create policy "<tabla>: operadores activos leen"
-  on public.<tabla> for select to authenticated
-  using ((select private.current_operator_id()) is not null);
+create policy "<tabla>: opsrun_app lee"
+  on opsrun.<tabla> for select to opsrun_app
+  using (true);
 ```
 
-En `operator`, la misma política. El `email` se ve solo entre operadores y no sale por `writeback`.
+`opsrun_app` lee todo sin exigir un actor: la read layer y la intake leen sin operador, y el login se controla en el servidor, porque el navegador no habla con la base. Si a otro rol se le diera SELECT por error, vería 0 filas. `opsrun_migrador`, dueño de las tablas, no está sujeto a RLS (no se usa `force row level security`), y las vistas de `opsrun_writeback` corren con sus permisos.
+
+Ninguna política llama a un helper de `opsrun_private`. Por eso ningún rol necesita EXECUTE ahí, y G7 no tiene excepciones. Si algún día una política necesita un helper, G7 se ve en rojo y la decisión se revisa.
+
+> **Historia.** Con el Supabase propio de la ADR 0002, la política de lectura de `authenticated` llamaba a `private.current_operator_id()`. Postgres evalúa una política con los permisos de quien consulta, así que `authenticated` necesitaba EXECUTE sobre ese helper. Henry eligió entonces que G7 lo permitiera solo para las funciones que usa una política (descubiertas en `pg_depend`), sin USAGE en el esquema, y que G6 mirara solo lo invocable (USAGE más EXECUTE). Con la ADR 0003 el navegador ya no llega a la base. El actor lo fija el servidor y lo leen las funciones de escritura, que corren como `opsrun_migrador`, y la política de respaldo no llama a ningún helper. La excepción de G7 deja de hacer falta. La regla de G6 se mantiene: mira lo que `opsrun_app` puede invocar.
 
 ## 7. Write-back (OPR-24)
 
 D-2 no está decidida. El esquema sirve para los dos caminos (consulta directa o pipeline):
 
-- Esquema `writeback` con vistas versionadas `writeback.v1_<objeto>`: `request`, `request_confirmation`, `cleaner_confirmation`, `instruction`, `alert_occurrence`, `ai_suggestion`, `ai_analysis`, `audit_event` y `operator` (solo `id`, `display_name`, `team`). Son el contrato: si cambia una tabla, la vista `v1` se mantiene o se crea `v2`.
-- Rol `bzzzbx_reader`, `NOLOGIN` en la migración. El login y la credencial se dan en el servidor, fuera del repo. Solo tiene `USAGE` en `writeback` y `SELECT` en sus vistas; nada en `public` ni en `private`.
+- Esquema `opsrun_writeback` con vistas versionadas `v1_<objeto>`: `request`, `request_confirmation`, `cleaner_confirmation`, `instruction`, `alert_occurrence`, `ai_suggestion`, `ai_analysis`, `audit_event` y `operator` (solo `id`, `display_name`, `team` y el cursor). Son el contrato: si cambia una tabla, la vista `v1` se mantiene o se crea `v2`.
+- Rol `bzzz_writeback_opsrun`. Es de la caja: lo crea el alta de opsRUN en Bzzz, entra solo desde la red interna de la caja y su credencial no pasa por opsRUN. La migración de opsRUN no lo crea; solo le concede `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`. Nada en `opsrun`, en `opsrun_private` ni en los esquemas de otras apps. Hay uno por vecina: un lector común leería el write-back de todas.
+- Las vistas están en la misma base que la caja (ADR 0003): BzzzBX las lee sin cruzar la red, pero solo con ese rol. Es la única puerta de BzzzBX a los datos de opsRUN.
 - Cursores incrementales:
   - en `audit_event`, el `id`;
   - en las tablas mutables, `change_seq bigint` asignado por trigger desde una secuencia global en cada INSERT o UPDATE, y expuesto en la vista.
@@ -420,31 +458,37 @@ D-2 no está decidida. El esquema sirve para los dos caminos (consulta directa o
 
 ## 8. Guards de seguridad (pgTAP, `supabase test db`)
 
-Todos **descubren** los objetos desde el catálogo (`information_schema`, `pg_class`, `pg_proc`, `pg_policy`) y no tienen listas escritas a mano. Siguen el patrón que dejó OPR-1 en `supabase/tests/database/rls.test.sql`:
+Todos **descubren** los objetos desde el catálogo (`pg_namespace`, `pg_class`, `pg_proc`, `pg_roles`, `pg_auth_members`, `pg_policy`) y no tienen listas escritas a mano. Siguen el patrón que dejó OPR-1 en `supabase/tests/database/rls.test.sql`:
 
-- "de opsRUN" es todo objeto cuyo dueño es el rol que aplica las migraciones, así que quedan fuera los esquemas de Supabase sin listarlos;
-- cada guard se ve fallar **en cada corrida**: dentro de la transacción del test crea un objeto de prueba que viola la regla, comprueba que lo detecta y lo corrige (o hace rollback).
+- "de opsRUN" es todo esquema llamado `opsrun` u `opsrun_*` y todo rol llamado `opsrun_*` (§2). Así quedan fuera, sin listarlos, `public`, los esquemas de Supabase y los de las demás apps de la caja, y entra cualquier esquema o rol nuevo de opsRUN;
+- "el dueño" es el dueño de los esquemas de opsRUN según `pg_namespace` (`opsrun_migrador`), leído del catálogo y no escrito en el test;
+- "rol ajeno" es todo rol de `pg_roles` (más `PUBLIC`) que no es de opsRUN. El lector del write-back (`bzzz_writeback_opsrun`) es un rol ajeno más: ningún guard lo busca por su nombre. Los superusuarios quedan fuera de las comprobaciones de privilegios, porque se los saltan, y por eso los triggers frenan también a los superusuarios;
+- cada guard se ve fallar **en cada corrida**: dentro de la transacción del test crea un objeto o un grant de prueba que viola la regla, comprueba que lo detecta y hace rollback.
 
 Así el "verlo fallar una vez" del principio 8 de `PLAN.md` queda en el propio test y no depende de que alguien lo pruebe a mano.
 
 | # | Guard | Cómo descubre | Cómo se ve fallar |
 |---|---|---|---|
-| G1 | Toda tabla de opsRUN a la que llegan `anon` o `authenticated` tiene RLS activada | **Ya existe** (`rls.test.sql`, OPR-1). OPR-20 solo lo hereda | Tabla de prueba sin RLS con `grant select` |
-| G2 | Ninguna tabla de `public` da INSERT, UPDATE, DELETE ni TRUNCATE a `anon` o `authenticated` | `has_table_privilege` sobre todas las tablas | `grant insert` a `authenticated` |
-| G3 | `anon` lee 0 filas (o recibe permiso denegado) en toda tabla y vista de `public` | Bucle dinámico con `set local role anon` | Política `using (true)` para `anon` |
-| G4 | Un `authenticated` sin operador activo lee 0 filas en toda tabla de `public` | Igual que G3, con un JWT de prueba sin fila en `operator` | Política `using (true)` |
-| G5 | Toda función `security definer` fija `search_path` | `pg_proc.prosecdef` y `proconfig` | Quitar `set search_path` |
-| G6 | Toda función `security definer` que `authenticated` puede ejecutar llama a `private.require_operator()` | `pg_proc.prosecdef`, `has_function_privilege('authenticated', …)` y `prosrc`. Así quedan fuera funciones de solo `service_role`, como `opsrun_health()` de OPR-1 | Función de prueba ejecutable por `authenticated` sin la llamada |
-| G7 | Ninguna función de `private` es ejecutable por `anon` ni `authenticated` | `has_function_privilege` | `grant execute` a `authenticated` |
-| G8 | `audit_event` rechaza UPDATE, DELETE y TRUNCATE, también como `service_role` y `postgres` | Prueba directa con los dos roles | Quitar el trigger |
-| G9 | Toda columna de `public` tiene `COMMENT` con el dueño (`opsrun`, `crosswalk`, `bzzzbx-snapshot`). Toda `bzzzbx_*_id` es `text` y está marcada `crosswalk` | `information_schema.columns` y `col_description` | Columna nueva sin comentario |
-| G10 | `bzzzbx_reader` no tiene ningún privilegio fuera de `writeback` y solo SELECT dentro | `has_*_privilege` sobre todos los objetos | `grant select` sobre una tabla de `public` |
-| G11 | El borrador de una request `scheduled` no cambia | Columnas del borrador leídas del `COMMENT` (`opsrun:draft`) | Quitar el trigger |
-| G12 | Todo `audit_event_type` con `requires_reason` rechaza eventos sin motivo | Bucle sobre el catálogo | Quitar el chequeo del trigger |
+| G1 | Toda tabla de opsRUN tiene RLS activada | **De OPR-1** (`rls.test.sql`, que OPR-1 acota a los esquemas de opsRUN). OPR-20 solo lo hereda | Tabla de prueba sin RLS |
+| G2 | Ningún rol, salvo el dueño, tiene INSERT, UPDATE, DELETE ni TRUNCATE sobre tablas o vistas de opsRUN, ni USAGE o UPDATE sobre sus secuencias. Tampoco `opsrun_app`: escribe solo por funciones | `has_table_privilege` y `has_sequence_privilege` de cada rol de `pg_roles` sobre cada objeto de los esquemas de opsRUN | `grant insert` a `opsrun_app` |
+| G3 | Todo rol ajeno con algún privilegio en los esquemas de opsRUN tiene solo USAGE en `opsrun_writeback` y SELECT en sus vistas `v1_*`. Nada en `opsrun` ni en `opsrun_private`, ni CREATE, ni otro privilegio en `opsrun_writeback`. `PUBLIC` no tiene nada. Y hay **a lo sumo un** rol ajeno con algún privilegio en los esquemas de opsRUN | `has_schema_privilege`, `has_table_privilege`, `has_sequence_privilege` y `has_function_privilege` de cada rol ajeno sobre cada esquema y objeto de opsRUN; los que tienen algo se cuentan y se comparan con lo permitido | El lector con un privilegio de más: `grant select on opsrun.request` o `grant usage on schema opsrun` al rol ajeno que tiene USAGE en `opsrun_writeback`, hallado en el catálogo; `grant usage on schema opsrun_writeback to public`; y un segundo lector: USAGE en `opsrun_writeback` y SELECT en una vista `v1_*` a otro rol ajeno (`authenticated` o uno creado en el test) |
+| G4 | Con RLS como respaldo, un rol ajeno con SELECT por error lee 0 filas en toda tabla y vista de `opsrun`; `opsrun_app` lee filas en todas | Bucle dinámico con `set local role` sobre una fixture que llena cada tabla | Política `using (true)` para ese rol |
+| G5 | Toda función `security definer` de opsRUN fija `search_path` | `pg_proc.prosecdef` y `proconfig` | Función de prueba sin `set search_path` |
+| G6 | Toda función `security definer` que `opsrun_app` puede invocar (USAGE en el esquema más EXECUTE) llama a `opsrun_private.require_operator()` o a `opsrun_private.require_system()` | `pg_proc.prosecdef`, `has_schema_privilege`, `has_function_privilege('opsrun_app', …)` y `prosrc` | Función de prueba ejecutable por `opsrun_app` sin la llamada |
+| G7 | Nadie más que `opsrun_migrador` alcanza `opsrun_private`: ningún rol (tampoco `opsrun_app` ni `PUBLIC`) tiene USAGE en el esquema ni EXECUTE en sus funciones | `has_schema_privilege` y `has_function_privilege` de cada rol | `grant execute` a `opsrun_app`; USAGE en `opsrun_private` |
+| G8 | `audit_event` rechaza UPDATE, DELETE y TRUNCATE: ningún rol tiene el privilegio, y aunque alguien lo otorgue, el trigger lo frena también para `opsrun_app` y `opsrun_migrador` | `has_table_privilege` de cada rol y prueba directa con los dos roles | Quitar el trigger |
+| G9 | Toda columna de una tabla de opsRUN tiene `COMMENT` con el dueño (`opsrun`, `crosswalk`, `bzzzbx-snapshot`). Toda `bzzzbx_*_id` es `text` y está marcada `crosswalk` | `pg_attribute` y `col_description` | Columna nueva sin comentario |
+| G10 | Los roles de opsRUN (`opsrun_*`) no llegan más allá de lo suyo: `opsrun_app` solo a `opsrun` (USAGE, SELECT y EXECUTE), sin CREATE en ningún esquema; `opsrun_migrador` es dueño de todos los esquemas de opsRUN y no tiene CREATE en la base ni en esquemas ajenos. Ninguno tiene privilegios en esquemas de Supabase ni de otras apps, atributos peligrosos (`superuser`, `createrole`, `createdb`, `replication`, `bypassrls`) ni pertenece a otro rol | `has_*_privilege` sobre todo el catálogo (salvo `pg_catalog` e `information_schema`), `pg_roles` y `pg_auth_members` | `grant select` sobre una tabla de otro esquema; `grant authenticated to opsrun_app` |
+| G11 | El borrador de una request `scheduled` no cambia | Columnas del borrador leídas del `COMMENT` (`:draft`) | Quitar el trigger |
+| G12 | Todo `audit_event_type` e `instruction_type` con `requires_reason` rechaza filas sin motivo | Bucle sobre los catálogos | Quitar el chequeo del trigger |
 
 G9 es el guard de "nadie copia datos de otro dueño": una columna nueva no pasa CI hasta que alguien declara de quién es. `bzzzbx-snapshot` se usa solo en `alert_occurrence.reason_text`. Cualquier otro uso pide una ADR.
 
-Pruebas funcionales de la migración (no son guards): el gate de Schedule, la vista `request_ai_marks`, que `instruction.status` solo avance, el índice único de confirmación vigente y que la seed cargue.
+G3 y G10 juntos son la frontera con la caja: de fuera solo entra el lector del write-back, y solo por `opsrun_writeback`; nadie de opsRUN sale a lo de otros.
+
+El límite de un solo rol ajeno en G3 evita que un grant de más (por ejemplo, SELECT de `v1_*` a `authenticated`) pase el guard: las vistas de `opsrun_writeback` corren con los permisos de `opsrun_migrador`, así que cualquier rol con SELECT leería todo el write-back. G3 sigue sin nombrar al lector. Si algún día BzzzBX necesita un segundo lector, G3 falla a propósito, y cambiarlo pide una decisión explícita (una ADR), no ajustar el test.
+
+Pruebas funcionales de la migración (no son guards): el gate de Schedule, la vista `request_ai_marks`, que `instruction.status` solo avance, el índice único de confirmación vigente, los helpers de actor (`require_operator()` y `require_system()` fallan sin actor o con los dos a la vez) y que la seed cargue.
 
 ## 9. Seed
 
@@ -455,11 +499,12 @@ Pruebas funcionales de la migración (no son guards): el gate de Schedule, la vi
 - una alerta abierta y una resuelta de cada `resolution`;
 - un análisis de IA con una sugerencia aceptada, una corregida y una abierta;
 - las plantillas en su versión 1;
-- los catálogos van en la migración, no en la seed.
+- los catálogos van en la migración, no en la seed;
+- sin usuarios de GoTrue: el login lo decide OPR-2.
 
 ## 10. Caché de lectura
 
-La caché de lectura de OPR-22 no entra en este esquema. Si se persiste, va en un esquema aparte `read_cache`, marcada como no autoritativa, con caducidad, sin write-back y sin escritura desde la app. Su diseño es de OPR-22.
+La caché de lectura de OPR-22 no entra en este esquema. Si se persiste, va en un esquema aparte `opsrun_read_cache`, marcada como no autoritativa, con caducidad, sin write-back y sin escritura desde la app. Su diseño es de OPR-22.
 
 ## 11. Preguntas abiertas (para Federico)
 
