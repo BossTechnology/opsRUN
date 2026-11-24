@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const raiz = fileURLToPath(new URL("..", import.meta.url));
+export const raiz = fileURLToPath(new URL("..", import.meta.url));
 const cli = process.platform === "win32" ? "supabase.cmd" : "supabase";
 
 export function supabase(args, opciones = {}) {

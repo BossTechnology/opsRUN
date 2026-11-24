@@ -5,12 +5,15 @@
 // 2. `next dev` con el entorno del Supabase local, sin archivos .env.
 import { spawn } from "node:child_process";
 
-import { entornoSupabaseLocal, supabase } from "./supabase-local.mjs";
+import { entornoSupabaseLocal, raiz, supabase } from "./supabase-local.mjs";
 
 supabase(["start"], { stdio: "inherit" });
 
-const app = spawn("pnpm", ["exec", "next", "dev", ...process.argv.slice(2)], {
+const next = process.platform === "win32" ? "next.cmd" : "next";
+const app = spawn(`${raiz}node_modules/.bin/${next}`, ["dev", ...process.argv.slice(2)], {
+  cwd: raiz,
   stdio: "inherit",
+  shell: process.platform === "win32",
   env: { ...process.env, ...entornoSupabaseLocal() },
 });
 
