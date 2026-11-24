@@ -1,7 +1,7 @@
 # 0002 — opsRUN corre al lado de BzzzBX, en el mismo servidor y con todo propio
 
 - **Fecha:** 2026-11-24
-- **Estado:** aceptada por Henry
+- **Estado:** aceptada por Henry; la parte del Supabase propio la reemplaza la [0003](0003-supabase-de-la-caja.md)
 - **Tarjeta:** OPR-1
 
 ## Contexto

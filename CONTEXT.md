@@ -10,7 +10,9 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 |---|---|---|
 | opsRUN | Esta consola: el tablero de Operations y Finance de PINCH. | Todo el repo |
 | BzzzBX | Capa de integración. Único camino de opsRUN hacia los sistemas de PINCH, para leer y para actuar. | OPR-6, OPR-22, OPR-23 |
-| Caja | La instalación de BzzzBX en el servidor de PINCH. opsRUN corre en el mismo servidor pero fuera de la caja: no usa su base, no la instala su actualizador y no entra por su puerta. _Evitar_: decir que opsRUN está "dentro de BzzzBX" o que es un "engine" de la caja. | ADR 0002 |
+| Caja | La instalación de BzzzBX en el servidor de PINCH. opsRUN corre en el mismo servidor pero fuera de la caja: no la instala su actualizador y no entra por su puerta, pero sí usa su Supabase (base y GoTrue), en su propio esquema y con su propio rol. _Evitar_: decir que opsRUN está "dentro de BzzzBX". | ADR 0002, ADR 0003 |
+| Engine | Para Henry, cada app de Boss que corre al lado de la caja y usa su Supabase: BOb, opsRUN y las que vengan. En el glosario de BzzzBX la palabra significa otra cosa (una app fuera de la caja a la que el portal solo enlaza). | ADR 0003 |
+| `opsrun_app` | Rol de Postgres con el que el servidor de opsRUN se conecta a la base de la caja. Mínimo privilegio, solo sobre `opsrun` y `opsrun_private`. | ADR 0003 |
 | Read layer | Parte de opsRUN que lee todo de BzzzBX y se actualiza en menos de 1 minuto. Si BzzzBX está caído, muestra lo último conocido con un aviso. | OPR-22 |
 | Instruction layer | Parte de opsRUN que convierte cada acción del operador en una instrucción a BzzzBX y espera su confirmación o su error. | OPR-23 |
 | Write-back | Envío de los datos que son de opsRUN a BzzzBX para que se consulten como el resto, también desde Rosie. | OPR-24 |
