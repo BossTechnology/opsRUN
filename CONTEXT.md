@@ -58,6 +58,22 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Focused / Global | Alcance de Rosie: Focused sigue el filtro de operador y Global ve toda la operación. | OPR-38 |
 | Not available in this release | Texto de las funciones que se muestran en gris porque no entran en V1.1 beta. | OPR-25, OPR-26 |
 
+## Modelo de datos
+
+Términos internos del esquema de opsRUN (no los ve el operador). Detalle en `docs/spec/opr-20-modelo-de-datos.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Crosswalk ID | Identificador de BzzzBX con el que opsRUN apunta a algo de PINCH (job, cliente, contacto, propiedad, equipo, mensaje, alerta). Columnas `bzzzbx_*_id`. Nunca se guarda nada más de esa entidad. | OPR-20 |
+| Draft | Job details, Who is it from? y Cleaner de una request mientras está en Requests. Es de opsRUN hasta que se programa; después manda el job de PINCH y el draft queda congelado. | OPR-20, OPR-28 |
+| Schedule gate | Lo que exige Schedule: dueño, más confirmaciones vigentes de details, sender y cleaner. | OPR-28 |
+| Cleaner confirmation | Pregunta al cleaner por texto, inicial o por Reschedule, con su respuesta y la decisión del operador. Las abiertas forman la sección Waiting. | OPR-17, OPR-29, OPR-34 |
+| Instruction | Registro de cada acción que sale a BzzzBX: tipo, motivo, estado (pending, sent, confirmed, failed, timed out) y error. | OPR-23 |
+| Alert occurrence | Una apertura de una regla de alerta sobre una request, con su resolución: Cleared automatically, resuelta por una acción o con Clear alert. | OPR-34 |
+| AI suggestion | Propuesta de la IA para un campo, con motivo. Queda sin decidir (el campo se ve AI-marked) hasta que el operador la acepta, la corrige o la rechaza. | OPR-36, OPR-37 |
+| Observed event | Hecho de PINCH (check-in, inicio, fin, Paid) que la read layer ve y anota en Audit con solo el tipo, la hora y el crosswalk ID. | OPR-20, OPR-35 |
+| Write-back views | Vistas `writeback.v1_*`: el contrato de lo que BzzzBX lee de opsRUN. | OPR-24 |
+
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
 - Reject · re-clean, las pestañas $ y People, editar To/Cc y el número temporal: se ven, no corren.
@@ -67,3 +83,4 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 
 ## Decisiones clave
 Enlaces a ADRs en `docs/adr/`.
+- [0001 — Modelo de datos de opsRUN](docs/adr/0001-modelo-de-datos.md) (OPR-20)
