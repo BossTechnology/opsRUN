@@ -76,9 +76,9 @@ El navegador nunca habla con la base: no hay PostgREST en la caja (ADR 0003). El
 
 | Rol | Qué es | Qué alcanza |
 |---|---|---|
-| `opsrun_migrador` | Dueño de `opsrun`, `opsrun_private` y `opsrun_writeback` y de todo lo que contienen; aplica las migraciones. `LOGIN`, `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, sin pertenecer a ningún rol y sin `CREATE` en la base. La credencial no está en el repo. | Sus esquemas. No toca los de otras apps ni los de Supabase. |
+| `opsrun_migrador` | Dueño de `opsrun`, `opsrun_private` y `opsrun_writeback` y de todo lo que contienen; aplica las migraciones. `LOGIN`, `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, `CONNECTION LIMIT 1` (lo fija el alta de Bzzz), sin pertenecer a ningún rol y sin `CREATE` en la base. La credencial no está en el repo. | Sus esquemas. No toca los de otras apps ni los de Supabase. |
 | `opsrun_app` | El servidor de Next. `LOGIN`, con los mismos atributos; la credencial no está en el repo. | `USAGE` en `opsrun`, `SELECT` en sus tablas y vistas, `EXECUTE` en sus funciones de escritura. Nada más. |
-| `bzzz_writeback_opsrun` | Rol de la caja (los suyos empiezan por `bzzz_`): BzzzBX leyendo el write-back de opsRUN. Entra solo desde la red de la caja, nunca desde la de opsRUN. | `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`, que concede la migración de opsRUN. Nada más. |
+| `bzzz_writeback_opsrun` | Rol de la caja (los suyos empiezan por `bzzz_`): BzzzBX leyendo el write-back de opsRUN. Entra solo desde la red interna de la caja, nunca desde la de opsRUN. | `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`, que concede la migración de opsRUN. Nada más. |
 | `anon`, `authenticated`, `service_role`, roles de otras apps | De Supabase o de las demás apps de la caja. | Nada en los esquemas de opsRUN. |
 
 Ningún rol de opsRUN pertenece a otro rol: no hereda de `authenticated`, `anon`, `service_role`, `postgres` ni de los roles de otras apps.
@@ -446,7 +446,7 @@ Ninguna política llama a un helper de `opsrun_private`. Por eso ningún rol nec
 D-2 no está decidida. El esquema sirve para los dos caminos (consulta directa o pipeline):
 
 - Esquema `opsrun_writeback` con vistas versionadas `v1_<objeto>`: `request`, `request_confirmation`, `cleaner_confirmation`, `instruction`, `alert_occurrence`, `ai_suggestion`, `ai_analysis`, `audit_event` y `operator` (solo `id`, `display_name`, `team` y el cursor). Son el contrato: si cambia una tabla, la vista `v1` se mantiene o se crea `v2`.
-- Rol `bzzz_writeback_opsrun`. Es de la caja: lo crea el alta de opsRUN en Bzzz, entra solo desde la red de la caja y su credencial no pasa por opsRUN. La migración de opsRUN no lo crea; solo le concede `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`. Nada en `opsrun`, en `opsrun_private` ni en los esquemas de otras apps. Hay uno por vecina: un lector común leería el write-back de todas.
+- Rol `bzzz_writeback_opsrun`. Es de la caja: lo crea el alta de opsRUN en Bzzz, entra solo desde la red interna de la caja y su credencial no pasa por opsRUN. La migración de opsRUN no lo crea; solo le concede `USAGE` en `opsrun_writeback` y `SELECT` en sus vistas `v1_*`. Nada en `opsrun`, en `opsrun_private` ni en los esquemas de otras apps. Hay uno por vecina: un lector común leería el write-back de todas.
 - Las vistas están en la misma base que la caja (ADR 0003): BzzzBX las lee sin cruzar la red, pero solo con ese rol. Es la única puerta de BzzzBX a los datos de opsRUN.
 - Cursores incrementales:
   - en `audit_event`, el `id`;
