@@ -26,9 +26,9 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 | Capa | Elección | Origen |
 |---|---|---|
 | App | Next.js (App Router), TypeScript estricto | OPR-1 |
-| Dónde corre | En el mismo servidor que BzzzBX, al lado de la caja y no dentro: repo, base, deploy y vuelta atrás propios. Con BzzzBX solo habla por el contrato de OPR-6 ([ADR 0002](docs/adr/0002-opsrun-al-lado-de-la-caja.md)) | OPR-1 |
-| Datos de opsRUN | Supabase autohospedado propio en el servidor dedicado de PINCH, junto a BzzzBX (no Supabase en la nube ni el de la caja) | OPR-1 |
-| Login | Pendiente de OPR-2 | OPR-2 |
+| Dónde corre | En el mismo servidor que BzzzBX, al lado de la caja y no dentro: repo, deploy y vuelta atrás propios. Con BzzzBX solo habla por el contrato de OPR-6 ([ADR 0002](docs/adr/0002-opsrun-al-lado-de-la-caja.md)) | OPR-1 |
+| Datos de opsRUN | El Supabase que ya corre en el servidor (el de la caja), en los esquemas `opsrun` y `opsrun_private`. Conexión directa a Postgres con el rol propio `opsrun_app`: sin PostgREST, sin service role, nada en `public` ([ADR 0003](docs/adr/0003-supabase-de-la-caja.md)) | OPR-1, OPR-20 |
+| Login | GoTrue de la caja, compartido con las demás apps; el método y la lista de usuarios siguen en OPR-2 | OPR-2 |
 | Integración | BzzzBX: lectura con actualizaciones en menos de 1 minuto, instrucciones con confirmación, write-back | OPR-6, OPR-22, OPR-23, OPR-24 |
 | Tests | Vitest (unitarios, jsdom), pgTAP con `supabase test db` (base) y Playwright (E2E contra el build de producción y el Supabase local). Corren en CI en cada PR | OPR-1 (confirmado) |
 | Gestor de paquetes | pnpm (versión fija en `packageManager`); Node 22 (`.nvmrc`) | OPR-1 |
@@ -50,6 +50,8 @@ Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1). Las 
 ### Variables de entorno
 
 Solo nombres. Los valores viven en el servidor, nunca en el repo. Los de BzzzBX salen del contrato de OPR-6.
+
+> **Cambia con la ADR 0003:** las variables `SUPABASE_*` y `NEXT_PUBLIC_SUPABASE_*` de abajo salen cuando OPR-1 pase a la conexión directa. Entran la URL de Postgres del rol `opsrun_app` y la URL del GoTrue de la caja; los nombres los fija ese PR.
 
 ```
 SUPABASE_URL=                 # solo servidor; URL de Supabase vista desde el servidor de Next
