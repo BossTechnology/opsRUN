@@ -94,11 +94,14 @@ as $$
   join pg_catalog.pg_roles as r on r.oid = n.nspowner
   where pg_temp.es_de_opsrun(r.rolname) and not pg_temp.es_de_opsrun(n.nspname)
   union all
+  -- pg_toast guarda el TOAST de las tablas de opsRUN, con su mismo dueño: es
+  -- de Postgres, no algo que opsRUN cree fuera.
   select 'relación ' || n.nspname || '.' || c.relname
   from pg_catalog.pg_class as c
   join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
   join pg_catalog.pg_roles as r on r.oid = c.relowner
   where pg_temp.es_de_opsrun(r.rolname) and not pg_temp.es_de_opsrun(n.nspname)
+    and n.nspname <> 'pg_toast'
   union all
   select 'función ' || n.nspname || '.' || p.proname
   from pg_catalog.pg_proc as p
