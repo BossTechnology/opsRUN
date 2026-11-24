@@ -8,7 +8,11 @@
 --     que solo usa el dueño.
 -- G7: nadie más que el dueño alcanza opsrun_private: ningún rol (tampoco
 --     opsrun_app ni PUBLIC) tiene USAGE en el esquema ni EXECUTE en sus
---     funciones. Sin excepciones: ninguna política llama a un helper (spec §6).
+--     funciones. Ninguna política llama a un helper (spec §6).
+--     Excepción (a), SIN DECIDIR (espera a Henry), la misma de G3: el USAGE
+--     que un rol tiene solo por ser miembro de pg_read_all_data (descubierto
+--     con pg_has_role, sin nombrar roles) no cuenta. pg_read_all_data no da
+--     EXECUTE, así que las funciones siguen cerradas para ese rol.
 --
 -- Descubre: pg_proc en los esquemas `opsrun` y `opsrun_*`, sin las funciones
 -- de una extensión; roles en pg_roles. Quedan fuera los superusuarios y los
@@ -19,7 +23,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(12);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
@@ -96,6 +100,19 @@ as $$
     and r.rolname !~ '^pg_'
     and r.oid <> pg_temp.dueno()
     and has_schema_privilege(r.oid, 'opsrun_private', 'USAGE')
+    and not (
+      pg_has_role(r.oid, 'pg_read_all_data', 'USAGE')
+      and not exists (
+        select 1
+        from pg_catalog.pg_namespace as n
+        cross join lateral aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) as x
+        where n.nspname = 'opsrun_private'
+          and x.privilege_type = 'USAGE'
+          and (x.grantee = 0
+               or (x.grantee <> 'pg_read_all_data'::regrole
+                   and pg_has_role(r.oid, x.grantee, 'USAGE')))
+      )
+    )
   union all
   select format('%s (%s EXECUTE)', f.nombre, r.rolname)
   from pg_temp.funciones_opsrun() as f
@@ -178,6 +195,27 @@ select ok(
 select ok(
   'opsrun_private (opsrun_app USAGE)' in (select * from pg_temp.private_al_alcance()),
   'G7 se ve fallar: detecta USAGE de opsrun_app en opsrun_private'
+);
+
+-- 11 y 12. Excepción (a): un rol de prueba que lee todo el clúster.
+create role guard_lector_global nologin;
+grant pg_read_all_data to guard_lector_global;
+
+select ok(
+  has_schema_privilege('guard_lector_global', 'opsrun_private', 'USAGE')
+    and not exists (
+      select 1 from pg_temp.private_al_alcance() as f(t) where f.t like '%guard_lector_global%'
+    ),
+  'excepción (a): el USAGE en opsrun_private que viene solo de pg_read_all_data no cuenta'
+);
+
+set local role opsrun_migrador;
+grant usage on schema opsrun_private to guard_lector_global;
+reset role;
+
+select ok(
+  'opsrun_private (guard_lector_global USAGE)' in (select * from pg_temp.private_al_alcance()),
+  'G7 se ve fallar con la excepción (a): detecta USAGE concedido a mano a un rol que lee todo el clúster'
 );
 
 select * from finish();

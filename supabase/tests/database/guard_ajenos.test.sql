@@ -20,16 +20,48 @@
 --
 -- La frontera con Supabase que miraba rls.test.sql (anon, authenticated y
 -- service_role sin USAGE en los esquemas de opsRUN) queda dentro de esta regla.
+--
+-- Excepción (a), SIN DECIDIR (espera a Henry): la lectura del clúster. Un rol
+-- miembro de pg_read_all_data (se descubre con pg_has_role, sin nombrarlo)
+-- tiene USAGE en todo esquema y SELECT en toda tabla sin que opsRUN se lo dé.
+-- Esos dos privilegios, cuando vienen solo de ahí (ningún ACL de opsRUN los
+-- concede al rol, a un rol del que hereda ni a PUBLIC), no cuentan como
+-- privilegio de opsRUN: ni de más ni para el límite de un rol ajeno. Todo lo
+-- demás sí cuenta, también un SELECT concedido a mano a uno de esos roles.
+-- Se ve fallar con un rol de prueba miembro de pg_read_all_data.
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(13);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
 language sql
 immutable
 as $$ select nombre = 'opsrun' or nombre like 'opsrun\_%' $$;
+
+-- Excepción (a): el rol tiene p_priv sobre el objeto solo por ser miembro de
+-- pg_read_all_data. pg_read_all_data da USAGE en esquemas y SELECT en tablas,
+-- vistas y secuencias; nada más.
+create function pg_temp.solo_por_lectura_global(
+  p_rol oid, p_acl aclitem[], p_tipo "char", p_dueno oid, p_priv text
+)
+returns boolean
+language sql
+stable
+as $$
+  select p_priv in ('USAGE', 'SELECT')
+    and pg_has_role(p_rol, 'pg_read_all_data', 'USAGE')
+    and not pg_has_role(p_rol, p_dueno, 'USAGE')
+    and not exists (
+      select 1
+      from aclexplode(coalesce(p_acl, acldefault(p_tipo, p_dueno))) as x
+      where x.privilege_type = p_priv
+        and (x.grantee = 0
+             or (x.grantee <> 'pg_read_all_data'::regrole
+                 and pg_has_role(p_rol, x.grantee, 'USAGE')))
+    )
+$$;
 
 -- Todo privilegio de un rol ajeno (o de PUBLIC) en los esquemas de opsRUN.
 create function pg_temp.privilegios_ajenos()
@@ -45,7 +77,7 @@ as $$
       and r.rolname !~ '^pg_'
   ),
   esquemas as (
-    select n.oid, n.nspname
+    select n.oid, n.nspname, n.nspacl, n.nspowner
     from pg_catalog.pg_namespace as n
     where pg_temp.es_de_opsrun(n.nspname)
   ),
@@ -66,6 +98,7 @@ as $$
     cross join esquemas as e
     cross join (values ('USAGE'), ('CREATE')) as p(priv)
     where has_schema_privilege(a.oid, e.oid, p.priv)
+      and not pg_temp.solo_por_lectura_global(a.oid, e.nspacl, 'n', e.nspowner, p.priv)
     union all
     select a.nombre, r.nspname || '.' || r.relname, p.priv,
            r.nspname = 'opsrun_writeback' and r.relkind = 'v'
@@ -76,6 +109,7 @@ as $$
                        ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) as p(priv)
     where r.relkind in ('r', 'p', 'v', 'm', 'f')
       and has_table_privilege(a.oid, r.oid, p.priv)
+      and not pg_temp.solo_por_lectura_global(a.oid, r.relacl, 'r', r.relowner, p.priv)
     union all
     select a.nombre, r.nspname || '.' || r.relname, p.priv, false
     from ajenos as a
@@ -83,6 +117,7 @@ as $$
     cross join (values ('USAGE'), ('SELECT'), ('UPDATE')) as p(priv)
     where r.relkind = 'S'
       and has_sequence_privilege(a.oid, r.oid, p.priv)
+      and not pg_temp.solo_por_lectura_global(a.oid, r.relacl, 's', r.relowner, p.priv)
     union all
     select a.nombre, f.nspname || '.' || f.proname, 'EXECUTE', false
     from ajenos as a
@@ -243,6 +278,30 @@ select ok(
   'authenticated' in (select * from pg_temp.lectores())
     and (select count(*) from pg_temp.lectores()) > 1,
   'G3 se ve fallar: …pero cuenta como un segundo rol ajeno con privilegios en opsRUN'
+);
+
+-- 11 a 13. Excepción (a): un rol de prueba que lee todo el clúster.
+create role guard_lector_global nologin;
+grant pg_read_all_data to guard_lector_global;
+
+select ok(
+  has_table_privilege('guard_lector_global', 'opsrun.request', 'SELECT')
+    and 'guard_lector_global' not in (select * from pg_temp.lectores()),
+  'excepción (a): lo que un rol lee solo por pg_read_all_data no cuenta como privilegio de opsRUN'
+);
+
+set local role opsrun_migrador;
+grant select on opsrun.request to guard_lector_global;
+grant insert on opsrun.note to guard_lector_global;
+reset role;
+
+select ok(
+  'guard_lector_global → opsrun.request: SELECT' in (select * from pg_temp.de_mas()),
+  'G3 se ve fallar con la excepción (a): detecta un SELECT concedido a mano a un rol que lee todo el clúster'
+);
+select ok(
+  'guard_lector_global → opsrun.note: INSERT' in (select * from pg_temp.de_mas()),
+  'G3 se ve fallar con la excepción (a): detecta un privilegio de escritura en un rol que lee todo el clúster'
 );
 
 select * from finish();
