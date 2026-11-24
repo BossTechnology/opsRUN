@@ -1,4 +1,4 @@
--- Guards de los esquemas de opsRUN (G1 y la frontera con Supabase).
+-- Guards de los esquemas de opsRUN (G1 y dónde viven sus objetos).
 --
 -- Descubre en vez de enumerar:
 -- - Los esquemas de opsRUN son `opsrun` y todo `opsrun_*`: el prefijo es lo
@@ -8,6 +8,9 @@
 --   se llame (en la caja y en el alta local, opsrun_migrador).
 -- - Las tablas salen de information_schema.tables.
 --
+-- La frontera con los roles ajenos (anon, authenticated, service_role y los
+-- demás) es G3, en guard_ajenos.test.sql: la descubre en vez de enumerarla.
+--
 -- Cada guard se ve fallar en cada corrida: el test rompe la regla a propósito
 -- dentro de la transacción y comprueba que el guard lo detecta. Para romperla
 -- como el dueño, el rol que corre el test (el que hizo el alta local) se
@@ -15,7 +18,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(10);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
@@ -67,19 +70,6 @@ as $$
   where t.table_type = 'BASE TABLE'
     and pg_temp.es_de_opsrun(t.table_schema::name)
     and not c.relrowsecurity
-$$;
-
--- Roles de la API de Supabase que llegan a un esquema de opsRUN.
-create function pg_temp.api_en_esquemas_opsrun()
-returns setof text
-language sql
-stable
-as $$
-  select e.esquema || ' (' || r.rol || ')'
-  from pg_temp.esquemas_opsrun() as e(esquema)
-  cross join (values ('anon'), ('authenticated'), ('service_role')) as r(rol)
-  where has_schema_privilege(r.rol, e.esquema, 'usage')
-     or has_schema_privilege(r.rol, e.esquema, 'create')
 $$;
 
 -- Lo que un rol de opsRUN tiene fuera de los esquemas de opsRUN: public, los
@@ -166,26 +156,7 @@ select is_empty(
   'el guard de RLS deja de verla al activar RLS'
 );
 
--- 7 y 8. anon, authenticated y service_role no llegan a los esquemas de opsRUN.
-select is_empty(
-  'select * from pg_temp.api_en_esquemas_opsrun()',
-  'anon, authenticated y service_role no llegan a los esquemas de opsRUN'
-);
-
-do $$
-begin
-  execute format('set local role %I', pg_temp.dueno());
-  grant usage on schema opsrun to authenticated;
-  reset role;
-end
-$$;
-
-select ok(
-  'opsrun (authenticated)' in (select * from pg_temp.api_en_esquemas_opsrun()),
-  'el guard detecta un rol de la API con USAGE en un esquema de opsRUN'
-);
-
--- 9 a 11. Nada de opsRUN fuera de sus esquemas: ni en public ni en lo de otros.
+-- 7 a 9. Nada de opsRUN fuera de sus esquemas: ni en public ni en lo de otros.
 select is_empty(
   'select * from pg_temp.opsrun_fuera()',
   'ningún rol de opsRUN es dueño de nada fuera de los esquemas de opsRUN'
@@ -211,7 +182,7 @@ select ok(
   'el guard detecta una tabla de opsRUN fuera de sus esquemas'
 );
 
--- 12. (Va al final: el esquema de prueba es "de opsRUN" para los demás guards.)
+-- 10. (Va al final: el esquema de prueba es "de opsRUN" para los demás guards.)
 -- Un esquema opsrun_* de otro dueño, como el que crearía una migración de otra
 -- vecina o alguien a mano.
 create schema opsrun_guard_otro_dueno;

@@ -1,34 +1,47 @@
 -- OPR-20 · Guards G5, G6 y G7: funciones.
 --
 -- G5: toda función security definer de opsRUN fija search_path.
--- G6: toda función security definer que authenticated puede invocar llama a
---     private.require_operator(). "Puede invocar" = tiene USAGE en el esquema
---     y EXECUTE en la función; así quedan fuera las de solo service_role (como
---     opsrun_health() de OPR-1) y los triggers.
--- G7: anon y authenticated no llegan a private: sin USAGE en el esquema y sin
---     EXECUTE en sus funciones. La única excepción es la que exige Postgres:
---     authenticated ejecuta las funciones que usa una política de RLS (la
---     política corre con los permisos de quien consulta). Se descubren en
---     pg_depend, no se listan.
+-- G6: toda función security definer que un rol de opsRUN (salvo el dueño)
+--     puede invocar llama a opsrun_private.require_operator() o a
+--     opsrun_private.require_system(). "Puede invocar" = tiene USAGE en el
+--     esquema y EXECUTE en la función; así quedan fuera los triggers y lo
+--     que solo usa el dueño.
+-- G7: nadie más que el dueño alcanza opsrun_private: ningún rol (tampoco
+--     opsrun_app ni PUBLIC) tiene USAGE en el esquema ni EXECUTE en sus
+--     funciones. Sin excepciones: ninguna política llama a un helper (spec §6).
 --
--- Descubre: pg_proc, funciones cuyo dueño es el rol que aplica las
--- migraciones, sin las que pertenecen a una extensión.
+-- Descubre: pg_proc en los esquemas `opsrun` y `opsrun_*`, sin las funciones
+-- de una extensión; roles en pg_roles. Quedan fuera los superusuarios y los
+-- roles predefinidos pg_* como tales.
 --
--- Se ve fallar en cada corrida: crea funciones de prueba que violan cada regla
--- y comprueba que las detecta.
+-- Se ve fallar en cada corrida: crea, como el dueño, funciones de prueba que
+-- violan cada regla y comprueba que las detecta.
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(10);
+
+create function pg_temp.es_de_opsrun(nombre name)
+returns boolean
+language sql
+immutable
+as $$ select nombre = 'opsrun' or nombre like 'opsrun\_%' $$;
+
+create function pg_temp.dueno()
+returns oid
+language sql
+stable
+as $$ select n.nspowner from pg_catalog.pg_namespace as n where n.nspname = 'opsrun' $$;
 
 create function pg_temp.funciones_opsrun()
-returns table (fn oid, esquema oid)
+returns table (fn oid, esquema oid, nombre text)
 language sql
 stable
 as $$
-  select p.oid, p.pronamespace
+  select p.oid, p.pronamespace, n.nspname || '.' || p.proname
   from pg_catalog.pg_proc as p
-  where pg_catalog.pg_get_userbyid(p.proowner) = current_user
+  join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+  where pg_temp.es_de_opsrun(n.nspname)
     and not exists (
       select 1 from pg_catalog.pg_depend as d
       where d.classid = 'pg_catalog.pg_proc'::regclass
@@ -43,7 +56,7 @@ returns setof text
 language sql
 stable
 as $$
-  select f.fn::regprocedure::text
+  select f.nombre
   from pg_temp.funciones_opsrun() as f
   join pg_catalog.pg_proc as p on p.oid = f.fn
   where p.prosecdef
@@ -54,18 +67,21 @@ as $$
 $$;
 
 -- G6
-create function pg_temp.definer_sin_require_operator()
+create function pg_temp.definer_sin_actor()
 returns setof text
 language sql
 stable
 as $$
-  select f.fn::regprocedure::text
+  select distinct f.nombre
   from pg_temp.funciones_opsrun() as f
   join pg_catalog.pg_proc as p on p.oid = f.fn
+  cross join pg_catalog.pg_roles as r
   where p.prosecdef
-    and has_schema_privilege('authenticated', f.esquema, 'usage')
-    and has_function_privilege('authenticated', f.fn, 'execute')
-    and p.prosrc !~ 'private\.require_operator\s*\('
+    and pg_temp.es_de_opsrun(r.rolname)
+    and r.oid <> pg_temp.dueno()
+    and has_schema_privilege(r.oid, f.esquema, 'USAGE')
+    and has_function_privilege(r.oid, f.fn, 'EXECUTE')
+    and p.prosrc !~ 'opsrun_private\.require_(operator|system)\s*\('
 $$;
 
 -- G7
@@ -74,98 +90,94 @@ returns setof text
 language sql
 stable
 as $$
-  select format('private (%s USAGE)', r.rol)
-  from (values ('anon'), ('authenticated')) as r(rol)
-  where has_schema_privilege(r.rol, 'private', 'usage')
+  select format('opsrun_private (%s USAGE)', r.rolname)
+  from pg_catalog.pg_roles as r
+  where not r.rolsuper
+    and r.rolname !~ '^pg_'
+    and r.oid <> pg_temp.dueno()
+    and has_schema_privilege(r.oid, 'opsrun_private', 'USAGE')
   union all
-  select format('%s (%s EXECUTE)', p.oid::regprocedure, r.rol)
-  from pg_catalog.pg_proc as p
-  cross join (values ('anon'), ('authenticated')) as r(rol)
-  where p.pronamespace = 'private'::regnamespace
-    and has_function_privilege(r.rol, p.oid, 'execute')
-    and not (
-      r.rol = 'authenticated'
-      and exists (
-        select 1 from pg_catalog.pg_depend as d
-        where d.classid = 'pg_catalog.pg_policy'::regclass
-          and d.refclassid = 'pg_catalog.pg_proc'::regclass
-          and d.refobjid = p.oid
-      )
-    )
+  select format('%s (%s EXECUTE)', f.nombre, r.rolname)
+  from pg_temp.funciones_opsrun() as f
+  cross join pg_catalog.pg_roles as r
+  where f.esquema = 'opsrun_private'::regnamespace
+    and not r.rolsuper
+    and r.rolname !~ '^pg_'
+    and r.oid <> pg_temp.dueno()
+    and has_function_privilege(r.oid, f.fn, 'EXECUTE')
+  union all
+  select format('%s (PUBLIC EXECUTE)', f.nombre)
+  from pg_temp.funciones_opsrun() as f
+  join pg_catalog.pg_proc as p on p.oid = f.fn
+  cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) as x
+  where f.esquema = 'opsrun_private'::regnamespace
+    and x.grantee = 0
 $$;
 
--- 1 a 3. La comprobación real.
-select is_empty('select * from pg_temp.definer_sin_search_path()',
-  'G5: toda función security definer de opsRUN fija search_path');
-select is_empty('select * from pg_temp.definer_sin_require_operator()',
-  'G6: toda función security definer que authenticated puede invocar llama a private.require_operator()');
-select is_empty('select * from pg_temp.private_al_alcance()',
-  'G7: anon y authenticated no llegan a private (salvo lo que usan las políticas de RLS)');
-
--- 4. La excepción de G7 existe de verdad: la usan las políticas de lectura.
+-- 1. El guard tiene qué mirar.
 select ok(
-  exists (
-    select 1 from pg_catalog.pg_depend as d
-    where d.classid = 'pg_catalog.pg_policy'::regclass
-      and d.refobjid = 'private.current_operator_id()'::regprocedure
-  ),
-  'las políticas de lectura dependen de private.current_operator_id()'
+  (select count(*) from pg_temp.funciones_opsrun() as f
+   where f.esquema = 'opsrun_private'::regnamespace) >= 4,
+  'G5 a G7 descubren las funciones de opsRUN'
 );
 
--- 5 a 11. Los guards se ven fallar.
-create function public.guard_prueba_sin_search_path()
+-- 2 a 4. La comprobación real.
+select is_empty('select * from pg_temp.definer_sin_search_path()',
+  'G5: toda función security definer de opsRUN fija search_path');
+select is_empty('select * from pg_temp.definer_sin_actor()',
+  'G6: toda función security definer que un rol de opsRUN puede invocar valida el actor');
+select is_empty('select * from pg_temp.private_al_alcance()',
+  'G7: nadie más que el dueño alcanza opsrun_private');
+
+-- 5 a 10. Los guards se ven fallar. Se rompen las reglas como el dueño.
+grant opsrun_migrador to current_user with inherit false, set true;
+set local role opsrun_migrador;
+
+create function opsrun.guard_prueba_sin_search_path()
 returns int language sql security definer as $$ select 1 $$;
 
-create function public.guard_prueba_sin_operador()
+create function opsrun.guard_prueba_sin_actor()
 returns int language sql security definer set search_path = '' as $$ select 1 $$;
-grant execute on function public.guard_prueba_sin_operador() to authenticated;
+grant execute on function opsrun.guard_prueba_sin_actor() to opsrun_app;
 
-create function public.guard_prueba_con_operador()
-returns uuid language sql security definer set search_path = '' as $$ select private.require_operator() $$;
-grant execute on function public.guard_prueba_con_operador() to authenticated;
+create function opsrun.guard_prueba_con_actor()
+returns uuid language sql security definer set search_path = '' as $$ select opsrun_private.require_operator() $$;
+grant execute on function opsrun.guard_prueba_con_actor() to opsrun_app;
 
-create function private.guard_prueba_privada()
+create function opsrun_private.guard_prueba_privada()
 returns int language sql set search_path = '' as $$ select 1 $$;
 
+reset role;
+
 select ok(
-  exists (select 1 from pg_temp.definer_sin_search_path() as f(fn)
-          where f.fn = 'guard_prueba_sin_search_path()'),
+  'opsrun.guard_prueba_sin_search_path' in (select * from pg_temp.definer_sin_search_path()),
   'G5 se ve fallar: detecta una función security definer sin search_path'
 );
 select ok(
-  exists (select 1 from pg_temp.definer_sin_require_operator() as f(fn)
-          where f.fn = 'guard_prueba_sin_operador()'),
-  'G6 se ve fallar: detecta una función que authenticated invoca sin require_operator()'
+  'opsrun.guard_prueba_sin_actor' in (select * from pg_temp.definer_sin_actor()),
+  'G6 se ve fallar: detecta una función que opsrun_app invoca sin validar el actor'
 );
 select ok(
-  not exists (select 1 from pg_temp.definer_sin_require_operator() as f(fn)
-              where f.fn = 'guard_prueba_con_operador()'),
+  'opsrun.guard_prueba_con_actor' not in (select * from pg_temp.definer_sin_actor()),
   'G6 no marca una función que llama a require_operator()'
 );
-select ok(
-  exists (select 1 from pg_temp.private_al_alcance() as f(fn)
-          where f.fn = 'private.guard_prueba_privada() (anon EXECUTE)'),
-  'G7 se ve fallar: detecta una función de private que nace ejecutable por PUBLIC'
+select is_empty(
+  $$select * from pg_temp.private_al_alcance() as f(t) where f.t like 'opsrun_private.guard_prueba_privada %'$$,
+  'una función nueva de opsrun_private nace sin EXECUTE para nadie más que el dueño'
 );
 
-revoke all on function private.guard_prueba_privada() from public;
-grant execute on function private.guard_prueba_privada() to authenticated;
-select ok(
-  exists (select 1 from pg_temp.private_al_alcance() as f(fn)
-          where f.fn = 'private.guard_prueba_privada() (authenticated EXECUTE)'),
-  'G7 se ve fallar: detecta EXECUTE de authenticated sobre una función de private que no usa ninguna política'
-);
+set local role opsrun_migrador;
+grant execute on function opsrun_private.guard_prueba_privada() to opsrun_app;
+grant usage on schema opsrun_private to opsrun_app;
+reset role;
 
-grant usage on schema private to authenticated;
 select ok(
-  exists (select 1 from pg_temp.private_al_alcance() as f(fn)
-          where f.fn = 'private (authenticated USAGE)'),
-  'G7 se ve fallar: detecta USAGE de authenticated sobre private'
+  'opsrun_private.guard_prueba_privada (opsrun_app EXECUTE)' in (select * from pg_temp.private_al_alcance()),
+  'G7 se ve fallar: detecta EXECUTE de opsrun_app sobre una función de opsrun_private'
 );
 select ok(
-  exists (select 1 from pg_temp.definer_sin_require_operator() as f(fn)
-          where f.fn = 'private.current_operator_id()'),
-  'G6 se ve fallar: con USAGE en private, current_operator_id() queda al alcance sin require_operator()'
+  'opsrun_private (opsrun_app USAGE)' in (select * from pg_temp.private_al_alcance()),
+  'G7 se ve fallar: detecta USAGE de opsrun_app en opsrun_private'
 );
 
 select * from finish();

@@ -161,14 +161,17 @@ select is_empty(
 -- 5 a 10. El guard se ve fallar. Se rompe la regla como el dueño.
 grant opsrun_migrador to current_user with inherit false, set true;
 
--- El lector, hallado en el catálogo: el rol ajeno con USAGE en opsrun_writeback.
+-- El lector, hallado en el catálogo: el rol ajeno al que el ACL del esquema
+-- opsrun_writeback le concede USAGE de forma directa.
 create temporary table lector as
-  select r.rolname
-  from pg_catalog.pg_roles as r
-  where not pg_temp.es_de_opsrun(r.rolname)
-    and not r.rolsuper
-    and r.rolname !~ '^pg_'
-    and has_schema_privilege(r.oid, 'opsrun_writeback', 'USAGE');
+  select x.grantee::regrole::name as rolname
+  from pg_catalog.pg_namespace as n
+  cross join lateral aclexplode(n.nspacl) as x
+  where n.nspname = 'opsrun_writeback'
+    and x.privilege_type = 'USAGE'
+    and x.grantee <> 0
+    and x.grantee <> n.nspowner
+    and not pg_temp.es_de_opsrun(x.grantee::regrole::name);
 
 select is(
   (select count(*) from lector), 1::bigint,
@@ -176,10 +179,14 @@ select is(
 );
 
 -- Un privilegio de más al lector: SELECT en una tabla de opsrun.
+-- (El nombre se lee antes de cambiar de rol: la tabla temporal es del rol que
+-- corre el test.)
 do $$
+declare
+  v_lector name := (select rolname from lector);
 begin
   set local role opsrun_migrador;
-  execute format('grant select on opsrun.request to %I', (select rolname from lector));
+  execute format('grant select on opsrun.request to %I', v_lector);
   reset role;
 end
 $$;
@@ -188,10 +195,12 @@ select ok(
   'G3 se ve fallar: detecta SELECT del lector sobre una tabla de opsrun'
 );
 do $$
+declare
+  v_lector name := (select rolname from lector);
 begin
   set local role opsrun_migrador;
-  execute format('revoke select on opsrun.request from %I', (select rolname from lector));
-  execute format('grant usage on schema opsrun to %I', (select rolname from lector));
+  execute format('revoke select on opsrun.request from %I', v_lector);
+  execute format('grant usage on schema opsrun to %I', v_lector);
   reset role;
 end
 $$;
@@ -200,9 +209,11 @@ select ok(
   'G3 se ve fallar: detecta USAGE del lector en el esquema opsrun'
 );
 do $$
+declare
+  v_lector name := (select rolname from lector);
 begin
   set local role opsrun_migrador;
-  execute format('revoke usage on schema opsrun from %I', (select rolname from lector));
+  execute format('revoke usage on schema opsrun from %I', v_lector);
   reset role;
 end
 $$;
@@ -225,12 +236,13 @@ grant usage on schema opsrun_writeback to authenticated;
 grant select on opsrun_writeback.v1_request to authenticated;
 reset role;
 select is_empty(
-  'select * from pg_temp.de_mas()',
+  $$select * from pg_temp.de_mas() as f(t) where f.t like 'authenticated %'$$,
   'un segundo lector con solo USAGE y SELECT del write-back no tiene privilegios de más…'
 );
-select cmp_ok(
-  (select count(*) from pg_temp.lectores()), '>', 1::bigint,
-  'G3 se ve fallar: …pero detecta que hay más de un rol ajeno con privilegios en opsRUN'
+select ok(
+  'authenticated' in (select * from pg_temp.lectores())
+    and (select count(*) from pg_temp.lectores()) > 1,
+  'G3 se ve fallar: …pero cuenta como un segundo rol ajeno con privilegios en opsRUN'
 );
 
 select * from finish();

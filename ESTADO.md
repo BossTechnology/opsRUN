@@ -3,8 +3,8 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-1, conexión directa (rama `opr-1-conexion-directa`): opsRUN en el Supabase de la caja, en sus esquemas y con sus roles, según la ADR 0003 y las convenciones de las vecinas de Bzzz. PR contra `main`, sin fusionar.
-- OPR-20: spec y ADR 0001 ajustados a la ADR 0003 y a las convenciones de las vecinas de Bzzz (PR #5, fusionado). La migración espera este PR de OPR-1. La parte de servidor de OPR-1 (staging y producción) espera la red de OPR-6.
+- OPR-20, migración del modelo de datos (rama `opr-20-migracion-modelo-de-datos`): PR en borrador contra `main`, sin fusionar. G3 y G7 quedan en rojo hasta que Henry decida la excepción de `pg_read_all_data` (ver Bloqueado).
+- La parte de servidor de OPR-1 (staging y producción) espera la red de OPR-6.
 
 ## Hecho
 - 2026-11-24: base de documentos creada a partir de las 43 tarjetas del proyecto OPR en Relevo. Commit `e029ca1` en `main`.
@@ -26,7 +26,12 @@
 - 2026-11-24: OPR-20 ajustado a la ADR 0003. Esquemas `opsrun`, `opsrun_private` y `opsrun_writeback`; roles `opsrun_app` (lee y ejecuta funciones) y `opsrun_writeback_reader`. El servidor fija el actor de cada transacción (`opsrun.auth_user_id` o `opsrun.system_actor`). RLS de respaldo con una sola política para `opsrun_app`. Los guards G2 a G12 quedan acotados a los esquemas y roles `opsrun*`. Henry eligió las cuatro opciones recomendadas.
 - 2026-11-24: OPR-20 alineado con D77 §2.8 (PR #5). El lector del write-back es `bzzz_writeback_opsrun`, rol de la caja, que reemplaza a `opsrun_writeback_reader`. El dueño de esquemas y migraciones es `opsrun_migrador`. Esquemas y roles los crea el alta de opsRUN en Bzzz; las migraciones solo crean objetos y conceden dentro de `opsrun*`. En local y en CI los imita un script de prueba que construye OPR-1. G3 no busca al lector por nombre: todo rol ajeno con privilegios en `opsrun*` solo puede tener USAGE en `opsrun_writeback` y SELECT en sus vistas `v1_*`.
 - 2026-11-24: G3 exige además a lo sumo un rol ajeno con privilegios en `opsrun*` (aprobado por Henry), para que un SELECT de más a `authenticated` no pase. Un segundo lector de BzzzBX hace fallar G3 a propósito y pide una decisión explícita.
-- La migración de OPR-20 (con el modelo anterior, en `public`) está escrita y sin correr en la rama local `opr-20-migracion-modelo-de-datos`; se adapta al nuevo modelo cuando entre lo de OPR-1.
+- 2026-11-24: PR #6 (OPR-1, conexión directa) fusionado en `main`.
+- 2026-11-24: OPR-20, migración `20261124130000_modelo_de_datos.sql` sobre la de OPR-1. Corre como `opsrun_migrador`, sin crear esquemas ni roles: catálogos, las 15 tablas en `opsrun`, helpers de actor en `opsrun_private` (`current_operator_id`, `require_operator`, `require_system`), triggers (Audit inmutable, motivo obligatorio, borrador congelado, gate de Schedule, estado de instrucciones hacia adelante), RLS con una política de lectura para `opsrun_app` y vistas `v1_*` en `opsrun_writeback` para `bzzz_writeback_opsrun`.
+  - Guards pgTAP G2 a G12 por descubrimiento, cada uno visto fallar en cada corrida. G3 absorbe la frontera con los roles de la API que miraba `rls.test.sql`; G10 queda dentro de G3 y se quita `guard_writeback.test.sql`.
+  - `scripts/migrar.mjs` ya no confunde el `end;` de un cuerpo plpgsql con un fin de transacción (con test de Vitest).
+  - La seed pasa al esquema `opsrun` y carga como `opsrun_migrador`, con datos inventados.
+  - Validado en local con psql contra el Postgres del Supabase local (el Docker local está saturado y `supabase test db` no arranca): todo verde salvo G3 y G7. `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde.
 
 ## Pendiente
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
@@ -37,8 +42,9 @@
 - Confirmar con Federico las dependencias de `PLAN.md` §5.
 
 ## Bloqueado
+- OPR-20, G3 y G7: en Supabase, `postgres` y dos roles de plataforma son miembros de `pg_read_all_data`, que les da USAGE en todos los esquemas `opsrun*` (también `opsrun_private`) y SELECT en todas las tablas. G3 los cuenta como roles ajenos de más y G7 como alcance a `opsrun_private`. La excepción (a) (privilegios que vienen solo de `pg_read_all_data` cuentan como lectura del clúster, fuera del límite de un rol ajeno, sin nada más que leer) está en un commit aparte, sin decidir. Espera la decisión de Henry.
 - OPR-6 (contrato de BzzzBX): bloquea casi todo P1, incluido el despliegue de OPR-1.
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Revisar y fusionar el PR de la conexión directa (OPR-1). Después, rebasar `opr-20-migracion-modelo-de-datos` sobre `main` y adaptar la migración y los guards al spec ajustado: versión posterior a `20261124120000`, corre como `opsrun_migrador` con `scripts/migrar.mjs`, no crea esquemas ni roles. Luego correrlos y abrir el PR de la migración.
+- Henry decide la excepción (a) de G3 y G7. Si la aprueba, el PR queda con ese commit y una ADR; si no, se revierte y se busca otra salida. Con la CI en verde, el PR de OPR-20 pasa de borrador a revisión.
