@@ -1,7 +1,7 @@
 # 0001 — Modelo de datos de opsRUN
 
 - **Fecha:** 2026-11-24
-- **Estado:** propuesta
+- **Estado:** propuesta. Ajustada a la [ADR 0003](0003-supabase-de-la-caja.md): esquemas `opsrun`, `opsrun_private` y `opsrun_writeback` en el Supabase de la caja, con los roles `opsrun_app` y `opsrun_writeback_reader`
 - **Tarjeta:** OPR-20
 
 ## Contexto
@@ -32,13 +32,13 @@ Se eligió, con el equipo, en este orden:
 
 1. **Una fila por request, que se vuelve job.** En V1.1 beta una request da un job: cuando la IA detecta varios, solo avisa que se reserven aparte. Una tabla de vínculo agregaría un join a cada pantalla sin un caso que lo pida.
 2. **La etapa se calcula; no hay columna `stage`.** opsRUN guarda sus hechos (`status`, `ended_manually_at`, `approved_at`) y BzzzBX da el check-in, el fin y Paid. Una etapa guardada se desincronizaría con los sistemas de PINCH, que son los dueños del job.
-3. **Audit es una tabla única, append-only, que también anota lo observado.** Cuando la read layer ve un check-in, un fin o un Paid, escribe un evento `bzzzbx_observed` con solo el tipo, la hora y el crosswalk ID. El Audit queda completo e inmutable aunque BzzzBX no guarde historial, y viaja entero por el write-back. La inmutabilidad la imponen triggers que también frenan a `service_role` y a `postgres`.
+3. **Audit es una tabla única, append-only, que también anota lo observado.** Cuando la read layer ve un check-in, un fin o un Paid, escribe un evento `bzzzbx_observed` con solo el tipo, la hora y el crosswalk ID. El Audit queda completo e inmutable aunque BzzzBX no guarde historial, y viaja entero por el write-back. La inmutabilidad la imponen triggers que frenan a todos los roles, también a `opsrun_app`, al rol dueño y a los superusuarios.
 4. **Cada ocurrencia de alerta se guarda completa.** Se guardan la regla y su versión, el nivel, el motivo tal como llegó, la hora de apertura y la de resolución, y quién y cómo la resolvió. Resolved, el tiempo abierta y las repeticiones no dependen de BzzzBX. El motivo es la única columna marcada `bzzzbx-snapshot`: es un resultado calculado, no un dato del negocio.
 5. **Borrador tipado más `ai_suggestion` con decisión.** El gate de Schedule y las validaciones necesitan tipos y constraints. Un campo está AI-marked mientras su sugerencia principal no tiene decisión, y confirmar o corregir anota quién, cuándo y el valor final.
-6. **Tabla `operator` con `auth_user_id` opcional.** Audit y Assigned to apuntan a un id que no depende del método de login, así que OPR-2 se puede decidir sin migrar datos. Los roles, si llegan, van en una tabla aparte.
+6. **Tabla `operator` con `auth_user_id` opcional.** Audit y Assigned to apuntan a un id que no depende del método de login, así que OPR-2 se puede decidir sin migrar datos. Los roles, si llegan, van en una tabla aparte. Con la ADR 0003, `auth_user_id` es el usuario del GoTrue de la caja: el servidor valida la sesión y fija el actor en cada transacción (`opsrun.auth_user_id` para un operador, `opsrun.system_actor` para el sistema). La base no lee el esquema `auth`.
 7. **De la conversación solo se guarda el vínculo y las notas.** El cuerpo, los adjuntos y el estado de entrega se leen de BzzzBX. El `bzzzbx_message_id` único es también la deduplicación de la intake.
-8. **Escrituras solo por funciones SQL.** `anon` y `authenticated` no tienen permisos de escritura en ninguna tabla. Cada función valida el operador, exige el motivo cuando aplica y escribe el dato y su `audit_event` en la misma transacción. Así no hay forma de actuar sin dejar Audit.
-9. **Vistas `writeback.v1_*` con el rol `bzzzbx_reader`.** El rol solo tiene SELECT, y las tablas llevan cursores (`audit_event.id`, `change_seq`). Sirven para la consulta directa y para un pipeline, así que D-2 se puede decidir sin cambiar el esquema.
+8. **Escrituras solo por funciones SQL.** Ningún rol, salvo el dueño, escribe directo en las tablas; `opsrun_app` solo lee y ejecuta funciones. Cada función valida el actor (`require_operator()` o `require_system()`), exige el motivo cuando aplica y escribe el dato y su `audit_event` en la misma transacción. Así no hay forma de actuar sin dejar Audit.
+9. **Vistas `opsrun_writeback.v1_*` con el rol `opsrun_writeback_reader`.** El rol solo tiene SELECT ahí, y las tablas llevan cursores (`audit_event.id`, `change_seq`). Sirven para la consulta directa y para un pipeline, así que D-2 se puede decidir sin cambiar el esquema. Con la ADR 0003 están en la misma base que la caja, y ese rol es la única puerta de BzzzBX a los datos de opsRUN.
 
 Mientras Federico confirma si se escriben en PINCH, Approve & confirm, End manually y Mark as OSS se diseñan como hechos de opsRUN. La caché de lectura queda fuera: la decide OPR-22, y si se persiste va en un esquema aparte y no autoritativo.
 
