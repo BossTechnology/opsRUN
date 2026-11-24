@@ -29,7 +29,11 @@ export function entornoSupabaseLocal() {
   const publishableKey = estado.PUBLISHABLE_KEY ?? estado.ANON_KEY;
   const secretKey = estado.SECRET_KEY ?? estado.SERVICE_ROLE_KEY;
   if (!url || !publishableKey || !secretKey) {
-    throw new Error("`supabase status` no trajo API_URL y las llaves. ¿Cambió la versión de la CLI?");
+    // Solo los nombres de los campos, nunca sus valores.
+    throw new Error(
+      "`supabase status` no trajo API_URL y las llaves (¿falta el servicio de auth o cambió la CLI?). " +
+        `Campos recibidos: ${Object.keys(estado).join(", ") || "ninguno"}.`,
+    );
   }
 
   return {

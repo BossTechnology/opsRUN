@@ -60,10 +60,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # La app solo necesita Postgres, PostgREST y Kong (la API).
+      # La app necesita Postgres, PostgREST y Kong (la API). GoTrue se queda:
+      # sin él, `supabase status` no entrega las llaves de la API.
       - run: >-
           pnpm exec supabase start
-          -x gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()
