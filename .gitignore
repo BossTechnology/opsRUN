@@ -1,0 +1,46 @@
+# dependencias
+/node_modules
+/.pnp
+.pnp.*
+
+# tests
+/coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# next.js
+/.next/
+/out/
+/build
+
+# varios
+.DS_Store
+*.pem
+*.key
+
+# debug
+npm-debug.log*
+.pnpm-debug.log*
+
+# variables de entorno: nunca se versionan, salvo el ejemplo
+.env*
+*.env
+!.env.example
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# supabase local
+supabase/.branches
+supabase/.temp
+
+# datos: este repo es público. Nada de dumps, exportes ni datos de PINCH
+*.dump
+*.sql.gz
+*.csv
+*.xlsx
+/datos/
+/exports/
