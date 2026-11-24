@@ -158,9 +158,9 @@ select lives_ok(
 
 -- 18. Un cambio de tipo en una instrucción también pasa por el chequeo.
 insert into opsrun.instruction (id, type, idempotency_key, payload, actor_kind)
-values ('c0000000-0000-4000-8000-0000000000a1', 'send_text', 'audit-tipo', '{}', 'system');
+values ('c0000000-0000-4000-8000-00000000a0d1', 'send_text', 'audit-tipo', '{}', 'system');
 select throws_ok(
-  $$ update opsrun.instruction set type = 'cancel_job' where id = 'c0000000-0000-4000-8000-0000000000a1' $$,
+  $$ update opsrun.instruction set type = 'cancel_job' where id = 'c0000000-0000-4000-8000-00000000a0d1' $$,
   'OP002', null,
   'cambiar una instrucción a un tipo que pide motivo exige motivo'
 );
