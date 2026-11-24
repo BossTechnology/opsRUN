@@ -420,16 +420,21 @@ D-2 no está decidida. El esquema sirve para los dos caminos (consulta directa o
 
 ## 8. Guards de seguridad (pgTAP, `supabase test db`)
 
-Todos **descubren** los objetos desde el catálogo (`information_schema`, `pg_class`, `pg_proc`, `pg_policy`) y no tienen listas escritas a mano. Cada uno se ve fallar una vez antes de darlo por bueno: se quita la protección en una rama, se corre, se ve rojo y se restaura. El PR de la migración anota cómo falló cada uno.
+Todos **descubren** los objetos desde el catálogo (`information_schema`, `pg_class`, `pg_proc`, `pg_policy`) y no tienen listas escritas a mano. Siguen el patrón que dejó OPR-1 en `supabase/tests/database/rls.test.sql`:
+
+- "de opsRUN" es todo objeto cuyo dueño es el rol que aplica las migraciones, así que quedan fuera los esquemas de Supabase sin listarlos;
+- cada guard se ve fallar **en cada corrida**: dentro de la transacción del test crea un objeto de prueba que viola la regla, comprueba que lo detecta y lo corrige (o hace rollback).
+
+Así el "verlo fallar una vez" del principio 8 de `PLAN.md` queda en el propio test y no depende de que alguien lo pruebe a mano.
 
 | # | Guard | Cómo descubre | Cómo se ve fallar |
 |---|---|---|---|
-| G1 | Toda tabla de `public` tiene RLS activada | `pg_class` con `relkind = 'r'` en `public` | `alter table … disable row level security` en una tabla |
+| G1 | Toda tabla de opsRUN a la que llegan `anon` o `authenticated` tiene RLS activada | **Ya existe** (`rls.test.sql`, OPR-1). OPR-20 solo lo hereda | Tabla de prueba sin RLS con `grant select` |
 | G2 | Ninguna tabla de `public` da INSERT, UPDATE, DELETE ni TRUNCATE a `anon` o `authenticated` | `has_table_privilege` sobre todas las tablas | `grant insert` a `authenticated` |
 | G3 | `anon` lee 0 filas (o recibe permiso denegado) en toda tabla y vista de `public` | Bucle dinámico con `set local role anon` | Política `using (true)` para `anon` |
 | G4 | Un `authenticated` sin operador activo lee 0 filas en toda tabla de `public` | Igual que G3, con un JWT de prueba sin fila en `operator` | Política `using (true)` |
 | G5 | Toda función `security definer` fija `search_path` | `pg_proc.prosecdef` y `proconfig` | Quitar `set search_path` |
-| G6 | Toda función `security definer` de `public` llama a `private.require_operator()` | `prosrc` de `pg_proc` | Función nueva sin la llamada |
+| G6 | Toda función `security definer` que `authenticated` puede ejecutar llama a `private.require_operator()` | `pg_proc.prosecdef`, `has_function_privilege('authenticated', …)` y `prosrc`. Así quedan fuera funciones de solo `service_role`, como `opsrun_health()` de OPR-1 | Función de prueba ejecutable por `authenticated` sin la llamada |
 | G7 | Ninguna función de `private` es ejecutable por `anon` ni `authenticated` | `has_function_privilege` | `grant execute` a `authenticated` |
 | G8 | `audit_event` rechaza UPDATE, DELETE y TRUNCATE, también como `service_role` y `postgres` | Prueba directa con los dos roles | Quitar el trigger |
 | G9 | Toda columna de `public` tiene `COMMENT` con el dueño (`opsrun`, `crosswalk`, `bzzzbx-snapshot`). Toda `bzzzbx_*_id` es `text` y está marcada `crosswalk` | `information_schema.columns` y `col_description` | Columna nueva sin comentario |
