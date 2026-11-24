@@ -27,7 +27,7 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 |---|---|---|
 | App | Next.js (App Router), TypeScript estricto | OPR-1 |
 | Dónde corre | En el mismo servidor que BzzzBX, al lado de la caja y no dentro: repo, deploy y vuelta atrás propios. Con BzzzBX solo habla por el contrato de OPR-6 ([ADR 0002](docs/adr/0002-opsrun-al-lado-de-la-caja.md)) | OPR-1 |
-| Datos de opsRUN | El Supabase que ya corre en el servidor (el de la caja), en los esquemas `opsrun` y `opsrun_private`. Conexión directa a Postgres con el rol propio `opsrun_app`: sin PostgREST, sin service role, nada en `public` ([ADR 0003](docs/adr/0003-supabase-de-la-caja.md)) | OPR-1, OPR-20 |
+| Datos de opsRUN | El Supabase que ya corre en el servidor (el de la caja), en los esquemas `opsrun`, `opsrun_private` y `opsrun_writeback`. Conexión directa a Postgres con el rol propio `opsrun_app`, que solo entra a `opsrun`: sin PostgREST, sin service role, nada en `public` ([ADR 0003](docs/adr/0003-supabase-de-la-caja.md)). Esquemas y roles los crea el alta de opsRUN en Bzzz; las migraciones corren como `opsrun_migrador`, el dueño, y solo crean objetos dentro de lo suyo | OPR-1, OPR-20 |
 | Login | GoTrue de la caja, compartido con las demás apps; el método y la lista de usuarios siguen en OPR-2 | OPR-2 |
 | Integración | BzzzBX: lectura con actualizaciones en menos de 1 minuto, instrucciones con confirmación, write-back | OPR-6, OPR-22, OPR-23, OPR-24 |
 | Tests | Vitest (unitarios, jsdom), pgTAP con `supabase test db` (base) y Playwright (E2E contra el build de producción y el Supabase local). Corren en CI en cada PR | OPR-1 (confirmado) |
@@ -41,30 +41,40 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 
 | Entorno | Dónde | Uso |
 |---|---|---|
-| Local | `pnpm local`: Supabase local (CLI, Docker, puertos 58320–58329) y `next dev`, con datos inventados | Desarrollo y todos los tests |
+| Local | `pnpm local`: Supabase local (CLI, Docker, puertos 58320–58329), un script que imita el alta de Bzzz, las migraciones como `opsrun_migrador` y `next dev`, con datos inventados | Desarrollo y todos los tests |
 | Staging | Servidor de PINCH | Pruebas E2E con datos vivos de PINCH (OPR-40) |
 | Producción | Servidor de PINCH | Uso real; la ejecuta Henry |
 
-Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1). Las migraciones se aplican solo desde la migración versionada; nunca se editan tablas desde el Studio.
+Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1). Las migraciones se aplican solo desde la migración versionada, con `scripts/migrar.mjs` como `opsrun_migrador`; nunca se editan tablas desde el Studio. Cómo se corren en la caja se acuerda con el equipo de BzzzBX.
 
 ### Variables de entorno
 
 Solo nombres. Los valores viven en el servidor, nunca en el repo. Los de BzzzBX salen del contrato de OPR-6.
 
-> **Cambia con la ADR 0003:** las variables `SUPABASE_*` y `NEXT_PUBLIC_SUPABASE_*` de abajo salen cuando OPR-1 pase a la conexión directa. Entran la URL de Postgres del rol `opsrun_app` y la URL del GoTrue de la caja; los nombres los fija ese PR.
-
 ```
-SUPABASE_URL=                 # solo servidor; URL de Supabase vista desde el servidor de Next
-SUPABASE_SECRET_KEY=          # solo servidor
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+OPSRUN_SERVIDOR=1             # staging y producción: activa las comprobaciones de arranque
+OPSRUN_DB_HOST=               # Postgres de la caja, visto desde el servidor de opsRUN
+OPSRUN_DB_PORT=               # opcional, 5432
+OPSRUN_DB_NAME=               # opcional, postgres
+OPSRUN_SECRETS_FILE=          # opcional; archivo montado con OPSRUN_APP_USUARIO y OPSRUN_APP_CLAVE
+OPSRUN_GOTRUE_URL=            # raíz del GoTrue de la caja; se valida, el login es de OPR-2
 NEXT_PUBLIC_SITE_URL=
 BZZZBX_…                      # por definir en OPR-6
+
+# Fuera del servidor de la app
+OPSRUN_DATABASE_URL=          # solo local y CI: conexión como opsrun_app
+OPSRUN_MIGRADOR_URL=          # solo para aplicar migraciones (scripts/migrar.mjs), como opsrun_migrador
 ```
 
-El servidor de Next lee `SUPABASE_URL` y `SUPABASE_SECRET_KEY` en tiempo de ejecución. No usa `NEXT_PUBLIC_SUPABASE_URL` porque Next congela las variables `NEXT_PUBLIC_*` al compilar, y el mismo build tiene que servir en staging y en producción. Las `NEXT_PUBLIC_*` se fijan en el build de cada entorno y solo las usa el navegador (todavía nada en OPR-1).
+El servidor se conecta directo a Postgres como `opsrun_app`. Lee todo en tiempo de ejecución, así que el mismo build sirve en staging y en producción. La clave no va en variables de entorno: va en un archivo de secretos montado en el contenedor, por defecto `/run/secrets/opsrun/app.env`.
 
-En local no hay archivos `.env`: `pnpm local` y Playwright toman los valores de `supabase status`.
+Con `OPSRUN_SERVIDOR=1` el servidor no arranca si:
+- falta `OPSRUN_DB_HOST`, `OPSRUN_GOTRUE_URL` o el archivo de secretos;
+- `OPSRUN_GOTRUE_URL` no es una URL http(s) limpia;
+- el login es superusuario o BYPASSRLS;
+- está definida alguna variable que el servidor no debe tener. Las llaves de Supabase (service role, secret key, JWT secret), `POSTGRES_PASSWORD`, `OPSRUN_DATABASE_URL`, `OPSRUN_APP_CLAVE` y `OPSRUN_MIGRADOR_URL` se rechazan solo por el nombre, sin mostrar su valor.
+
+En local y en CI no hay archivos `.env`: `pnpm local`, `pnpm test:db`, Vitest y Playwright arman la conexión desde `supabase status`, con las claves locales del alta local.
 
 ---
 

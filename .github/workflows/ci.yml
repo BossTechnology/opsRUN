@@ -1,4 +1,5 @@
 # CI de opsRUN: lint, typecheck, Vitest, pgTAP (`supabase test db`) y Playwright.
+# La app se conecta directo a Postgres como opsrun_app (ADR 0003).
 # Todo corre contra el Supabase local de la CLI, con datos inventados.
 name: CI
 
@@ -43,13 +44,14 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Solo Postgres, con las migraciones de supabase/migrations aplicadas.
+      # Solo Postgres. La CLI no aplica migraciones (supabase/config.toml).
       - run: pnpm exec supabase db start
-      # Descubre y corre todo supabase/tests/**/*.sql.
-      - run: pnpm exec supabase test db
+      # Imita el alta de opsRUN en Bzzz, aplica las migraciones como
+      # opsrun_migrador y corre todo supabase/tests/**/*.sql.
+      - run: pnpm test:db
 
   e2e:
-    name: Playwright
+    name: Playwright y pool contra Postgres
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -60,11 +62,19 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # La app necesita Postgres, PostgREST y Kong (la API). GoTrue se queda:
-      # sin él, `supabase status` no entrega las llaves de la API.
+      # Como en la caja: Postgres y GoTrue (Kong lo publica en /auth/v1).
+      # opsRUN no usa PostgREST.
       - run: >-
           pnpm exec supabase start
-          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          -x postgrest,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      # Alta local y migraciones como opsrun_migrador, como en la caja.
+      - run: pnpm db:prepare
+      # Con la base lista, Vitest corre también las pruebas del pool contra
+      # Postgres como opsrun_app (src/lib/db/pool.test.ts). Si la base no
+      # respondiera, fallan en vez de saltarse.
+      - run: pnpm test
+        env:
+          OPSRUN_REQUIERE_BASE: "1"
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()

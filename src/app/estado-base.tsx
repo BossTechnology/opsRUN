@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 
-import { leerSalud } from "@/lib/salud";
-import { crearClienteServidor } from "@/lib/supabase/servidor";
+import { comoOpsrunApp } from "@/lib/db/servidor";
+import { CONSULTA_SALUD, leerSalud } from "@/lib/salud";
 
 import { TarjetaSalud } from "./tarjeta-salud";
 
@@ -9,15 +9,9 @@ import { TarjetaSalud } from "./tarjeta-salud";
 export async function EstadoBase() {
   await connection();
 
-  let salud;
-  try {
-    salud = await leerSalud(crearClienteServidor());
-  } catch (e) {
-    salud = {
-      conectada: false as const,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
+  const salud = await leerSalud(() =>
+    comoOpsrunApp(async (db) => (await db.query(CONSULTA_SALUD)).rows),
+  );
   if (!salud.conectada) {
     console.error("[opsRUN] La base no responde:", salud.error);
   }
