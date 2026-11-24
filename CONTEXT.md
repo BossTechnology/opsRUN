@@ -10,6 +10,7 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 |---|---|---|
 | opsRUN | Esta consola: el tablero de Operations y Finance de PINCH. | Todo el repo |
 | BzzzBX | Capa de integración. Único camino de opsRUN hacia los sistemas de PINCH, para leer y para actuar. | OPR-6, OPR-22, OPR-23 |
+| Caja | La instalación de BzzzBX en el servidor de PINCH. opsRUN corre en el mismo servidor pero fuera de la caja: no usa su base, no la instala su actualizador y no entra por su puerta. _Evitar_: decir que opsRUN está "dentro de BzzzBX" o que es un "engine" de la caja. | ADR 0002 |
 | Read layer | Parte de opsRUN que lee todo de BzzzBX y se actualiza en menos de 1 minuto. Si BzzzBX está caído, muestra lo último conocido con un aviso. | OPR-22 |
 | Instruction layer | Parte de opsRUN que convierte cada acción del operador en una instrucción a BzzzBX y espera su confirmación o su error. | OPR-23 |
 | Write-back | Envío de los datos que son de opsRUN a BzzzBX para que se consulten como el resto, también desde Rosie. | OPR-24 |
