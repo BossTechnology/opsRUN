@@ -13,6 +13,7 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Caja | La instalación de BzzzBX en el servidor de PINCH. opsRUN corre en el mismo servidor pero fuera de la caja: no la instala su actualizador y no entra por su puerta, pero sí usa su Supabase (base y GoTrue), en su propio esquema y con su propio rol. _Evitar_: decir que opsRUN está "dentro de BzzzBX". | ADR 0002, ADR 0003 |
 | Engine | Para Henry, cada app de Boss que corre al lado de la caja y usa su Supabase: BOb, opsRUN y las que vengan. En el glosario de BzzzBX la palabra significa otra cosa (una app fuera de la caja a la que el portal solo enlaza). | ADR 0003 |
 | `opsrun_app` | Rol de Postgres con el que el servidor de opsRUN se conecta a la base de la caja. Mínimo privilegio: lee el esquema `opsrun` y ejecuta sus funciones de escritura; no llega a `opsrun_private`. | ADR 0003, OPR-20 |
+| `opsrun_migrador` | Rol de Postgres dueño de los esquemas `opsrun`, `opsrun_private` y `opsrun_writeback`; aplica las migraciones. Lo crea, con los esquemas, el alta de opsRUN en Bzzz; las migraciones no crean esquemas ni roles. En local y en CI lo imita un script de prueba (OPR-1). | D77 §2.8, OPR-1, OPR-20 |
 | Read layer | Parte de opsRUN que lee todo de BzzzBX y se actualiza en menos de 1 minuto. Si BzzzBX está caído, muestra lo último conocido con un aviso. | OPR-22 |
 | Instruction layer | Parte de opsRUN que convierte cada acción del operador en una instrucción a BzzzBX y espera su confirmación o su error. | OPR-23 |
 | Write-back | Envío de los datos que son de opsRUN a BzzzBX para que se consulten como el resto, también desde Rosie. | OPR-24 |
@@ -75,7 +76,7 @@ Términos internos del esquema de opsRUN (no los ve el operador). Detalle en `do
 | Alert occurrence | Una apertura de una regla de alerta sobre una request, con su resolución: Cleared automatically, resuelta por una acción o con Clear alert. | OPR-34 |
 | AI suggestion | Propuesta de la IA para un campo, con motivo. Queda sin decidir (el campo se ve AI-marked) hasta que el operador la acepta, la corrige o la rechaza. | OPR-36, OPR-37 |
 | Observed event | Hecho de PINCH (check-in, inicio, fin, Paid) que la read layer ve y anota en Audit con solo el tipo, la hora y el crosswalk ID. | OPR-20, OPR-35 |
-| Write-back views | Vistas `opsrun_writeback.v1_*`: el contrato de lo que BzzzBX lee de opsRUN, con el rol `opsrun_writeback_reader`. | OPR-24, OPR-20 |
+| Write-back views | Vistas `opsrun_writeback.v1_*`: el contrato de lo que BzzzBX lee de opsRUN, con el rol de la caja `bzzz_writeback_opsrun` (lo crea la caja; la migración de opsRUN solo le concede SELECT). | OPR-24, OPR-20 |
 | Actor de la transacción | Quién actúa en una transacción, según lo que fija el servidor: un operador (`opsrun.auth_user_id`, validado contra GoTrue) o un proceso del sistema (`opsrun.system_actor`). Las funciones de escritura lo leen y lo escriben en Audit. | OPR-20 |
 
 ## Fuera de alcance de V1.1 beta
