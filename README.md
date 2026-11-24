@@ -69,7 +69,9 @@ Todo cambio va en una migración nueva en `supabase/migrations/`, con nombre `<A
 - llevan la cuenta en `opsrun.schema_migration`;
 - solo crean objetos dentro de los esquemas de opsRUN y conceden sobre ellos.
 
-La CLI de Supabase no las aplica (`supabase/config.toml`). Nunca se editan tablas desde el Studio.
+La CLI de Supabase no las aplica (`supabase/config.toml`). Nunca se editan tablas desde el Studio. Si existe `supabase/seed.sql` (solo datos inventados), `pnpm db:reset` lo carga como `opsrun_migrador` después de las migraciones.
+
+Si tu base local es de antes de la conexión directa (tiene `public.opsrun_health()`), `pnpm local` te pide `pnpm db:reset` una vez.
 
 Los guards de `supabase/tests/database/` descubren en vez de enumerar: "de opsRUN" es todo esquema `opsrun` u `opsrun_*` y todo rol `opsrun_*`, y el dueño es el del esquema `opsrun`. Cada uno rompe su regla a propósito en cada corrida y comprueba que la detecta.
 

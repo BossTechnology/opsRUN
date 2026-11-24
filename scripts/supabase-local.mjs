@@ -40,13 +40,13 @@ export function urlsSupabaseLocal() {
   } catch {
     throw new Error("Supabase local no está corriendo. Levántalo con `pnpm local` o `pnpm db:start`.");
   }
-  if (!estado.DB_URL || !estado.API_URL) {
-    // Solo los nombres de los campos, nunca sus valores.
-    throw new Error(
-      "`supabase status` no trajo DB_URL y API_URL (¿cambió la CLI?). " +
+  // Solo los nombres de los campos, nunca sus valores.
+  const faltaCampo = (campo) =>
+    new Error(
+      `\`supabase status\` no trajo ${campo} (¿cambió la CLI o falta el servicio?). ` +
         `Campos recibidos: ${Object.keys(estado).join(", ") || "ninguno"}.`,
     );
-  }
+  if (!estado.DB_URL) throw faltaCampo("DB_URL");
   const comoRol = (usuario, clave) => {
     const url = new URL(estado.DB_URL);
     url.username = usuario;
@@ -57,13 +57,16 @@ export function urlsSupabaseLocal() {
     admin: estado.DB_URL,
     app: comoRol("opsrun_app", CLAVE_LOCAL_OPSRUN_APP),
     migrador: comoRol("opsrun_migrador", CLAVE_LOCAL_OPSRUN_MIGRADOR),
-    api: estado.API_URL.replace(/\/+$/, ""),
+    // La API (Kong) no corre con `supabase db start`; solo la necesita la app.
+    api: estado.API_URL ? estado.API_URL.replace(/\/+$/, "") : null,
+    faltaCampo,
   };
 }
 
 /** Variables de entorno de opsRUN para el Supabase local. Falla si no está arriba. */
 export function entornoSupabaseLocal() {
-  const { app, api } = urlsSupabaseLocal();
+  const { app, api, faltaCampo } = urlsSupabaseLocal();
+  if (!api) throw faltaCampo("API_URL");
   return {
     OPSRUN_DATABASE_URL: app,
     // En local GoTrue está detrás de Kong; en la caja sirve en su raíz.

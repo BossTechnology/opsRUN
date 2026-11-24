@@ -22,7 +22,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(18);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
@@ -190,14 +190,28 @@ select ok(
 );
 revoke authenticated from opsrun_app;
 
--- 6. Sin CREATE en la base. (La prueba que lo rompe necesita conceder sobre la
--- base, que es de la caja; Postgres no se lo da a PUBLIC y el alta tampoco.)
+-- 6 y 7. Sin CREATE en la base (Postgres no se lo da a PUBLIC y el alta tampoco).
 select is_empty(
   'select * from pg_temp.crean_en_la_base()',
   'ningún rol de opsRUN puede crear esquemas en la base'
 );
 
--- 7 a 11. Nada fuera de sus esquemas que PUBLIC no tenga ya.
+do $$
+begin
+  execute format('grant create on database %I to opsrun_app', current_database());
+end
+$$;
+select ok(
+  'opsrun_app' in (select * from pg_temp.crean_en_la_base()),
+  'el guard detecta CREATE de opsrun_app en la base'
+);
+do $$
+begin
+  execute format('revoke create on database %I from opsrun_app', current_database());
+end
+$$;
+
+-- 8 a 12. Nada fuera de sus esquemas que PUBLIC no tenga ya.
 select is_empty(
   'select * from pg_temp.alcance_fuera()',
   'ningún rol de opsRUN alcanza nada fuera de sus esquemas que PUBLIC no alcance ya'
@@ -233,7 +247,7 @@ select ok(
   'el guard detecta INSERT en una tabla de public'
 );
 
--- 12 y 13. Lo que ya prohíbe Postgres, visto desde cada rol de opsRUN.
+-- 13 y 14. Lo que ya prohíbe Postgres, visto desde cada rol de opsRUN.
 select is_empty(
   $$select r.rol from pg_temp.roles_opsrun() as r(rol)
     where has_schema_privilege(r.rol, 'auth', 'usage')
@@ -246,7 +260,7 @@ select is_empty(
   'ningún rol de opsRUN puede crear nada en public'
 );
 
--- 14 a 17. Dentro de opsRUN, opsrun_app entra a opsrun y a nada más.
+-- 15 a 18. Dentro de opsRUN, opsrun_app entra a opsrun y a nada más.
 select ok(
   has_schema_privilege('opsrun_app', 'opsrun', 'usage'),
   'opsrun_app entra al esquema opsrun'

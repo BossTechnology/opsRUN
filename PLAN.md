@@ -71,7 +71,7 @@ El servidor se conecta directo a Postgres como `opsrun_app`. Lee todo en tiempo 
 Con `OPSRUN_SERVIDOR=1` el servidor no arranca si:
 - falta `OPSRUN_DB_HOST`, `OPSRUN_GOTRUE_URL` o el archivo de secretos;
 - `OPSRUN_GOTRUE_URL` no es una URL http(s) limpia;
-- el login es superusuario o BYPASSRLS;
+- el login es superusuario o BYPASSRLS (si la base no responde al arrancar, arranca y la primera consulta lo vuelve a comprobar: con ese login no corre ninguna);
 - está definida alguna variable que el servidor no debe tener. Las llaves de Supabase (service role, secret key, JWT secret), `POSTGRES_PASSWORD`, `OPSRUN_DATABASE_URL`, `OPSRUN_APP_CLAVE` y `OPSRUN_MIGRADOR_URL` se rechazan solo por el nombre, sin mostrar su valor.
 
 En local y en CI no hay archivos `.env`: `pnpm local`, `pnpm test:db`, Vitest y Playwright arman la conexión desde `supabase status`, con las claves locales del alta local.

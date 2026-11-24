@@ -4,12 +4,15 @@
 //    administrador local: crea los esquemas y los roles de opsRUN. En la caja
 //    esto lo hace Bzzz, nunca este script.
 // 2. Aplica las migraciones pendientes como opsrun_migrador (scripts/migrar.mjs).
+// 3. Si existe supabase/seed.sql (datos inventados), lo carga como
+//    opsrun_migrador cuando esta corrida aplicó migraciones: tras un reset o
+//    una base nueva.
 //
 // La CLI de Supabase no aplica las migraciones ni la seed por su cuenta
 // (desactivadas en supabase/config.toml): lo hace esto, en el orden de la caja.
 // Lo llaman `pnpm local`, `pnpm db:start`, `pnpm db:reset`, `pnpm test:db`, el
 // E2E y el CI. Es idempotente.
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import pg from "pg";
@@ -18,21 +21,41 @@ import { migrar } from "./migrar.mjs";
 import { urlsSupabaseLocal } from "./supabase-local.mjs";
 
 const ALTA_LOCAL = new URL("../supabase/alta-local.sql", import.meta.url);
+const SEED = new URL("../supabase/seed.sql", import.meta.url);
+
+async function ejecutar(url, sql) {
+  const cliente = new pg.Client({ connectionString: url });
+  await cliente.connect();
+  try {
+    return await cliente.query(sql);
+  } finally {
+    await cliente.end();
+  }
+}
 
 export async function prepararBaseLocal({ avisar = console.log } = {}) {
   const { admin, migrador } = urlsSupabaseLocal();
 
-  const alta = await readFile(ALTA_LOCAL, "utf8");
-  const cliente = new pg.Client({ connectionString: admin });
-  await cliente.connect();
-  try {
-    await cliente.query(alta);
-  } finally {
-    await cliente.end();
+  // Una base local creada antes de la conexión directa tiene public.opsrun_health(),
+  // que la CLI aplicaba como postgres. Ya no es de opsRUN: hay que empezar de cero.
+  const { rows } = await ejecutar(admin, "select to_regprocedure('public.opsrun_health()') is not null as vieja");
+  if (rows[0]?.vieja) {
+    throw new Error("La base local es de antes de la conexión directa (tiene public.opsrun_health). Corre `pnpm db:reset`.");
   }
+
+  await ejecutar(admin, await readFile(ALTA_LOCAL, "utf8"));
   avisar("Alta local de opsRUN: esquemas y roles listos.");
 
-  await migrar(migrador, { avisar });
+  const aplicadas = await migrar(migrador, { avisar });
+
+  const haySeed = await access(SEED).then(
+    () => true,
+    () => false,
+  );
+  if (haySeed && aplicadas.length > 0) {
+    await ejecutar(migrador, await readFile(SEED, "utf8"));
+    avisar("Seed cargada: supabase/seed.sql.");
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

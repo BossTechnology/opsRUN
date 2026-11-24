@@ -15,7 +15,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(12);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
@@ -206,6 +206,16 @@ select ok(
 select ok(
   'relación guard_otra_app.de_opsrun' in (select * from pg_temp.opsrun_fuera()),
   'el guard detecta una tabla de opsRUN fuera de sus esquemas'
+);
+
+-- 12. (Va al final: el esquema de prueba es "de opsRUN" para los demás guards.)
+-- Un esquema opsrun_* de otro dueño, como el que crearía una migración de otra
+-- vecina o alguien a mano.
+create schema opsrun_guard_otro_dueno;
+
+select ok(
+  'opsrun_guard_otro_dueno' in (select * from pg_temp.esquemas_de_otro_dueno()),
+  'el guard detecta un esquema de opsRUN de otro dueño'
 );
 
 select * from finish();

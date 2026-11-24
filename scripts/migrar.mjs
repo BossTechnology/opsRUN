@@ -21,6 +21,9 @@ import pg from "pg";
 
 export const DIRECTORIO_MIGRACIONES = new URL("../supabase/migrations/", import.meta.url);
 const PATRON = /^(\d{14})_([a-z0-9_]+)\.sql$/;
+// La transacción la abre y la cierra este script: si la migración trae la suya,
+// su COMMIT dejaría la cuenta fuera de la transacción.
+const CONTROL_DE_TRANSACCION = /^\s*(begin|commit|rollback|end|start\s+transaction)\s*;/im;
 
 /** Las migraciones en disco, en orden. Falla si un .sql no sigue el patrón. */
 export async function migracionesEnDisco(directorio = DIRECTORIO_MIGRACIONES) {
@@ -81,6 +84,11 @@ export async function migrar(url, { directorio = DIRECTORIO_MIGRACIONES, avisar 
 
     for (const migracion of pendientes) {
       const sql = await readFile(migracion.url, "utf8");
+      if (CONTROL_DE_TRANSACCION.test(sql)) {
+        throw new Error(
+          `${migracion.version}_${migracion.nombre}: no puede abrir ni cerrar transacciones; cada migración ya corre en la suya.`,
+        );
+      }
       await cliente.query("begin");
       try {
         await cliente.query(sql);
@@ -90,7 +98,7 @@ export async function migrar(url, { directorio = DIRECTORIO_MIGRACIONES, avisar 
         ]);
         await cliente.query("commit");
       } catch (error) {
-        await cliente.query("rollback");
+        await cliente.query("rollback").catch(() => {});
         throw new Error(`Falló la migración ${migracion.version}_${migracion.nombre}: ${error.message}`, {
           cause: error,
         });
