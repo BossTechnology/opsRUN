@@ -29,8 +29,10 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 | Datos de opsRUN | Supabase autohospedado en el servidor dedicado de PINCH, junto a BzzzBX (no Supabase en la nube) | OPR-1 |
 | Login | Pendiente de OPR-2 | OPR-2 |
 | Integración | BzzzBX: lectura con actualizaciones en menos de 1 minuto, instrucciones con confirmación, write-back | OPR-6, OPR-22, OPR-23, OPR-24 |
-| Tests | Vitest, pgTAP (`supabase test db`) y Playwright | Por confirmar en OPR-1; se hereda de Relevo |
-| Gestor de paquetes | pnpm | |
+| Tests | Vitest (unitarios, jsdom), pgTAP con `supabase test db` (base) y Playwright (E2E contra el build de producción y el Supabase local). Corren en CI en cada PR | OPR-1 (confirmado) |
+| Gestor de paquetes | pnpm (versión fija en `packageManager`); Node 22 (`.nvmrc`) | OPR-1 |
+| CLI de Supabase | Dependencia del proyecto (`supabase` en `devDependencies`), versión fija | OPR-1 |
+| CI | GitHub Actions: lint, typecheck, Vitest, `supabase test db` y Playwright | OPR-1 |
 
 ---
 
@@ -38,7 +40,7 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 
 | Entorno | Dónde | Uso |
 |---|---|---|
-| Local | `supabase start` (CLI, Docker) y `pnpm dev`, con datos inventados | Desarrollo y todos los tests |
+| Local | `pnpm local`: Supabase local (CLI, Docker, puertos 58320–58329) y `next dev`, con datos inventados | Desarrollo y todos los tests |
 | Staging | Servidor de PINCH | Pruebas E2E con datos vivos de PINCH (OPR-40) |
 | Producción | Servidor de PINCH | Uso real; la ejecuta Henry |
 
@@ -49,12 +51,17 @@ Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1). Las 
 Solo nombres. Los valores viven en el servidor, nunca en el repo. Los de BzzzBX salen del contrato de OPR-6.
 
 ```
+SUPABASE_URL=                 # solo servidor; URL de Supabase vista desde el servidor de Next
+SUPABASE_SECRET_KEY=          # solo servidor
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SECRET_KEY=          # solo servidor
 NEXT_PUBLIC_SITE_URL=
 BZZZBX_…                      # por definir en OPR-6
 ```
+
+El servidor de Next lee `SUPABASE_URL` y `SUPABASE_SECRET_KEY` en tiempo de ejecución. No usa `NEXT_PUBLIC_SUPABASE_URL` porque Next congela las variables `NEXT_PUBLIC_*` al compilar, y el mismo build tiene que servir en staging y en producción. Las `NEXT_PUBLIC_*` se fijan en el build de cada entorno y solo las usa el navegador (todavía nada en OPR-1).
+
+En local no hay archivos `.env`: `pnpm local` y Playwright toman los valores de `supabase status`.
 
 ---
 
