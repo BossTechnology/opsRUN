@@ -3,7 +3,7 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-20, migración del modelo de datos (rama `opr-20-migracion-modelo-de-datos`): PR en borrador contra `main`, sin fusionar. G3 y G7 quedan en rojo hasta que Henry decida la excepción de `pg_read_all_data` (ver Bloqueado).
+- OPR-20, migración del modelo de datos (rama `opr-20-migracion-modelo-de-datos`): PR #7 contra `main`, sin fusionar.
 - La parte de servidor de OPR-1 (staging y producción) espera la red de OPR-6.
 
 ## Hecho
@@ -28,10 +28,11 @@
 - 2026-11-24: G3 exige además a lo sumo un rol ajeno con privilegios en `opsrun*` (aprobado por Henry), para que un SELECT de más a `authenticated` no pase. Un segundo lector de BzzzBX hace fallar G3 a propósito y pide una decisión explícita.
 - 2026-11-24: PR #6 (OPR-1, conexión directa) fusionado en `main`.
 - 2026-11-24: OPR-20, migración `20261124130000_modelo_de_datos.sql` sobre la de OPR-1. Corre como `opsrun_migrador`, sin crear esquemas ni roles: catálogos, las 15 tablas en `opsrun`, helpers de actor en `opsrun_private` (`current_operator_id`, `require_operator`, `require_system`), triggers (Audit inmutable, motivo obligatorio, borrador congelado, gate de Schedule, estado de instrucciones hacia adelante), RLS con una política de lectura para `opsrun_app` y vistas `v1_*` en `opsrun_writeback` para `bzzz_writeback_opsrun`.
-  - Guards pgTAP G2 a G12 por descubrimiento, cada uno visto fallar en cada corrida. G3 absorbe la frontera con los roles de la API que miraba `rls.test.sql`; G10 queda dentro de G3 y se quita `guard_writeback.test.sql`.
+  - Guards pgTAP G2 a G12 por descubrimiento, cada uno visto fallar en cada corrida. G3 absorbe la frontera con los roles de la API que miraba `rls.test.sql`. El guard del lector del write-back del modelo anterior (`guard_writeback.test.sql`) queda dentro de G3 y se quita; el G10 del spec actual lo cubren `roles.test.sql` y `rls.test.sql` de OPR-1.
   - `scripts/migrar.mjs` ya no confunde el `end;` de un cuerpo plpgsql con un fin de transacción (con test de Vitest).
   - La seed pasa al esquema `opsrun` y carga como `opsrun_migrador`, con datos inventados.
-  - Validado en local con psql contra el Postgres del Supabase local (el Docker local está saturado y `supabase test db` no arranca): todo verde salvo G3 y G7. `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde.
+  - G3 y G7 con la lectura del clúster (ADR 0004, elegida por Henry): lo que un rol tiene solo por heredar `pg_read_all_data` no cuenta; se halla por membresía, sin nombrar roles. La regla está en el spec §8.
+  - Validado en local con psql contra el Postgres del Supabase local, con la seed cargada (el Docker local está saturado y `supabase test db` no arranca): los 11 archivos pgTAP en verde. `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde. `test:db` completo, en la CI del PR.
 
 ## Pendiente
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
@@ -42,9 +43,8 @@
 - Confirmar con Federico las dependencias de `PLAN.md` §5.
 
 ## Bloqueado
-- OPR-20, G3 y G7: en Supabase, `postgres` y dos roles de plataforma son miembros de `pg_read_all_data`, que les da USAGE en todos los esquemas `opsrun*` (también `opsrun_private`) y SELECT en todas las tablas. G3 los cuenta como roles ajenos de más y G7 como alcance a `opsrun_private`. La excepción (a) (privilegios que vienen solo de `pg_read_all_data` cuentan como lectura del clúster, fuera del límite de un rol ajeno, sin nada más que leer) está en un commit aparte, sin decidir. Espera la decisión de Henry.
 - OPR-6 (contrato de BzzzBX): bloquea casi todo P1, incluido el despliegue de OPR-1.
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry decide la excepción (a) de G3 y G7. Si la aprueba, el PR queda con ese commit y una ADR; si no, se revierte y se busca otra salida. Con la CI en verde, el PR de OPR-20 pasa de borrador a revisión.
+- Con la CI en verde, el PR #7 de OPR-20 pasa de borrador a revisión y Henry decide si se fusiona.

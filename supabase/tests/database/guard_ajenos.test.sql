@@ -16,12 +16,13 @@
 --
 -- Se ve fallar en cada corrida, como el dueño y con rollback: un privilegio de
 -- más al lector hallado (SELECT en una tabla de opsrun, USAGE en opsrun),
--- USAGE en opsrun_writeback para PUBLIC, y un segundo lector (authenticated).
+-- USAGE en opsrun_writeback para PUBLIC, y un segundo lector: un rol de prueba
+-- ajeno, que no es miembro de pg_read_all_data, con lo mismo que el primero.
 --
 -- La frontera con Supabase que miraba rls.test.sql (anon, authenticated y
 -- service_role sin USAGE en los esquemas de opsRUN) queda dentro de esta regla.
 --
--- Excepción (a), SIN DECIDIR (espera a Henry): la lectura del clúster. Un rol
+-- Excepción (a), la lectura del clúster (ADR 0004, elegida por Henry). Un rol
 -- miembro de pg_read_all_data (se descubre con pg_has_role, sin nombrarlo)
 -- tiene USAGE en todo esquema y SELECT en toda tabla sin que opsRUN se lo dé.
 -- Esos dos privilegios, cuando vienen solo de ahí (ningún ACL de opsRUN los
@@ -265,17 +266,20 @@ set local role opsrun_migrador;
 revoke usage on schema opsrun_writeback from public;
 reset role;
 
--- Un segundo lector, con lo mismo que el primero.
+-- Un segundo lector, con lo mismo que el primero: un rol de prueba ajeno que
+-- no es miembro de pg_read_all_data, así que la excepción (a) no lo cubre.
+create role guard_segundo_lector nologin;
 set local role opsrun_migrador;
-grant usage on schema opsrun_writeback to authenticated;
-grant select on opsrun_writeback.v1_request to authenticated;
+grant usage on schema opsrun_writeback to guard_segundo_lector;
+grant select on opsrun_writeback.v1_request to guard_segundo_lector;
 reset role;
 select is_empty(
-  $$select * from pg_temp.de_mas() as f(t) where f.t like 'authenticated %'$$,
+  $$select * from pg_temp.de_mas() as f(t) where f.t like 'guard_segundo_lector %'$$,
   'un segundo lector con solo USAGE y SELECT del write-back no tiene privilegios de más…'
 );
 select ok(
-  'authenticated' in (select * from pg_temp.lectores())
+  not pg_has_role('guard_segundo_lector', 'pg_read_all_data', 'USAGE')
+    and 'guard_segundo_lector' in (select * from pg_temp.lectores())
     and (select count(*) from pg_temp.lectores()) > 1,
   'G3 se ve fallar: …pero cuenta como un segundo rol ajeno con privilegios en opsRUN'
 );

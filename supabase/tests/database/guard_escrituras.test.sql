@@ -12,8 +12,8 @@
 -- miran como tales: quien los tenga con herencia aparece por sí mismo.
 --
 -- Se ve fallar en cada corrida: da INSERT sobre opsrun.request a opsrun_app y
--- USAGE sobre la secuencia del R number a authenticated, y comprueba que los
--- detecta.
+-- USAGE sobre la secuencia del R number a un rol ajeno de prueba, y comprueba
+-- que los detecta.
 begin;
 create extension if not exists pgtap with schema extensions;
 
@@ -74,10 +74,11 @@ select is_empty(
 );
 
 -- 3 y 4. El guard se ve fallar. Se rompe la regla como el dueño.
+create role guard_escrituras_ajeno nologin;
 grant opsrun_migrador to current_user with inherit false, set true;
 set local role opsrun_migrador;
 grant insert on opsrun.request to opsrun_app;
-grant usage on sequence opsrun.request_r_number_seq to authenticated;
+grant usage on sequence opsrun.request_r_number_seq to guard_escrituras_ajeno;
 reset role;
 
 select ok(
@@ -85,8 +86,8 @@ select ok(
   'G2 se ve fallar: detecta INSERT de opsrun_app sobre opsrun.request'
 );
 select ok(
-  'opsrun.request_r_number_seq (authenticated USAGE)' in (select * from pg_temp.escrituras_abiertas()),
-  'G2 se ve fallar: detecta USAGE de authenticated sobre la secuencia del R number'
+  'opsrun.request_r_number_seq (guard_escrituras_ajeno USAGE)' in (select * from pg_temp.escrituras_abiertas()),
+  'G2 se ve fallar: detecta USAGE de un rol ajeno sobre la secuencia del R number'
 );
 
 select * from finish();

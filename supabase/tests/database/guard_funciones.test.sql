@@ -9,7 +9,7 @@
 -- G7: nadie más que el dueño alcanza opsrun_private: ningún rol (tampoco
 --     opsrun_app ni PUBLIC) tiene USAGE en el esquema ni EXECUTE en sus
 --     funciones. Ninguna política llama a un helper (spec §6).
---     Excepción (a), SIN DECIDIR (espera a Henry), la misma de G3: el USAGE
+--     Excepción (a), la misma de G3 (ADR 0004): el USAGE
 --     que un rol tiene solo por ser miembro de pg_read_all_data (descubierto
 --     con pg_has_role, sin nombrar roles) no cuenta. pg_read_all_data no da
 --     EXECUTE, así que las funciones siguen cerradas para ese rol.
