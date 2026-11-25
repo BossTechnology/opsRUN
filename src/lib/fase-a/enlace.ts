@@ -1,0 +1,183 @@
+/**
+ * Fase A: enlace de una request con el job que el operador creó en las
+ * herramientas de PINCH (spec `docs/spec/fase-a-enlace.md`).
+ *
+ * opsRUN busca en BzzzBX los jobs que pueden ser el de la request y se los
+ * propone al operador; él confirma uno o rechaza un candidato. Las propuestas
+ * no se guardan: se calculan cada vez. Del job solo se guarda su crosswalk ID
+ * y su job number, y cada decisión queda en Audit (lo hacen las funciones SQL
+ * de la migración de la Fase A). No sale ninguna instrucción a BzzzBX.
+ */
+import type { LecturaBzzzbx } from "@/lib/bzzzbx/puertos";
+import type { FiltroDeJobs, Job, Leido } from "@/lib/bzzzbx/tipos";
+import type { Actor } from "@/lib/db/pool";
+
+/** Lo que el enlace necesita de la request: su estado y el borrador. */
+export type RequestParaEnlace = {
+  id: string;
+  status: "open" | "scheduled";
+  /** ISO 8601. */
+  received_at: string;
+  bzzzbx_customer_id: string | null;
+  bzzzbx_property_id: string | null;
+  /** YYYY-MM-DD. */
+  service_date: string | null;
+  /** HH:MM. */
+  window_start: string | null;
+  window_end: string | null;
+  bzzzbx_team_id: string | null;
+};
+
+/** Lo que el enlace lee y escribe en opsRUN. La implementación real es `datos-sql.ts`. */
+export interface DatosDeEnlace {
+  leerRequest(requestId: string): Promise<RequestParaEnlace | null>;
+  /** De los jobs dados, los que ya están enlazados a una request distinta de esta. */
+  jobsEnlazadosAOtra(requestId: string, bzzzbxJobIds: string[]): Promise<Set<string>>;
+  /** Los jobs que un operador rechazó para esta request. */
+  jobsRechazados(requestId: string): Promise<Set<string>>;
+  enlazar(enlace: { requestId: string; bzzzbxJobId: string; jobNumber: string }, actor: Actor): Promise<void>;
+  rechazar(rechazo: { requestId: string; bzzzbxJobId: string; motivo: string | null }, actor: Actor): Promise<void>;
+}
+
+export type DependenciasDeEnlace = { lectura: LecturaBzzzbx; datos: DatosDeEnlace };
+
+export type Coincidencia = "misma_propiedad" | "misma_fecha" | "misma_ventana" | "mismo_equipo";
+
+export type Candidato = {
+  job: Leido<Job>;
+  /** Por qué encaja con el borrador, para mostrarlo. */
+  coincide: Coincidencia[];
+  /** Suggested: el primero, si coincide en propiedad y fecha (supuesto S-4). */
+  sugerido: boolean;
+};
+
+export type MotivoVacio = "request_no_abierta" | "sin_cliente_ni_propiedad" | "sin_candidatos";
+
+export type Propuesta = { candidatos: Candidato[]; motivo_vacio?: MotivoVacio };
+
+export type CodigoEnlaceInvalido =
+  | "request_no_encontrada"
+  | "request_no_abierta"
+  | "gate_incompleto"
+  | "job_no_encontrado"
+  | "job_cancelado"
+  | "job_ya_enlazado";
+
+/** El enlace no se puede hacer con esos datos. No se escribió nada. */
+export class EnlaceInvalido extends Error {
+  constructor(readonly codigo: CodigoEnlaceInvalido) {
+    super(`enlace inválido: ${codigo}`);
+    this.name = "EnlaceInvalido";
+  }
+}
+
+/** Días alrededor de la fecha del borrador (supuesto S-3). */
+export const DIAS_ALREDEDOR = 3;
+/** Días después de la llegada de la request cuando el borrador no tiene fecha (supuesto S-3). */
+export const DIAS_SIN_FECHA = 30;
+
+const DIA_MS = 86_400_000;
+
+function sumarDias(fecha: string, dias: number): string {
+  return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * DIA_MS).toISOString().slice(0, 10);
+}
+
+function distanciaEnDias(a: string, b: string): number {
+  return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DIA_MS;
+}
+
+/** La búsqueda que sale del borrador; null si no hay con qué buscar. */
+function filtroDesdeBorrador(request: RequestParaEnlace): FiltroDeJobs | null {
+  const criterio = request.bzzzbx_customer_id
+    ? { bzzzbx_customer_id: request.bzzzbx_customer_id }
+    : request.bzzzbx_property_id
+      ? { bzzzbx_property_id: request.bzzzbx_property_id }
+      : null;
+  if (!criterio) return null;
+  if (request.service_date) {
+    return {
+      ...criterio,
+      desde: sumarDias(request.service_date, -DIAS_ALREDEDOR),
+      hasta: sumarDias(request.service_date, DIAS_ALREDEDOR),
+    };
+  }
+  const llegada = request.received_at.slice(0, 10);
+  return { ...criterio, desde: llegada, hasta: sumarDias(llegada, DIAS_SIN_FECHA) };
+}
+
+function coincidencias(request: RequestParaEnlace, job: Job): Coincidencia[] {
+  const lista: Coincidencia[] = [];
+  if (request.bzzzbx_property_id && job.bzzzbx_property_id === request.bzzzbx_property_id) lista.push("misma_propiedad");
+  if (request.service_date && job.service_date === request.service_date) lista.push("misma_fecha");
+  if (request.window_start && job.window_start === request.window_start && job.window_end === request.window_end) {
+    lista.push("misma_ventana");
+  }
+  if (request.bzzzbx_team_id && job.bzzzbx_team_id === request.bzzzbx_team_id) lista.push("mismo_equipo");
+  return lista;
+}
+
+async function leerRequest(datos: DatosDeEnlace, requestId: string): Promise<RequestParaEnlace> {
+  const request = await datos.leerRequest(requestId);
+  if (!request) throw new EnlaceInvalido("request_no_encontrada");
+  return request;
+}
+
+/**
+ * Los jobs de BzzzBX que pueden ser el de la request, del más probable al
+ * menos. Puede lanzar `BzzzbxNoDisponible`: sin BzzzBX no se propone nada.
+ */
+export async function proponerEnlaces({ lectura, datos }: DependenciasDeEnlace, requestId: string): Promise<Propuesta> {
+  const request = await leerRequest(datos, requestId);
+  if (request.status !== "open") return { candidatos: [], motivo_vacio: "request_no_abierta" };
+  const filtro = filtroDesdeBorrador(request);
+  if (!filtro) return { candidatos: [], motivo_vacio: "sin_cliente_ni_propiedad" };
+
+  const encontrados = (await lectura.buscarJobs(filtro)).filter((job) => job.status !== "cancelled");
+  const [enlazados, rechazados] = await Promise.all([
+    datos.jobsEnlazadosAOtra(request.id, encontrados.map((job) => job.bzzzbx_job_id)),
+    datos.jobsRechazados(request.id),
+  ]);
+  const referencia = request.service_date ?? request.received_at.slice(0, 10);
+
+  const candidatos = encontrados
+    .filter((job) => !enlazados.has(job.bzzzbx_job_id) && !rechazados.has(job.bzzzbx_job_id))
+    .map((job) => ({ job, coincide: coincidencias(request, job), sugerido: false }))
+    .sort(
+      (a, b) =>
+        Number(b.coincide.includes("misma_propiedad")) - Number(a.coincide.includes("misma_propiedad")) ||
+        distanciaEnDias(a.job.service_date, referencia) - distanciaEnDias(b.job.service_date, referencia) ||
+        Number(b.coincide.includes("misma_ventana")) - Number(a.coincide.includes("misma_ventana")) ||
+        a.job.job_number.localeCompare(b.job.job_number),
+    );
+
+  const primero = candidatos[0];
+  if (!primero) return { candidatos: [], motivo_vacio: "sin_candidatos" };
+  primero.sugerido = primero.coincide.includes("misma_propiedad") && primero.coincide.includes("misma_fecha");
+  return { candidatos };
+}
+
+/**
+ * El operador confirma que el job es el de la request. Se relee el job en
+ * BzzzBX (tiene que existir y no estar cancelado) y la función SQL lo enlaza:
+ * la request queda Scheduled, si cumple el gate de Schedule, con su Audit.
+ */
+export async function confirmarEnlace(
+  { lectura, datos }: DependenciasDeEnlace,
+  { requestId, bzzzbxJobId }: { requestId: string; bzzzbxJobId: string },
+  actor: Actor,
+): Promise<void> {
+  const job = await lectura.obtener("job", bzzzbxJobId);
+  if (!job) throw new EnlaceInvalido("job_no_encontrado");
+  if (job.status === "cancelled") throw new EnlaceInvalido("job_cancelado");
+  await datos.enlazar({ requestId, bzzzbxJobId, jobNumber: job.job_number }, actor);
+}
+
+/** El operador dice que ese job no es el de la request. No se le vuelve a proponer para ella. */
+export async function rechazarEnlace(
+  { datos }: DependenciasDeEnlace,
+  { requestId, bzzzbxJobId, motivo }: { requestId: string; bzzzbxJobId: string; motivo?: string | null },
+  actor: Actor,
+): Promise<void> {
+  const limpio = motivo?.trim() || null;
+  await datos.rechazar({ requestId, bzzzbxJobId, motivo: limpio }, actor);
+}
