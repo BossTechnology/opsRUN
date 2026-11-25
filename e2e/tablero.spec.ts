@@ -137,7 +137,9 @@ test("lo que no entra en V1.1 beta se ve en gris y no corre", async ({ page }) =
     await expect(boton).toHaveAttribute("aria-disabled", "true");
     await expect(boton).toHaveAttribute("title", "Available in a later release");
   }
-  await page.getByRole("button", { name: "Observe", exact: true }).click();
+  // aria-disabled cuenta como deshabilitado para Playwright, que esperaría para
+  // siempre: se fuerza el clic, como lo haría una persona, y no debe pasar nada.
+  await page.getByRole("button", { name: "Observe", exact: true }).click({ force: true });
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("option", { name: /Only me/ })).toBeDisabled();
 });
