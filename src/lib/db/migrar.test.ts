@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { controlaLaTransaccion } from "../../../scripts/migrar.mjs";
+import { controlaLaTransaccion, urlDelMigrador } from "../../../scripts/migrar.mjs";
 
 describe("controlaLaTransaccion", () => {
   it("detecta una migración que abre o cierra su transacción", () => {
@@ -48,5 +48,37 @@ $cuerpo$;
     expect(controlaLaTransaccion("create function f() returns int language sql as $$ select 1 $$;\ncommit;")).toBe(
       true,
     );
+  });
+});
+
+describe("urlDelMigrador", () => {
+  const nuncaLee = async () => {
+    throw new Error("no debía leer");
+  };
+
+  it("prefiere OPSRUN_MIGRADOR_URL", async () => {
+    expect(await urlDelMigrador({ OPSRUN_MIGRADOR_URL: "postgres://m@db.test/postgres" }, nuncaLee)).toBe(
+      "postgres://m@db.test/postgres",
+    );
+  });
+
+  it("lee la conexión del archivo de secretos del migrador", async () => {
+    const leer = async (ruta: string) => {
+      expect(ruta).toBe("/run/secrets/opsrun/migrador.env");
+      return "# solo el deploy\nOPSRUN_MIGRADOR_URL=postgres://m:x@db.test:5432/postgres\n";
+    };
+    expect(await urlDelMigrador({ OPSRUN_MIGRADOR_SECRETS_FILE: "/run/secrets/opsrun/migrador.env" }, leer)).toBe(
+      "postgres://m:x@db.test:5432/postgres",
+    );
+  });
+
+  it("falla sin conexión, sin archivo o con un archivo sin la línea", async () => {
+    await expect(urlDelMigrador({}, nuncaLee)).rejects.toThrow(/OPSRUN_MIGRADOR_SECRETS_FILE/);
+    await expect(urlDelMigrador({ OPSRUN_MIGRADOR_SECRETS_FILE: "/no/existe" }, nuncaLee)).rejects.toThrow(
+      /No se pudo leer/,
+    );
+    await expect(
+      urlDelMigrador({ OPSRUN_MIGRADOR_SECRETS_FILE: "/m.env" }, async () => "OTRA=1\n"),
+    ).rejects.toThrow(/no trae OPSRUN_MIGRADOR_URL/);
   });
 });

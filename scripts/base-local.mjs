@@ -12,6 +12,10 @@
 // (desactivadas en supabase/config.toml): lo hace esto, en el orden de la caja.
 // Lo llaman `pnpm local`, `pnpm db:start`, `pnpm db:reset`, `pnpm test:db`, el
 // E2E y el CI. Es idempotente.
+//
+// Con --solo-alta hace solo el paso 1: la prueba del ciclo de deploy
+// (scripts/servidor/prueba-ciclo.sh) deja que el deploy aplique las
+// migraciones, como en el servidor.
 import { access, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
@@ -33,7 +37,7 @@ async function ejecutar(url, sql) {
   }
 }
 
-export async function prepararBaseLocal({ avisar = console.log } = {}) {
+export async function prepararBaseLocal({ avisar = console.log, soloAlta = false } = {}) {
   const { admin, migrador } = urlsSupabaseLocal();
 
   // Una base local creada antes de la conexión directa tiene public.opsrun_health(),
@@ -45,6 +49,7 @@ export async function prepararBaseLocal({ avisar = console.log } = {}) {
 
   await ejecutar(admin, await readFile(ALTA_LOCAL, "utf8"));
   avisar("Alta local de opsRUN: esquemas y roles listos.");
+  if (soloAlta) return;
 
   const aplicadas = await migrar(migrador, { avisar });
 
@@ -59,7 +64,7 @@ export async function prepararBaseLocal({ avisar = console.log } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  prepararBaseLocal().catch((error) => {
+  prepararBaseLocal({ soloAlta: process.argv.includes("--solo-alta") }).catch((error) => {
     console.error(error.message);
     process.exit(1);
   });

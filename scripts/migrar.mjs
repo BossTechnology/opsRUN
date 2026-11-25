@@ -13,11 +13,17 @@
 //
 // En local y en CI lo llama scripts/base-local.mjs. A mano:
 //   OPSRUN_MIGRADOR_URL=... node scripts/migrar.mjs
+// En el servidor lo corre el deploy (scripts/servidor/opsrun.sh) dentro de la
+// imagen nueva, con la conexión en un archivo montado solo en ese contenedor
+// (OPSRUN_MIGRADOR_SECRETS_FILE, una línea OPSRUN_MIGRADOR_URL=...): la
+// credencial no pasa por el entorno ni por la línea de comandos.
 // Cómo se aplican en la caja se acuerda con el equipo de BzzzBX.
 import { readdir, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import pg from "pg";
+
+import { leerArchivoEnv } from "../src/lib/db/entorno.ts";
 
 export const DIRECTORIO_MIGRACIONES = new URL("../supabase/migrations/", import.meta.url);
 const PATRON = /^(\d{14})_([a-z0-9_]+)\.sql$/;
@@ -123,14 +129,34 @@ export async function migrar(url, { directorio = DIRECTORIO_MIGRACIONES, avisar 
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const url = process.env.OPSRUN_MIGRADOR_URL;
-  if (!url) {
-    console.error("Falta OPSRUN_MIGRADOR_URL (la conexión como opsrun_migrador).");
-    process.exit(1);
+/**
+ * La conexión como opsrun_migrador: OPSRUN_MIGRADOR_URL o, si no está, la
+ * línea OPSRUN_MIGRADOR_URL del archivo OPSRUN_MIGRADOR_SECRETS_FILE.
+ */
+/**
+ * @param {Record<string, string | undefined>} env
+ * @param {(ruta: string) => Promise<string>} leer
+ */
+export async function urlDelMigrador(env = process.env, leer = (ruta) => readFile(ruta, "utf8")) {
+  if (env.OPSRUN_MIGRADOR_URL) return env.OPSRUN_MIGRADOR_URL;
+  const ruta = env.OPSRUN_MIGRADOR_SECRETS_FILE;
+  if (!ruta) throw new Error("Falta OPSRUN_MIGRADOR_URL u OPSRUN_MIGRADOR_SECRETS_FILE (la conexión como opsrun_migrador).");
+  let texto;
+  try {
+    texto = await leer(ruta);
+  } catch {
+    throw new Error(`No se pudo leer el archivo de secretos del migrador ${ruta}.`);
   }
-  migrar(url).catch((error) => {
-    console.error(error.message);
-    process.exit(1);
-  });
+  const url = leerArchivoEnv(texto).OPSRUN_MIGRADOR_URL;
+  if (!url) throw new Error(`${ruta} no trae OPSRUN_MIGRADOR_URL.`);
+  return url;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  urlDelMigrador()
+    .then((url) => migrar(url))
+    .catch((error) => {
+      console.error(error.message);
+      process.exit(1);
+    });
 }
