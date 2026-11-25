@@ -14,6 +14,8 @@
  */
 import { readFileSync } from "node:fs";
 
+import { problemasBzzzbx } from "../bzzzbx/modo";
+
 export class ErrorDeConfiguracion extends Error {}
 
 type Entorno = Record<string, string | undefined>;
@@ -139,6 +141,8 @@ export function problemasDeEntorno(env: Entorno = process.env, leer: Lector = le
       problemas.push(e instanceof Error ? e.message : String(e));
     }
   }
+  // OPR-22: el stand-in de BzzzBX no corre en el servidor.
+  problemas.push(...problemasBzzzbx(env));
   return problemas;
 }
 
