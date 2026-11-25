@@ -1,7 +1,7 @@
 # 0005 — opsRUN habla con BzzzBX por dos puertos, con un stand-in en memoria mientras no hay contrato
 
 - **Fecha:** 2026-11-24
-- **Estado:** propuesta. Provisional hasta el contrato de OPR-6
+- **Estado:** propuesta, con las respuestas de Henry a P-0 a P-4 en el spec §9. Provisional hasta que el equipo de BzzzBX confirme el transporte (P-1) en OPR-6
 - **Tarjetas:** OPR-22, OPR-23, OPR-6, OPR-44
 
 ## Contexto
@@ -23,7 +23,7 @@ La opción 3:
 - **Selección:** `BZZZBX_MODO`. Por defecto `falso` en local y en CI y `real` en el servidor, donde `falso` no deja arrancar.
 - **Contrato:** las pruebas de contrato son funciones que reciben la implementación, así que se corren contra el real sin reescribirlas.
 
-La 1 frena todo P2. La 2 es la forma del Runbook, pero ata los stand-ins a un transporte que todavía está en discusión (proyecciones en Postgres o vistas por HTTP) y toca la base local antes de saberlo. Queda como banco de pruebas de la implementación real si se confirman las proyecciones en Supabase; esa decisión es de Henry (spec, P-0).
+La 1 frena todo P2. La 2 es la forma del Runbook, pero ata los stand-ins a un transporte que todavía está en discusión (proyecciones en Postgres o vistas por HTTP) y toca la base local antes de saberlo. Queda como banco de pruebas de la implementación real si se confirman las proyecciones en Supabase; Henry decidió dejarlo en memoria y revisarlo solo si P-1 resulta ser proyecciones (spec, P-0).
 
 ## Consecuencias
 - **Se gana:**
