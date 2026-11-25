@@ -1,4 +1,5 @@
-# CI de opsRUN: lint, typecheck, Vitest, pgTAP (`supabase test db`) y Playwright.
+# CI de opsRUN: lint, typecheck, Vitest, pgTAP (`supabase test db`), Playwright
+# y el ciclo de deploy con la imagen de producción.
 # La app se conecta directo a Postgres como opsrun_app (ADR 0003).
 # Todo corre contra el Supabase local de la CLI, con datos inventados.
 name: CI
@@ -83,3 +84,22 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  deploy:
+    name: Imagen y ciclo de deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Solo Postgres, como la base de la caja. Las migraciones las aplica el
+      # deploy, no la CLI ni db:prepare.
+      - run: pnpm exec supabase db start
+      # Construye opsrun-prueba:<sha>; deploy, humo, deploy roto que vuelve
+      # solo, entorno con una variable prohibida y vuelta atrás.
+      - run: pnpm test:deploy

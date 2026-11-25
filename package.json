@@ -16,7 +16,12 @@
     "db:start": "supabase start && node scripts/base-local.mjs",
     "db:prepare": "node scripts/base-local.mjs",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset && node scripts/base-local.mjs"
+    "db:reset": "supabase db reset && node scripts/base-local.mjs",
+    "imagen": "bash scripts/servidor/opsrun.sh construir",
+    "deploy:servidor": "bash scripts/servidor/opsrun.sh deploy",
+    "deploy:vuelta-atras": "bash scripts/servidor/opsrun.sh vuelta-atras",
+    "deploy:estado": "bash scripts/servidor/opsrun.sh estado",
+    "test:deploy": "bash scripts/servidor/prueba-ciclo.sh"
   },
   "dependencies": {
     "next": "16.4.6",
