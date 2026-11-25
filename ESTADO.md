@@ -3,8 +3,8 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-20, migración del modelo de datos (rama `opr-20-migracion-modelo-de-datos`): PR #7 contra `main`, sin fusionar.
-- La parte de servidor de OPR-1 (staging y producción) espera la red de OPR-6.
+- OPR-22, stand-ins de BzzzBX (rama `opr-22-stand-ins-bzzzbx`): PR contra `main`, sin fusionar. Henry autorizó adelantar la parte local de OPR-22 y la forma del puerto de OPR-23 sin OPR-6.
+- La parte de servidor de OPR-1 (staging y producción) sigue en su propia rama (PR #8).
 
 ## Hecho
 - 2026-11-24: base de documentos creada a partir de las 43 tarjetas del proyecto OPR en Relevo. Commit `e029ca1` en `main`.
@@ -34,7 +34,17 @@
   - G3 y G7 con la lectura del clúster (ADR 0004, aprobada por Henry el 2026-11-24 para G3 y G7; riesgo aceptado: esos miembros tienen BYPASSRLS y leen todo opsRUN, y cerrarlo es de la caja): lo que un rol tiene solo por heredar `pg_read_all_data` no cuenta; se halla por membresía, sin nombrar roles. La regla está en el spec §8.
   - Validado en local con psql contra el Postgres del Supabase local, con la seed cargada (el Docker local está saturado y `supabase test db` no arranca): los 11 archivos pgTAP en verde. `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde. `test:db` completo, en la CI del PR.
 
+- 2026-11-24: OPR-22, stand-ins de BzzzBX. Spec `docs/spec/opr-22-stand-ins.md` y ADR 0005, provisionales hasta OPR-6 y escritos contra el Runbook 1.1 (en Relevo).
+  - Puertos en `src/lib/bzzzbx/`. Lectura: 13 proyecciones con crosswalk ID y versión, `buscarJobs` para la Fase A y cambios por cursor (sondeo; el realtime solo lo despierta). Instrucciones: `entregar` idempotente, los pasos del Runbook §7.1 y cierre confirmada, fallida o sin confirmar.
+  - Falso en memoria con datos inventados y los mismos crosswalk IDs que la seed. Deja forzar errores (también con `__forzar_error` en el payload), simular cambios en el origen, pedir aprobación y reconstruir.
+  - `BZZZBX_MODO`: `falso` por defecto fuera del servidor y `real` en el servidor, donde `falso` no deja arrancar. El real no existe todavía.
+  - Pruebas de contrato que reciben la implementación: corren contra el falso y, con `BZZZBX_CONTRATO_REAL=1`, contra el real (hoy fallan a propósito).
+  - La seed ya no arma `bx-job-`, `bx-msg-`, `bx-thread-` ni el job number con el R number, que en una base usada no empieza en 1: salen del id fijo de cada request. Verificado en una base temporal local.
+  - En local: lint, typecheck, Vitest y `pnpm test:db` (11 archivos, 148 pruebas) en verde.
+
 ## Pendiente
+- OPR-22, preguntas para Henry en el spec §9: P-0 (stand-in en memoria o en la base, como dice el Runbook §6.2), P-1 (proyecciones con realtime o vistas por HTTP), P-2 (siete pasos frente a los cinco estados de `opsrun.instruction`), P-3 (lista de instrucciones del Runbook §4.3 frente al catálogo de OPR-20) y P-4 (Fase A).
+- `scripts/verificar-entorno.mjs` (PR #8) quizás deba rechazar también `BZZZBX_MODO=falso` en el servidor, como ya hace `asegurarEntorno()`.
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
 - Con el equipo de BzzzBX: cómo se aplican las migraciones en la caja (`scripts/migrar.mjs` como `opsrun_migrador` u otro mecanismo), cómo llega la clave de `opsrun_app` al archivo de secretos y el límite de conexiones de `opsrun_app` (el pool abre hasta 4).
 - Protección de la rama `main`.
@@ -47,4 +57,4 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Con la CI en verde, el PR #7 de OPR-20 pasa de borrador a revisión y Henry decide si se fusiona.
+- Henry revisa el PR de OPR-22 y contesta P-0 a P-4. Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`.

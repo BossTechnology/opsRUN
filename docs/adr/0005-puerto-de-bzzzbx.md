@@ -20,7 +20,7 @@ La opción 3:
 - **Puerto de lectura:** entidades con su crosswalk ID y una versión; lectura por ID, por varios IDs y por relación; aviso de cambios por **sondeo con cursor opaco**, donde cada cambio dice solo qué cambió y el dato se vuelve a leer. Si el real trae realtime, lo usa por dentro para sondear antes; el puerto no cambia. Así el mismo puerto sirve para proyecciones en Postgres y para vistas por HTTP.
 - **Puerto de instrucciones:** `entregar` idempotente por `idempotency_key`, resultados por cursor y estado por clave. Un resultado dice en qué paso va (los siete del Runbook §7.1) y cierra como confirmada, fallida o sin confirmar. Con el outbox, "entregar" es la escritura que ya hace la función SQL; sin él, una llamada. El puerto no decide cuál.
 - **Falso en memoria:** datos inventados con los mismos crosswalk IDs que `supabase/seed.sql`, controles para forzar errores, simular cambios en el origen, pedir aprobación y reconstruir. Nunca guarda nada en la base.
-- **Selección:** `BZZZBX_MODO`. Por defecto `falso` en local y en CI; en el servidor es obligatoria y `falso` no se acepta.
+- **Selección:** `BZZZBX_MODO`. Por defecto `falso` en local y en CI y `real` en el servidor, donde `falso` no deja arrancar.
 - **Contrato:** las pruebas de contrato son funciones que reciben la implementación, así que se corren contra el real sin reescribirlas.
 
 La 1 frena todo P2. La 2 es la forma del Runbook, pero ata los stand-ins a un transporte que todavía está en discusión (proyecciones en Postgres o vistas por HTTP) y toca la base local antes de saberlo. Queda como banco de pruebas de la implementación real si se confirman las proyecciones en Supabase; esa decisión es de Henry (spec, P-0).

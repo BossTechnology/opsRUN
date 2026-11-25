@@ -33,8 +33,8 @@ Las proyecciones que el Runbook §4.1 dice que opsRUN lee, que coinciden con OPR
 
 | Entidad | Crosswalk ID | Campos (supuestos) | Frescura (Runbook §4.1) | Lo usa |
 |---|---|---|---|---|
-| `Job` | `bzzzbx_job_id` | `job_number`, `bzzzbx_property_id`, `bzzzbx_space_id`, `bzzzbx_service_id`, `service_date`, `window_start`, `window_end`, `status` (`scheduled`, `cancelled`), `bzzzbx_team_id` (cleaner), `po_number` | ≤ 1 min | Card, etapas, Billing |
-| `Assignment` | `bzzzbx_job_id` + `bzzzbx_team_id` | `status` (`assigned`, `confirmed`, `declined`, `cancelled`) | ≤ 1 min | Cleaner del job, OPS-020 |
+| `Job` | `bzzzbx_job_id` | `job_number`, `bzzzbx_customer_id`, `bzzzbx_property_id`, `bzzzbx_space_id`, `bzzzbx_service_id`, `service_date`, `window_start`, `window_end`, `status` (`scheduled`, `cancelled`), `bzzzbx_team_id` (cleaner), `po_number` | ≤ 1 min | Card, etapas, Billing |
+| `Assignment` | `bzzzbx_assignment_id` | `bzzzbx_job_id`, `bzzzbx_team_id`, `status` (`assigned`, `confirmed`, `declined`, `cancelled`) | ≤ 1 min | Cleaner del job, OPS-020 |
 | `Customer` | `bzzzbx_customer_id` | `name`, `po_required` | ≤ 1 min | Card, Who is it from?, Validate |
 | `Contact` | `bzzzbx_contact_id` | `bzzzbx_customer_id`, `name`, `email`, `phone` | ≤ 1 min | Who is it from?, Requester |
 | `Property` | `bzzzbx_property_id` | `name`, `city`, `units[]` (`bzzzbx_space_id`, `label`), `default_team_id` | ≤ 1 min | Card (city), pestaña de la propiedad |
@@ -43,7 +43,7 @@ Las proyecciones que el Runbook §4.1 dice que opsRUN lee, que coinciden con OPR
 | `JobTrackerEvent` | `bzzzbx_event_id` | `bzzzbx_job_id`, `kind` (`checked_in`, `started`, `completed`), `occurred_at` | ≤ 1 min | Etapas In Progress / Complete, Job tracker |
 | `Photo` | `bzzzbx_photo_id` | `bzzzbx_job_id`, `phase` (`before`, `after`), `taken_at`, `ref` (referencia, no el archivo) | ≤ 1 min | Job tracker, ORG-002/003 |
 | `Message` | `bzzzbx_message_id` | `bzzzbx_thread_id`, `channel` (`email`, `text`), `direction`, `from`, `to`, `subject`, `body`, `sent_at`, `delivery` (`queued`, `sent`, `delivered`, `failed`) | ≤ 1 min | Conversation, intake, Message not delivered |
-| `Payment` | `bzzzbx_job_id` | `paid`, `paid_at` | **≤ 1 h** | Paid (OPR-10, OPR-32) |
+| `Payment` | `bzzzbx_job_id` | `paid`, `paid_at`, `bzzzbx_event_id` (para deduplicar `job_paid` en Audit) | **≤ 1 h** | Paid (OPR-10, OPR-32) |
 | `AlertResult` | `bzzzbx_alert_id` | sujeto (§3.1.1), `rule_id`, `rule_version`, `level`, `reason_text`, `opened_at`, `cleared_at` | ≤ 1 min | Alerts (OPR-33, OPR-34) |
 | `JobHealth` | `bzzzbx_job_id` | `status` (`on_track`, `at_risk`, `breached`) | ≤ 1 min | Colores de la card |
 
@@ -204,14 +204,15 @@ En el falso, una instrucción confirmada cambia lo que devuelve la lectura, porq
 - Resolución asíncrona: una instrucción avanza un paso por cada `avanzar()` (pruebas) o tras un retardo corto (servidor local) [S-11].
 - Controles de prueba, solo en el falso: `forzarError`, `noDisponible(on/off)`, `cambiar(entidad, id, parche)` (simula un cambio en el origen, por ejemplo un check-in), `reconstruir()`, `avanzar()`, `exigirAprobacion(tipo)` (para ver "Waiting for approval").
 - **Datos** (`falso/datos.ts`): inventados y con los **mismos crosswalk IDs que `supabase/seed.sql`**: `bx-cust-0001`…`0003`, `bx-cont-0001`…`0004`, `bx-prop-0001`…`0006`, `bx-space-0002`, `bx-svc-0001`…`0003`, `bx-team-0001`…`0003`, `bx-job-0003`…`0006` con `EX-00003`…`EX-00006`, `bx-msg-0001`…`0006` y `bx-msg-0102`, `bx-thread-0001`…`0006`, `bx-evt-0001`…`0005`, `bx-alert-0001`…`0004`. Los estados encajan con la seed: R4 con check-in y inicio, R6 con fin, PO y Paid, la alerta OPS-001 abierta sobre R1. Un cliente (`bx-cust-0003`, el de R6) exige PO.
-- Una prueba compara los crosswalk IDs de la seed con los del falso: los literales leyendo `seed.sql`, y los que la seed arma con el R number (`bx-job-…`, `bx-msg-…`), contra la base cuando está disponible (`OPSRUN_REQUIERE_BASE=1`, como el job de Playwright de la CI).
+- La seed armaba `bx-job-…`, `bx-msg-…`, `bx-thread-…` y el job number con el R number, que depende de la secuencia: en una base local ya usada no empieza en 1 y los IDs dejaban de coincidir. Ahora salen del último dígito del id fijo de cada request, con los mismos valores que en una base nueva. No es una migración.
+- Una prueba compara los crosswalk IDs de la seed con los del falso: los literales leyendo `seed.sql`, y los que la seed arma, contra la base recién cargada del job de E2E de la CI (`OPSRUN_REQUIERE_BASE=1`).
 
 ### 5.1 Selección por variable de entorno
 
 `BZZZBX_MODO` = `falso` | `real` [S-12]. Una fábrica `crearBzzzbx(env)` en `src/lib/bzzzbx/index.ts` devuelve los dos puertos.
 
 - Fuera del servidor (local, CI) el valor por defecto es `falso`.
-- Con `OPSRUN_SERVIDOR=1`, `BZZZBX_MODO` es obligatoria y `falso` no se acepta: el falso nunca corre en staging ni en producción. Se valida en `asegurarEntorno()` junto con lo de OPR-1.
+- Con `OPSRUN_SERVIDOR=1` el valor por defecto es `real`, y `BZZZBX_MODO=falso` no deja arrancar: el falso nunca corre en staging ni en producción. Se valida en `asegurarEntorno()` junto con lo de OPR-1. No se hace obligatoria para no agregarle una variable al deploy de OPR-1 antes de que exista el real.
 - `real` lanza "no implementado (OPR-6)" hasta que exista.
 - El Runbook §6.2 cambia cada stand-in por su fuente real de a una proyección o acción. Eso pide una selección por proyección, no un interruptor único; se agrega cuando exista la primera fuente real [S-12].
 
@@ -246,7 +247,7 @@ Este trabajo entrega puertos y falso, no la read layer completa de OPR-22. Lo qu
 | S-9 | Error forzado por marca en el payload, solo en el falso. |
 | S-10 | Qué tipos de instrucción cambian la lectura y cómo. |
 | S-11 | Ritmo de avance del falso en local. |
-| S-12 | Nombre `BZZZBX_MODO` (PLAN §3 deja `BZZZBX_…` por definir en OPR-6) y un interruptor único hasta la primera fuente real. |
+| S-12 | Nombre `BZZZBX_MODO` (PLAN §3 deja `BZZZBX_…` por definir en OPR-6), `real` por defecto en el servidor y un interruptor único hasta la primera fuente real. |
 
 ## 9. Preguntas abiertas para Henry
 

@@ -19,6 +19,8 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Write-back | Envío de los datos que son de opsRUN a BzzzBX para que se consulten como el resto, también desde Rosie. | OPR-24 |
 | Signal Maker | Parte de BzzzBX donde se calculan las reglas de alerta. | OPR-33 |
 | Job Tracker | Sistema de PINCH que registra check-in, inicio, fin y fotos del trabajo; también el nombre de la pestaña que lo muestra. | OPR-9, OPR-30 |
+| Puertos de BzzzBX | Las dos interfaces por las que opsRUN lee de BzzzBX y le manda instrucciones (`src/lib/bzzzbx/`). Toda implementación pasa las mismas pruebas de contrato. | OPR-22, OPR-23, ADR 0005 |
+| Stand-in | Implementación falsa de BzzzBX, en memoria y con datos inventados, para construir sin el contrato real. Solo local y CI; con `OPSRUN_SERVIDOR=1` no arranca. | OPR-22, OPR-44 |
 | Rosie | Analista de solo lectura en el riel izquierdo. Consulta BzzzBX y los datos de opsRUN; nunca actúa. | OPR-38 |
 
 ## Trabajo y etapas
@@ -89,3 +91,4 @@ Términos internos del esquema de opsRUN (no los ve el operador). Detalle en `do
 ## Decisiones clave
 Enlaces a ADRs en `docs/adr/`.
 - [0001 — Modelo de datos de opsRUN](docs/adr/0001-modelo-de-datos.md) (OPR-20)
+- [0005 — Puertos de BzzzBX con un stand-in en memoria](docs/adr/0005-puerto-de-bzzzbx.md) (OPR-22, OPR-23)
