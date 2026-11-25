@@ -1,7 +1,7 @@
 # 0004 — La lectura del clúster (`pg_read_all_data`) no cuenta en G3 ni en G7
 
 - **Fecha:** 2026-11-24
-- **Estado:** aceptada por Henry
+- **Estado:** aceptada por Henry el 2026-11-24, para G3 y G7
 - **Tarjeta:** OPR-20
 
 ## Contexto

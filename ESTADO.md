@@ -31,7 +31,7 @@
   - Guards pgTAP G2 a G12 por descubrimiento, cada uno visto fallar en cada corrida. G3 absorbe la frontera con los roles de la API que miraba `rls.test.sql`. El guard del lector del write-back del modelo anterior (`guard_writeback.test.sql`) queda dentro de G3 y se quita; el G10 del spec actual lo cubren `roles.test.sql` y `rls.test.sql` de OPR-1.
   - `scripts/migrar.mjs` ya no confunde el `end;` de un cuerpo plpgsql con un fin de transacción (con test de Vitest).
   - La seed pasa al esquema `opsrun` y carga como `opsrun_migrador`, con datos inventados.
-  - G3 y G7 con la lectura del clúster (ADR 0004, elegida por Henry): lo que un rol tiene solo por heredar `pg_read_all_data` no cuenta; se halla por membresía, sin nombrar roles. La regla está en el spec §8.
+  - G3 y G7 con la lectura del clúster (ADR 0004, aprobada por Henry el 2026-11-24 para G3 y G7; riesgo aceptado: esos miembros tienen BYPASSRLS y leen todo opsRUN, y cerrarlo es de la caja): lo que un rol tiene solo por heredar `pg_read_all_data` no cuenta; se halla por membresía, sin nombrar roles. La regla está en el spec §8.
   - Validado en local con psql contra el Postgres del Supabase local, con la seed cargada (el Docker local está saturado y `supabase test db` no arranca): los 11 archivos pgTAP en verde. `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde. `test:db` completo, en la CI del PR.
 
 ## Pendiente

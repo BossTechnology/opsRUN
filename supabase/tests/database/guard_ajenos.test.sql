@@ -22,7 +22,7 @@
 -- La frontera con Supabase que miraba rls.test.sql (anon, authenticated y
 -- service_role sin USAGE en los esquemas de opsRUN) queda dentro de esta regla.
 --
--- Excepción (a), la lectura del clúster (ADR 0004, elegida por Henry). Un rol
+-- Excepción (a), la lectura del clúster (ADR 0004, aprobada por Henry el 2026-11-24). Un rol
 -- miembro de pg_read_all_data (se descubre con pg_has_role, sin nombrarlo)
 -- tiene USAGE en todo esquema y SELECT en toda tabla sin que opsRUN se lo dé.
 -- Esos dos privilegios, cuando vienen solo de ahí (ningún ACL de opsRUN los
