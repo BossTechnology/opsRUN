@@ -145,6 +145,11 @@ describe("asegurarEntorno", () => {
     expect(problemas.join(" ")).not.toContain("valor-secreto");
   });
 
+  it("no deja arrancar con el stand-in de BzzzBX (OPR-22)", () => {
+    const problemas = problemasDeEntorno({ ...SERVIDOR_COMPLETO, BZZZBX_MODO: "falso" }, lectorCon(SECRETOS));
+    expect(problemas).toEqual(["BZZZBX_MODO=falso no se permite en el servidor"]);
+  });
+
   it("junta todos los problemas en un solo error", () => {
     expect(() => asegurarEntorno({ OPSRUN_SERVIDOR: "1" }, sinArchivo)).toThrow(
       /OPSRUN_DB_HOST no está definida; OPSRUN_GOTRUE_URL no está definida/,

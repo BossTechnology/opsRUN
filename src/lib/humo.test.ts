@@ -56,6 +56,10 @@ describe("verificarEntorno", () => {
     }
   });
 
+  it("rechaza el stand-in de BzzzBX en el servidor (OPR-22)", () => {
+    expect(verificarEntorno({ ...base, BZZZBX_MODO: "falso" })).toContain("BZZZBX_MODO=falso no se permite en el servidor");
+  });
+
   it("dice si falta el archivo de secretos", () => {
     expect(verificarEntorno(base).join(" ")).toContain("no se pudo leer el archivo de secretos");
   });

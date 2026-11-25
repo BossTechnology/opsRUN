@@ -59,7 +59,8 @@ OPSRUN_DB_NAME=               # opcional, postgres
 OPSRUN_SECRETS_FILE=          # opcional; archivo montado con OPSRUN_APP_USUARIO y OPSRUN_APP_CLAVE
 OPSRUN_GOTRUE_URL=            # raíz del GoTrue de la caja; se valida, el login es de OPR-2
 NEXT_PUBLIC_SITE_URL=
-BZZZBX_…                      # por definir en OPR-6
+BZZZBX_MODO=                  # falso | real. Fuera del servidor, falso; en el servidor, real, y falso no deja arrancar (OPR-22)
+BZZZBX_…                      # el resto, por definir en OPR-6
 
 # Fuera del servidor de la app
 OPSRUN_DATABASE_URL=          # solo local y CI: conexión como opsrun_app

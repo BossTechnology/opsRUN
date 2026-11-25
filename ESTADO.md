@@ -3,7 +3,8 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-1, imagen y deploy (rama `opr-1-imagen-y-deploy`): PR contra `main`, sin fusionar. Todo lo que se puede hacer sin el servidor de PINCH; el despliegue real espera la red de OPR-6.
+- OPR-22, stand-ins de BzzzBX (rama `opr-22-stand-ins-bzzzbx`): PR contra `main`, sin fusionar. Henry autorizó adelantar la parte local de OPR-22 y la forma del puerto de OPR-23 sin OPR-6.
+- OPR-1, imagen y deploy (PR #8): fusionado en `main`. El primer deploy en el servidor de PINCH espera la red de OPR-6.
 
 ## Hecho
 - 2026-11-24: base de documentos creada a partir de las 43 tarjetas del proyecto OPR en Relevo. Commit `e029ca1` en `main`.
@@ -42,8 +43,16 @@
   - `pnpm test:deploy` (`scripts/servidor/prueba-ciclo.sh`) prueba el ciclo contra el Supabase local: deploy, versión B, deploy roto que vuelve solo, entorno con una variable prohibida y vuelta atrás. Job nuevo en CI.
   - Runbook en `docs/runbook-servidor.md`.
   - En local pasan `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:db` (11 archivos, 148 tests) y `pnpm test:deploy` con la imagen construida en local.
+- 2026-11-24: OPR-22, stand-ins de BzzzBX. Spec `docs/spec/opr-22-stand-ins.md` y ADR 0005, provisionales hasta OPR-6 y escritos contra el Runbook 1.1 (en Relevo).
+  - Puertos en `src/lib/bzzzbx/`. Lectura: 13 proyecciones con crosswalk ID y versión, `buscarJobs` para la Fase A y cambios por cursor (sondeo; el realtime solo lo despierta). Instrucciones: `entregar` idempotente, los pasos del Runbook §7.1 y cierre confirmada, fallida o sin confirmar.
+  - Falso en memoria con datos inventados y los mismos crosswalk IDs que la seed. Deja forzar errores (también con `__forzar_error` en el payload), simular cambios en el origen, pedir aprobación y reconstruir.
+  - `BZZZBX_MODO`: `falso` por defecto fuera del servidor y `real` en el servidor, donde `falso` no deja arrancar. El real no existe todavía.
+  - Pruebas de contrato que reciben la implementación: corren contra el falso y, con `BZZZBX_CONTRATO_REAL=1`, contra el real (hoy fallan a propósito).
+  - La seed ya no arma `bx-job-`, `bx-msg-`, `bx-thread-` ni el job number con el R number, que en una base usada no empieza en 1: salen del id fijo de cada request. Verificado en una base temporal local.
+  - En local: lint, typecheck, Vitest y `pnpm test:db` (11 archivos, 148 pruebas) en verde.
 
 ## Pendiente
+- OPR-22, preguntas para Henry en el spec §9: P-0 (stand-in en memoria o en la base, como dice el Runbook §6.2), P-1 (proyecciones con realtime o vistas por HTTP), P-2 (siete pasos frente a los cinco estados de `opsrun.instruction`), P-3 (lista de instrucciones del Runbook §4.3 frente al catálogo de OPR-20) y P-4 (Fase A).
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
 - Con el equipo de BzzzBX: cómo se aplican las migraciones en la caja (`scripts/migrar.mjs` como `opsrun_migrador` u otro mecanismo), cómo llega la clave de `opsrun_app` al archivo de secretos y el límite de conexiones de `opsrun_app` (el pool abre hasta 4).
 - Protección de la rama `main`.
@@ -57,4 +66,5 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Con la CI en verde, Henry revisa el PR de OPR-1 (imagen y deploy) y decide si se fusiona. Después, cuando llegue la red de OPR-6, el primer deploy a staging con el runbook.
+- Henry revisa el PR de OPR-22 y contesta P-0 a P-4. Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`.
+- OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.
