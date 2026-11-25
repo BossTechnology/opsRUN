@@ -53,7 +53,7 @@ Contrato (pruebas en `contrato/lectura.contrato.ts`, para el falso y el real):
 - orden: `service_date`, luego `bzzzbx_job_id`. A lo sumo 50 resultados [S-2];
 - puede lanzar `BzzzbxNoDisponible`, como el resto del puerto.
 
-El falso implementa lo mismo sobre sus datos. Se agregan al falso jobs inventados **sin request** (creados "en las herramientas de PINCH") para que las pruebas tengan candidatos: uno exacto para R1 y uno de la misma propiedad con otra fecha. No cambian `supabase/seed.sql` ni los IDs que la seed comparte con el falso.
+El falso implementa lo mismo sobre sus datos. Se agregan al falso jobs inventados **sin request** (creados "en las herramientas de PINCH") para que las pruebas tengan candidatos: uno exacto para R2 (`bx-job-0102`), uno de la misma propiedad otro día (`0103`), uno cancelado (`0104`) y uno de la misma propiedad y fecha pero de otro cliente (`0105`). No cambian `supabase/seed.sql` ni los IDs que la seed comparte con el falso.
 
 ## 4. Qué propone opsRUN
 
@@ -61,16 +61,16 @@ Módulo nuevo `src/lib/fase-a/enlace.ts`, en el servidor. `proponerEnlaces(reque
 
 1. Lee la request (`opsrun.request`, como `opsrun_app`). Si no está `open`, no hay propuestas.
 2. Arma la búsqueda con el borrador:
-   - con `bzzzbx_customer_id`, busca por cliente (cubre un job creado con otra propiedad del mismo cliente); si no, por `bzzzbx_property_id`; sin ninguno de los dos, no hay propuestas y se dice por qué ("Confirm who it is from first");
-   - fechas: `service_date` ± 3 días [S-3]; sin fecha, desde el día de `received_at` hasta 30 días después [S-3].
+   - con `bzzzbx_property_id`, busca por propiedad; solo sin propiedad, por `bzzzbx_customer_id`. La propiedad es el criterio más estrecho: buscar por cliente con un cliente grande puede llegar al tope de 50 de `buscarJobs` y dejar fuera el job bueno. Sin ninguno de los dos, no hay propuestas y se dice por qué ("Confirm who it is from first");
+   - fechas: `service_date` ± 3 días [S-3]; sin fecha, desde el día UTC anterior a `received_at` hasta 30 días después de `received_at` (32 días) [S-3]. El día anterior cubre una request que llega de noche en América, cuando en UTC ya es el día siguiente.
 3. Descarta:
    - jobs `cancelled`;
    - jobs ya enlazados a **otra** request (`opsrun.request.bzzzbx_job_id`);
    - jobs que el operador ya rechazó **para esta request** (eventos `job_link_rejected` de su Audit).
-4. Ordena: misma propiedad primero; luego menor distancia de fecha; luego misma ventana; luego `job_number`.
-5. Marca cada candidato con por qué encaja (`misma_propiedad`, `misma_fecha`, `misma_ventana`, `mismo_equipo`) para que la pantalla lo muestre. El primero, si coincide en propiedad y fecha, va como **Suggested** [S-4].
+4. Ordena: misma propiedad primero; luego menor distancia de fecha; luego mismo cliente; luego misma ventana; luego `job_number`.
+5. Marca cada candidato con por qué encaja (`misma_propiedad`, `mismo_cliente`, `misma_fecha`, `misma_ventana`, `mismo_equipo`) para que la pantalla lo muestre. El primero va como **Suggested** si coincide en propiedad, fecha y, cuando el borrador tiene cliente, cliente [S-4].
 
-Devuelve `{ candidatos, motivo_vacio? }`. Con BzzzBX caído devuelve el error tipado para que la pantalla diga "BzzzBX unavailable" y no proponga nada.
+Devuelve `{ candidatos, truncado, motivo_vacio? }`. `truncado` es true cuando `buscarJobs` devolvió el máximo (50): puede haber más jobs que no llegaron, y la pantalla lo avisa para que el operador afine el borrador. Con BzzzBX caído devuelve el error tipado para que la pantalla diga "BzzzBX unavailable" y no proponga nada.
 
 Las propuestas no son de IA (sale de una búsqueda determinista), así que no usan `ai_suggestion` ni la marca AI. Sí siguen la regla: proponen y el operador confirma.
 
@@ -89,7 +89,7 @@ opsrun.link_observed_job(p_request_id uuid, p_bzzzbx_job_id text, p_job_number t
 
 - `opsrun_private.require_operator()`;
 - la request existe y está `open` (si no, error `OP0xx`);
-- el job no está enlazado a otra request (el `unique` ya lo frena; la función da un error claro antes);
+- el job no está enlazado a otra request: la función da un error claro antes (`OP008`). Si dos operadores enlazan el mismo job a la vez, los dos pasan ese chequeo y el segundo choca con el `unique` (`23505` en `request_bzzzbx_job_id_key` o `request_job_number_key`); el servidor lo traduce también a `job_ya_enlazado`;
 - pone `bzzzbx_job_id`, `job_number`, `scheduled_at = now()` y `status = 'scheduled'`. El trigger del **gate de Schedule** sigue valiendo: dueño y tres confirmaciones vigentes (P-1);
 - escribe `audit_event` `request_scheduled` con `details = {"mode": "linked", "bzzzbx_job_id": …, "job_number": …}` y el actor.
 
@@ -127,7 +127,7 @@ Guards:
 
 ## 9. Preguntas para Henry y su respuesta
 
-Henry aceptó las cinco recomendaciones (25 nov).
+Henry aceptó las cinco recomendaciones (25 nov). Tras la revisión del PR #12 pidió además (25 nov): buscar por propiedad antes que por cliente y avisar con `truncado`, empezar la ventana sin fecha un día antes de la llegada, y traducir el `23505` de una carrera a `job_ya_enlazado`.
 
 - **P-0. Migración.** §7 agrega un tipo de Audit y dos funciones. Sin migración no hay cómo escribir el enlace (hoy no existe ninguna función de escritura). Pide tu OK.
   - **Decisión:** sí a la migración de §7.
@@ -146,6 +146,6 @@ Henry aceptó las cinco recomendaciones (25 nov).
 |---|---|
 | S-1 | `buscarJobs` acepta un rango de a lo sumo 62 días. |
 | S-2 | `buscarJobs` devuelve a lo sumo 50 jobs. |
-| S-3 | Ventana de búsqueda: `service_date` ± 3 días; sin fecha, 30 días desde que llegó la request. |
-| S-4 | Suggested = misma propiedad y misma fecha. |
+| S-3 | Ventana de búsqueda: `service_date` ± 3 días; sin fecha, desde el día UTC anterior a la llegada hasta 30 días después. |
+| S-4 | Suggested = misma propiedad, misma fecha y, si el borrador tiene cliente, mismo cliente. |
 | S-5 | `job_number` del job observado es el Job number que se guarda en la request. |

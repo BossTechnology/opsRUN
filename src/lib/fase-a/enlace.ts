@@ -9,7 +9,7 @@
  * de la migración de la Fase A). No sale ninguna instrucción a BzzzBX.
  */
 import type { LecturaBzzzbx } from "@/lib/bzzzbx/puertos";
-import type { FiltroDeJobs, Job, Leido } from "@/lib/bzzzbx/tipos";
+import { BUSCAR_JOBS_MAX, type FiltroDeJobs, type Job, type Leido } from "@/lib/bzzzbx/tipos";
 import type { Actor } from "@/lib/db/pool";
 
 /** Lo que el enlace necesita de la request: su estado y el borrador. */
@@ -41,19 +41,27 @@ export interface DatosDeEnlace {
 
 export type DependenciasDeEnlace = { lectura: LecturaBzzzbx; datos: DatosDeEnlace };
 
-export type Coincidencia = "misma_propiedad" | "misma_fecha" | "misma_ventana" | "mismo_equipo";
+export type Coincidencia = "misma_propiedad" | "mismo_cliente" | "misma_fecha" | "misma_ventana" | "mismo_equipo";
 
 export type Candidato = {
   job: Leido<Job>;
   /** Por qué encaja con el borrador, para mostrarlo. */
   coincide: Coincidencia[];
-  /** Suggested: el primero, si coincide en propiedad y fecha (supuesto S-4). */
+  /** Suggested: el primero, si coincide en propiedad, fecha y, si el borrador lo tiene, cliente (supuesto S-4). */
   sugerido: boolean;
 };
 
 export type MotivoVacio = "request_no_abierta" | "sin_cliente_ni_propiedad" | "sin_candidatos";
 
-export type Propuesta = { candidatos: Candidato[]; motivo_vacio?: MotivoVacio };
+export type Propuesta = {
+  candidatos: Candidato[];
+  /**
+   * BzzzBX devolvió el máximo de `buscarJobs`: puede haber más jobs que no
+   * llegaron. La pantalla lo avisa.
+   */
+  truncado: boolean;
+  motivo_vacio?: MotivoVacio;
+};
 
 export type CodigoEnlaceInvalido =
   | "request_no_encontrada"
@@ -73,7 +81,12 @@ export class EnlaceInvalido extends Error {
 
 /** Días alrededor de la fecha del borrador (supuesto S-3). */
 export const DIAS_ALREDEDOR = 3;
-/** Días después de la llegada de la request cuando el borrador no tiene fecha (supuesto S-3). */
+/**
+ * Sin fecha en el borrador: desde el día UTC anterior a la llegada (una
+ * request que llega de noche en América ya es "mañana" en UTC) hasta 30 días
+ * después (supuesto S-3).
+ */
+export const DIAS_ANTES_DE_LA_LLEGADA = 1;
 export const DIAS_SIN_FECHA = 30;
 
 const DIA_MS = 86_400_000;
@@ -86,12 +99,17 @@ function distanciaEnDias(a: string, b: string): number {
   return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DIA_MS;
 }
 
-/** La búsqueda que sale del borrador; null si no hay con qué buscar. */
+/**
+ * La búsqueda que sale del borrador; null si no hay con qué buscar. Por
+ * propiedad si la hay: es el criterio más estrecho, así el tope de
+ * `buscarJobs` no deja fuera el job bueno de un cliente grande. Por cliente
+ * solo sin propiedad.
+ */
 function filtroDesdeBorrador(request: RequestParaEnlace): FiltroDeJobs | null {
-  const criterio = request.bzzzbx_customer_id
-    ? { bzzzbx_customer_id: request.bzzzbx_customer_id }
-    : request.bzzzbx_property_id
-      ? { bzzzbx_property_id: request.bzzzbx_property_id }
+  const criterio = request.bzzzbx_property_id
+    ? { bzzzbx_property_id: request.bzzzbx_property_id }
+    : request.bzzzbx_customer_id
+      ? { bzzzbx_customer_id: request.bzzzbx_customer_id }
       : null;
   if (!criterio) return null;
   if (request.service_date) {
@@ -102,12 +120,13 @@ function filtroDesdeBorrador(request: RequestParaEnlace): FiltroDeJobs | null {
     };
   }
   const llegada = request.received_at.slice(0, 10);
-  return { ...criterio, desde: llegada, hasta: sumarDias(llegada, DIAS_SIN_FECHA) };
+  return { ...criterio, desde: sumarDias(llegada, -DIAS_ANTES_DE_LA_LLEGADA), hasta: sumarDias(llegada, DIAS_SIN_FECHA) };
 }
 
 function coincidencias(request: RequestParaEnlace, job: Job): Coincidencia[] {
   const lista: Coincidencia[] = [];
   if (request.bzzzbx_property_id && job.bzzzbx_property_id === request.bzzzbx_property_id) lista.push("misma_propiedad");
+  if (request.bzzzbx_customer_id && job.bzzzbx_customer_id === request.bzzzbx_customer_id) lista.push("mismo_cliente");
   if (request.service_date && job.service_date === request.service_date) lista.push("misma_fecha");
   if (request.window_start && job.window_start === request.window_start && job.window_end === request.window_end) {
     lista.push("misma_ventana");
@@ -128,11 +147,13 @@ async function leerRequest(datos: DatosDeEnlace, requestId: string): Promise<Req
  */
 export async function proponerEnlaces({ lectura, datos }: DependenciasDeEnlace, requestId: string): Promise<Propuesta> {
   const request = await leerRequest(datos, requestId);
-  if (request.status !== "open") return { candidatos: [], motivo_vacio: "request_no_abierta" };
+  if (request.status !== "open") return { candidatos: [], truncado: false, motivo_vacio: "request_no_abierta" };
   const filtro = filtroDesdeBorrador(request);
-  if (!filtro) return { candidatos: [], motivo_vacio: "sin_cliente_ni_propiedad" };
+  if (!filtro) return { candidatos: [], truncado: false, motivo_vacio: "sin_cliente_ni_propiedad" };
 
-  const encontrados = (await lectura.buscarJobs(filtro)).filter((job) => job.status !== "cancelled");
+  const devueltos = await lectura.buscarJobs(filtro);
+  const truncado = devueltos.length >= BUSCAR_JOBS_MAX;
+  const encontrados = devueltos.filter((job) => job.status !== "cancelled");
   const [enlazados, rechazados] = await Promise.all([
     datos.jobsEnlazadosAOtra(request.id, encontrados.map((job) => job.bzzzbx_job_id)),
     datos.jobsRechazados(request.id),
@@ -146,14 +167,18 @@ export async function proponerEnlaces({ lectura, datos }: DependenciasDeEnlace, 
       (a, b) =>
         Number(b.coincide.includes("misma_propiedad")) - Number(a.coincide.includes("misma_propiedad")) ||
         distanciaEnDias(a.job.service_date, referencia) - distanciaEnDias(b.job.service_date, referencia) ||
+        Number(b.coincide.includes("mismo_cliente")) - Number(a.coincide.includes("mismo_cliente")) ||
         Number(b.coincide.includes("misma_ventana")) - Number(a.coincide.includes("misma_ventana")) ||
         a.job.job_number.localeCompare(b.job.job_number),
     );
 
   const primero = candidatos[0];
-  if (!primero) return { candidatos: [], motivo_vacio: "sin_candidatos" };
-  primero.sugerido = primero.coincide.includes("misma_propiedad") && primero.coincide.includes("misma_fecha");
-  return { candidatos };
+  if (!primero) return { candidatos: [], truncado, motivo_vacio: "sin_candidatos" };
+  primero.sugerido =
+    primero.coincide.includes("misma_propiedad") &&
+    primero.coincide.includes("misma_fecha") &&
+    (!request.bzzzbx_customer_id || primero.coincide.includes("mismo_cliente"));
+  return { candidatos, truncado };
 }
 
 /**

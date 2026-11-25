@@ -21,11 +21,20 @@ const CODIGOS_SQL: Record<string, CodigoEnlaceInvalido> = {
   OP008: "job_ya_enlazado",
 };
 
+/**
+ * Las constraints únicas del job en `opsrun.request`. Dos operadores que
+ * enlazan el mismo job a la vez pasan los dos el chequeo OP008 de la función;
+ * el segundo choca aquí con un 23505.
+ */
+const UNICAS_DEL_JOB = new Set(["request_bzzzbx_job_id_key", "request_job_number_key"]);
+
 async function traducirErrores<T>(promesa: Promise<T>): Promise<T> {
   try {
     return await promesa;
   } catch (e) {
-    const codigo = CODIGOS_SQL[(e as DatabaseError | undefined)?.code ?? ""];
+    const error = e as Partial<DatabaseError> | undefined;
+    if (error?.code === "23505" && UNICAS_DEL_JOB.has(error.constraint ?? "")) throw new EnlaceInvalido("job_ya_enlazado");
+    const codigo = CODIGOS_SQL[error?.code ?? ""];
     if (codigo) throw new EnlaceInvalido(codigo);
     throw e;
   }

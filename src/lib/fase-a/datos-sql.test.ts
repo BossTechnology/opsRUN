@@ -111,7 +111,7 @@ conBase("Fase A contra la base: proponer, rechazar y confirmar", () => {
 
   it("propone para R2 el job de PINCH que encaja, y no los ya enlazados a otras requests", async () => {
     const { candidatos } = await proponerEnlaces(deps(), R2);
-    expect(candidatos.map((c) => c.job.bzzzbx_job_id)).toEqual(["bx-job-0102", "bx-job-0103"]);
+    expect(candidatos.map((c) => c.job.bzzzbx_job_id)).toEqual(["bx-job-0102", "bx-job-0105", "bx-job-0103"]);
     expect(candidatos[0].sugerido).toBe(true);
   });
 
@@ -119,7 +119,7 @@ conBase("Fase A contra la base: proponer, rechazar y confirmar", () => {
     const d = deps();
     await rechazarEnlace(d, { requestId: R2, bzzzbxJobId: "bx-job-0103", motivo: "Different date" }, OPERADOR);
     const { candidatos } = await proponerEnlaces(d, R2);
-    expect(candidatos.map((c) => c.job.bzzzbx_job_id)).toEqual(["bx-job-0102"]);
+    expect(candidatos.map((c) => c.job.bzzzbx_job_id)).toEqual(["bx-job-0102", "bx-job-0105"]);
     const { rows } = await cliente.query(
       `select reason, actor_operator_id, details from opsrun.audit_event
         where request_id = $1 and event_type = 'job_link_rejected'`,
@@ -149,7 +149,7 @@ conBase("Fase A contra la base: proponer, rechazar y confirmar", () => {
     expect(audit.rows).toEqual([
       { actor_operator_id: OPERADOR_ID, details: { mode: "linked", bzzzbx_job_id: "bx-job-0102", job_number: "EX-00102" } },
     ]);
-    expect(await proponerEnlaces(deps(), R2)).toEqual({ candidatos: [], motivo_vacio: "request_no_abierta" });
+    expect(await proponerEnlaces(deps(), R2)).toEqual({ candidatos: [], truncado: false, motivo_vacio: "request_no_abierta" });
   });
 
   it("sin operador la base no enlaza", async () => {
