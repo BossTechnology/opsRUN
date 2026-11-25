@@ -4,7 +4,7 @@
 -- "Rol de opsRUN" es todo rol llamado `opsrun_*`, descubierto en pg_roles: en
 -- la caja y en el alta local, opsrun_migrador (dueño) y opsrun_app (el
 -- servidor de Next). El lector del write-back de la caja no es de opsRUN y
--- aquí no se busca; lo cubre OPR-20.
+-- aquí no se busca; lo cubre G3 (guard_ajenos.test.sql).
 --
 -- - Ninguno es superusuario, salta RLS, crea roles o bases, ni replica.
 -- - Ninguno es miembro de otro rol: no heredan de authenticated, service_role,

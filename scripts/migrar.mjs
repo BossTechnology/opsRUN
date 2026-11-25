@@ -24,6 +24,17 @@ const PATRON = /^(\d{14})_([a-z0-9_]+)\.sql$/;
 // La transacción la abre y la cierra este script: si la migración trae la suya,
 // su COMMIT dejaría la cuenta fuera de la transacción.
 const CONTROL_DE_TRANSACCION = /^\s*(begin|commit|rollback|end|start\s+transaction)\s*;/im;
+// Cuerpos entre dólares ($$ … $$ o $etiqueta$ … $etiqueta$) y comentarios: lo
+// de dentro no es una sentencia de la migración (el `end;` de un bloque
+// plpgsql no cierra ninguna transacción).
+const CUERPO_ENTRE_DOLARES = /\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g;
+const COMENTARIO = /--[^\n]*|\/\*[\s\S]*?\*\//g;
+
+/** ¿La migración abre o cierra su propia transacción? */
+export function controlaLaTransaccion(sql) {
+  const sentencias = sql.replace(COMENTARIO, "").replace(CUERPO_ENTRE_DOLARES, "$$$$");
+  return CONTROL_DE_TRANSACCION.test(sentencias);
+}
 
 /** Las migraciones en disco, en orden. Falla si un .sql no sigue el patrón. */
 export async function migracionesEnDisco(directorio = DIRECTORIO_MIGRACIONES) {
@@ -84,7 +95,7 @@ export async function migrar(url, { directorio = DIRECTORIO_MIGRACIONES, avisar 
 
     for (const migracion of pendientes) {
       const sql = await readFile(migracion.url, "utf8");
-      if (CONTROL_DE_TRANSACCION.test(sql)) {
+      if (controlaLaTransaccion(sql)) {
         throw new Error(
           `${migracion.version}_${migracion.nombre}: no puede abrir ni cerrar transacciones; cada migración ya corre en la suya.`,
         );
