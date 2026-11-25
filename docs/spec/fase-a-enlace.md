@@ -1,7 +1,7 @@
 # Fase A — Enlace de una request con el job observado
 
 - **Tarjetas:** OPR-28 (Schedule de una request), con `buscarJobs` del puerto de lectura de OPR-22 y el evento de Audit de OPR-35. Contrato real: OPR-6.
-- **Estado:** borrador **provisional**, para revisión de Henry. Lo marcado **[S-n]** es un supuesto que cambia con OPR-6 o con el User Guide; lo marcado **P-n** es una pregunta para Henry (§9).
+- **Estado:** aprobado por Henry el 2026-11-25 con las recomendaciones de §9; **provisional** hasta OPR-6. Lo marcado **[S-n]** es un supuesto que cambia con OPR-6 o con el User Guide; lo marcado **P-n** es una pregunta para Henry (§9).
 - **Autorización:** Henry adoptó la Fase A del Runbook §6.1 para el primer lanzamiento (spec OPR-22 §9, P-4) y autorizó adelantar esta parte en local aunque OPR-6, OPR-15, OPR-23, OPR-26 y OPR-36 no estén.
 
 ## 1. Para qué
@@ -125,13 +125,20 @@ Guards:
 - Integración contra la base con la seed (`OPSRUN_REQUIERE_BASE=1`, corre en CI): confirmar y rechazar de punta a punta, y que lo propuesto después de rechazar ya no trae ese job.
 - pgTAP §7.
 
-## 9. Preguntas para Henry
+## 9. Preguntas para Henry y su respuesta
+
+Henry aceptó las cinco recomendaciones (25 nov).
 
 - **P-0. Migración.** §7 agrega un tipo de Audit y dos funciones. Sin migración no hay cómo escribir el enlace (hoy no existe ninguna función de escritura). Pide tu OK.
+  - **Decisión:** sí a la migración de §7.
 - **P-1. Gate.** En la Fase A, ¿enlazar exige el gate de Schedule (dueño y confirmaciones de details, sender y cleaner)? Recomiendo **sí**: el trigger de OPR-20 ya lo hace, Audit muestra lo mismo que en la Fase B y no hay que tocar la migración de OPR-20. Lo malo: el operador confirma en opsRUN cosas que ya decidió al crear el job en PINCH. Alternativa: el enlace solo exige dueño, y eso cambia el trigger.
+  - **Decisión:** el enlace exige el gate de Schedule completo; no se toca el trigger.
 - **P-2. Motivo del rechazo.** Recomiendo opcional: rechazar un candidato es corregir una propuesta, no una acción sobre el job. Si lo quieres obligatorio, `requires_reason = true` y G12 lo cubre solo.
+  - **Decisión:** opcional.
 - **P-3. Evento de Audit del enlace.** Recomiendo `request_scheduled` con `mode: "linked"` en vez de un tipo nuevo `job_linked`: la pestaña Audit (OPR-35) muestra "Scheduled" en las dos fases.
+  - **Decisión:** `request_scheduled` con `mode: "linked"`.
 - **P-4. Deshacer un enlace.** Fuera de alcance. Si un operador enlaza el job equivocado, hoy no hay salida (borrador congelado). ¿Lo dejamos para cuando exista Reschedule / Cancel job (OPR-29) o lo necesitas antes del primer lanzamiento?
+  - **Decisión:** queda para OPR-29.
 
 ## 10. Supuestos
 

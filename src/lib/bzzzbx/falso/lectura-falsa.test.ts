@@ -120,7 +120,7 @@ describe("lectura falsa: BzzzBX no disponible", () => {
     await expect(lectura.obtener("job", "bx-job-0003")).rejects.toBeInstanceOf(BzzzbxNoDisponible);
     await expect(lectura.obtenerVarios("job", ["bx-job-0003"])).rejects.toBeInstanceOf(BzzzbxNoDisponible);
     await expect(lectura.listarPor("photo", { bzzzbx_job_id: "bx-job-0006" })).rejects.toBeInstanceOf(BzzzbxNoDisponible);
-    await expect(lectura.buscarJobs({})).rejects.toBeInstanceOf(BzzzbxNoDisponible);
+    await expect(lectura.buscarJobs({ bzzzbx_property_id: "bx-prop-0004", desde: "2030-01-01", hasta: "2030-01-02" })).rejects.toBeInstanceOf(BzzzbxNoDisponible);
     await expect(lectura.cambiosDesde(cursor)).rejects.toBeInstanceOf(BzzzbxNoDisponible);
     lectura.noDisponible(false);
     expect(await lectura.obtener("job", "bx-job-0003")).not.toBeNull();
