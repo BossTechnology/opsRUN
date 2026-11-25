@@ -88,6 +88,8 @@ Términos internos del esquema de opsRUN (no los ve el operador). Detalle en `do
 | Observed event | Hecho de PINCH (check-in, inicio, fin, Paid) que la read layer ve y anota en Audit con solo el tipo, la hora y el crosswalk ID. | OPR-20, OPR-35 |
 | Write-back views | Vistas `opsrun_writeback.v1_*`: el contrato de lo que BzzzBX lee de opsRUN, con el rol de la caja `bzzz_writeback_opsrun` (lo crea la caja; la migración de opsRUN solo le concede SELECT). | OPR-24, OPR-20 |
 | Actor de la transacción | Quién actúa en una transacción, según lo que fija el servidor: un operador (`opsrun.auth_user_id`, validado contra GoTrue) o un proceso del sistema (`opsrun.system_actor`). Las funciones de escritura lo leen y lo escriben en Audit. | OPR-20 |
+| Fase A | Primer lanzamiento (Runbook §6.1, OPR-42): el job se crea en las herramientas de PINCH y opsRUN registra decisiones y observa; casi no manda instrucciones. | OPR-28, OPR-42 |
+| Enlace (job link) | En la Fase A, la confirmación del operador de que un job observado en BzzzBX es el de una request. La deja Scheduled con el crosswalk ID y el job number del job; en Audit es `request_scheduled` con `mode: "linked"`. Un candidato rechazado (`job_link_rejected`) no se vuelve a proponer para esa request. | OPR-28, spec Fase A |
 
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
