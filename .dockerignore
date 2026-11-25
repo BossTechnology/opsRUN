@@ -1,0 +1,48 @@
+# Lo que nunca entra al contexto de la imagen. El repo es público, pero un
+# archivo local (credenciales, dumps) no debe terminar en una capa.
+
+# secretos y datos
+.env*
+*.env
+*.pem
+*.key
+*.dump
+*.sql.gz
+*.csv
+*.xlsx
+datos/
+exports/
+
+# git y herramientas
+.git
+.github
+.claude
+.vscode
+.idea
+
+# dependencias y builds locales: la imagen instala y construye las suyas
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# tests y reportes
+e2e
+test-results
+playwright-report
+blob-report
+playwright
+supabase/.branches
+supabase/.temp
+supabase/tests
+supabase/seed.sql
+
+# varios
+.DS_Store
+npm-debug.log*
+.pnpm-debug.log*
+Dockerfile
+.dockerignore
