@@ -45,6 +45,10 @@ insert into opsrun.message_template (key, version, channel, subject, body, activ
 
 -- ---------------------------------------------------------------------------
 -- Requests: una por etapa, más una en Requests sin dueño.
+--   Los crosswalk IDs que se arman (bx-job-000N, bx-msg-000N, bx-thread-000N,
+--   EX-0000N) salen del último dígito del id de la request, no del R number:
+--   el R number depende de la secuencia y en una base ya usada no empieza en 1.
+--   Son los mismos que usa el stand-in de BzzzBX (src/lib/bzzzbx/falso/datos.ts).
 --   R1 Requests (sin dueño, con análisis de IA)
 --   R2 Requests (con dueño, details confirmados, esperando al cleaner)
 --   R3 Scheduled
@@ -83,7 +87,7 @@ insert into opsrun.request (
 
 -- El correo original de cada request.
 insert into opsrun.request_message (request_id, bzzzbx_message_id, bzzzbx_thread_id, channel, direction, is_original, actor_kind, linked_at)
-select r.id, 'bx-msg-' || lpad(r.r_number::text, 4, '0'), 'bx-thread-' || lpad(r.r_number::text, 4, '0'),
+select r.id, 'bx-msg-000' || right(r.id::text, 1), 'bx-thread-000' || right(r.id::text, 1),
        'email', 'inbound', true, 'system', r.received_at
 from opsrun.request as r;
 
@@ -188,17 +192,17 @@ where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-
 
 insert into opsrun.instruction (request_id, type, idempotency_key, payload, actor_kind, actor_operator_id,
                                 status, sent_at, resolved_at, attempts, bzzzbx_reference)
-select r.id, 'create_job', 'seed-job-' || lpad(r.r_number::text, 4, '0'), '{}', 'operator', r.owner_operator_id,
+select r.id, 'create_job', 'seed-job-000' || right(r.id::text, 1), '{}', 'operator', r.owner_operator_id,
        'confirmed', r.received_at + interval '2 hours', r.received_at + interval '2 hours', 1,
-       'bx-ref-job-' || lpad(r.r_number::text, 4, '0')
+       'bx-ref-job-000' || right(r.id::text, 1)
 from opsrun.request as r
 where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-0000000000a4',
                'b0000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-0000000000a6');
 
 update opsrun.request
 set status = 'scheduled',
-    bzzzbx_job_id = 'bx-job-' || lpad(r_number::text, 4, '0'),
-    job_number = 'EX-' || lpad(r_number::text, 5, '0'),
+    bzzzbx_job_id = 'bx-job-000' || right(id::text, 1),
+    job_number = 'EX-0000' || right(id::text, 1),
     scheduled_at = received_at + interval '2 hours'
 where id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-0000000000a4',
              'b0000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-0000000000a6');

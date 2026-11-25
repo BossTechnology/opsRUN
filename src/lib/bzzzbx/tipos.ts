@@ -108,6 +108,8 @@ export type Payment = {
   bzzzbx_job_id: string;
   paid: boolean;
   paid_at: string | null;
+  /** El evento de pago, para deduplicar `job_paid` en Audit (OPR-20 §3.11). */
+  bzzzbx_event_id: string | null;
 };
 
 /**

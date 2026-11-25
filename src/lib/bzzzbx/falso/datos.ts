@@ -100,10 +100,10 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       },
     ],
     payment: [
-      { bzzzbx_job_id: "bx-job-0003", paid: false, paid_at: null },
-      { bzzzbx_job_id: "bx-job-0004", paid: false, paid_at: null },
-      { bzzzbx_job_id: "bx-job-0005", paid: false, paid_at: null },
-      { bzzzbx_job_id: "bx-job-0006", paid: true, paid_at: hace(DIA) },
+      { bzzzbx_job_id: "bx-job-0003", paid: false, paid_at: null, bzzzbx_event_id: null },
+      { bzzzbx_job_id: "bx-job-0004", paid: false, paid_at: null, bzzzbx_event_id: null },
+      { bzzzbx_job_id: "bx-job-0005", paid: false, paid_at: null, bzzzbx_event_id: null },
+      { bzzzbx_job_id: "bx-job-0006", paid: true, paid_at: hace(DIA), bzzzbx_event_id: "bx-evt-0005" },
     ],
     alert_result: [
       { bzzzbx_alert_id: "bx-alert-0001", sujeto: { tipo: "request", request_id: "b0000000-0000-4000-8000-0000000000a1" }, rule_id: "OPS-001", rule_version: "1", level: "amber", reason_text: "Unassigned for 15 min.", opened_at: hace(5 * MIN), cleared_at: null },

@@ -224,7 +224,7 @@ export class InstruccionesFalsas implements InstruccionesBzzzbx {
         if (bzzzbx_team_id) {
           this.lectura.poner("assignment", { bzzzbx_assignment_id: `bx-asg-${n}`, bzzzbx_job_id, bzzzbx_team_id, status: "assigned" });
         }
-        this.lectura.poner("payment", { bzzzbx_job_id, paid: false, paid_at: null });
+        this.lectura.poner("payment", { bzzzbx_job_id, paid: false, paid_at: null, bzzzbx_event_id: null });
         return { bzzzbx_job_id, job_number };
       }
       case "reschedule_job":
