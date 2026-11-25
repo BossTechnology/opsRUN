@@ -31,3 +31,17 @@ export async function leerSalud(consultar: () => Promise<unknown[]>): Promise<Sa
     return { conectada: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * Lo que responde GET /api/salud. Sin el texto del error: puede nombrar el
+ * host de la base, y la ruta no lleva autenticación.
+ */
+export function respuestaDeSalud(salud: Salud): {
+  estado: 200 | 503;
+  cuerpo: { status: "ok"; schema_version: string | null } | { status: "error" };
+} {
+  if (salud.conectada) {
+    return { estado: 200, cuerpo: { status: "ok", schema_version: salud.versionEsquema } };
+  }
+  return { estado: 503, cuerpo: { status: "error" } };
+}

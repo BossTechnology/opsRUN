@@ -6,6 +6,7 @@ Consola de operaciones para los equipos de Operations y Finance de PINCH (V1.1 b
 - [`CONTEXT.md`](CONTEXT.md): glosario del dominio.
 - [`ESTADO.md`](ESTADO.md): en qué va el trabajo.
 - [`docs/adr/`](docs/adr/): decisiones de arquitectura.
+- [`docs/runbook-servidor.md`](docs/runbook-servidor.md): deploy y vuelta atrás en el servidor.
 
 El detalle de cada entrega vive en el proyecto OPR de Relevo.
 

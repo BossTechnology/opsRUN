@@ -45,7 +45,7 @@ Los documentos fuente (Release Definition V1.1 beta, User Guide edición 1.1, pr
 | Staging | Servidor de PINCH | Pruebas E2E con datos vivos de PINCH (OPR-40) |
 | Producción | Servidor de PINCH | Uso real; la ejecuta Henry |
 
-Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1). Las migraciones se aplican solo desde la migración versionada, con `scripts/migrar.mjs` como `opsrun_migrador`; nunca se editan tablas desde el Studio. Cómo se corren en la caja se acuerda con el equipo de BzzzBX.
+Deploy y vuelta atrás repetibles, con un solo comando documentado (OPR-1): `scripts/servidor/opsrun.sh deploy` y `vuelta-atras`, con la imagen de producción etiquetada por SHA y `opsrun_health()` como prueba de humo ([runbook](docs/runbook-servidor.md)). Las migraciones se aplican solo desde la migración versionada, con `scripts/migrar.mjs` como `opsrun_migrador`, dentro del deploy; nunca se editan tablas desde el Studio. Son solo hacia adelante: la vuelta atrás cambia la imagen, no la base. Cómo se corren en la caja se acuerda con el equipo de BzzzBX.
 
 ### Variables de entorno
 
@@ -65,6 +65,7 @@ BZZZBX_…                      # el resto, por definir en OPR-6
 # Fuera del servidor de la app
 OPSRUN_DATABASE_URL=          # solo local y CI: conexión como opsrun_app
 OPSRUN_MIGRADOR_URL=          # solo para aplicar migraciones (scripts/migrar.mjs), como opsrun_migrador
+OPSRUN_MIGRADOR_SECRETS_FILE= # en el deploy: archivo montado solo en el contenedor de migraciones, con OPSRUN_MIGRADOR_URL
 ```
 
 El servidor se conecta directo a Postgres como `opsrun_app`. Lee todo en tiempo de ejecución, así que el mismo build sirve en staging y en producción. La clave no va en variables de entorno: va en un archivo de secretos montado en el contenedor, por defecto `/run/secrets/opsrun/app.env`.

@@ -23,6 +23,14 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Stand-in | Implementación falsa de BzzzBX, en memoria y con datos inventados, para construir sin el contrato real. Solo local y CI; con `OPSRUN_SERVIDOR=1` no arranca. | OPR-22, OPR-44 |
 | Rosie | Analista de solo lectura en el riel izquierdo. Consulta BzzzBX y los datos de opsRUN; nunca actúa. | OPR-38 |
 
+## Despliegue
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Deploy | Llevar una imagen de opsRUN, etiquetada por el SHA de su commit, a un entorno del servidor con `scripts/servidor/opsrun.sh deploy`: revisa el entorno, aplica las migraciones de esa imagen, arranca la nueva y la prueba. | OPR-1, `docs/runbook-servidor.md` |
+| Prueba de humo | `scripts/humo.mjs` dentro del contenedor: `GET /api/salud`, que corre `opsrun.opsrun_health()` como `opsrun_app`. Pasa si la base responde y va en la última migración de la imagen o en una posterior. Es también el healthcheck de la imagen. | OPR-1 |
+| Vuelta atrás | Volver a la imagen anterior de un entorno (`opsrun:<entorno>-anterior`), sola cuando un deploy no pasa la prueba de humo o a mano con `vuelta-atras`. No deshace migraciones: son solo hacia adelante. | OPR-1 |
+
 ## Trabajo y etapas
 
 | Término | Significado | Dónde aparece |
