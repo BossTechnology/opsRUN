@@ -70,6 +70,14 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | AI-marked field | Campo llenado por la IA que se ve marcado como AI hasta que el operador lo confirma o lo corrige. | OPR-28, OPR-36 |
 | AI pending | Estado de los campos cuando la IA tarda o está caída; el operador trabaja a mano. | OPR-36 |
 | Focused / Global | Alcance de Rosie: Focused sigue el filtro de operador y Global ve toda la operación. | OPR-38 |
+| Board | El tablero: barra superior, riel izquierdo y las cinco columnas con sus tarjetas. Se actualiza solo en menos de 1 minuto. | OPR-25 |
+| Card | La tarjeta de una request o job en el tablero: nombre y número, estado bajo el número, ciudad, type \| service, chat, flags (PO, PO missing, OSS) y color. | OPR-25 |
+| Paid row | Fila colapsada "Paid (n)" al final de Validation con las tarjetas verdes. | OPR-25 |
+| Live | Indicador de la barra superior: Live, Reconnecting… o "BzzzBX unavailable · last update HH:MM" cuando se muestra lo último conocido. | OPR-22, OPR-25 |
+| Operator filter | All operators / Only me. Only me espera al login (OPR-21). | OPR-25 |
+| PO missing | Flag de la tarjeta cuando el cliente exige PO y el job no lo tiene. | OPR-8, OPR-25 |
+| — — | Lo que se muestra en un valor sin definir. | OPR-25 |
+| Available in a later release | Texto de lo que se ve en gris en la barra y el riel del tablero. | OPR-25 |
 | Not available in this release | Texto de las funciones que se muestran en gris porque no entran en V1.1 beta. | OPR-25, OPR-26 |
 
 ## Modelo de datos

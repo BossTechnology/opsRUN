@@ -1,7 +1,7 @@
 # OPR-25 — Tablero y tarjetas
 
 - **Tarjeta:** OPR-25 (P2 · Board and cards, prototipo R23). Depende de OPR-22 (read layer), cuyos stand-ins ya están en `main` (ADR 0005).
-- **Estado:** borrador para revisión de Henry. **No se pudo leer el prototipo R23** (el artifact del hilo de OPR-6 no está compartido con esta cuenta). Todo lo visual que la tarjeta no fija va como supuesto **[S-n]** y se ajusta cuando se pueda ver el prototipo (**P-0**).
+- **Estado:** aprobado por Henry el 2026-11-24 con las respuestas propuestas en §7. **No se pudo leer el prototipo R23** (el artifact del hilo de OPR-6 no está compartido con esta cuenta). Todo lo visual que la tarjeta no fija va como supuesto **[S-n]** y se ajusta cuando se pueda ver el prototipo (**P-0**).
 - **Fuera de alcance:** Job window (OPR-26), pestaña y panel de Alerts (OPR-34), Rosie (OPR-38), login y "Only me" real (OPR-21), cálculo de alertas y de health (OPR-33, en BzzzBX).
 
 ## 1. Qué se ve
@@ -118,3 +118,23 @@ Si una lectura lanza `BzzzbxNoDisponible`, el servidor usa el último tablero ar
 - **P-8. Zona horaria** (S-6): ¿la variable `OPSRUN_ZONA_HORARIA` está bien, o hay un valor fijo hasta OPR-4?
 
 Ninguna de las opciones propuestas necesita migración.
+
+### 7.1 Decisiones (2026-11-24)
+
+Henry aprobó las respuestas propuestas. Quedó así:
+
+- P-1: marcador genérico "Logo" en el repo.
+- P-2: `Only me` deshabilitado con "(sign-in required)" hasta OPR-21.
+- P-3: Rosie se ve activa, con el título "Rosie is not connected yet", hasta OPR-38.
+- P-4: Paused no se muestra.
+- P-5: chat cuando hay un mensaje entrante después del original.
+- P-6: las alertas se piden por sujeto (request y job); el puerto no cambia.
+- P-7: `POST /api/falso` (reiniciar, cambiar, poner, no_disponible); 404 sin falso o en el servidor.
+- P-8: `OPSRUN_ZONA_HORARIA`, UTC si falta o no es válida.
+- P-0 sigue abierta: el aspecto se revisa contra R23 cuando se pueda ver.
+
+### 7.2 Cómo quedó construido
+
+- Modelo: `src/lib/tablero/` (`armar.ts` puro, `leer.ts` con lo último conocido, `cambios.ts`, `consultas.ts` y `servidor.ts`).
+- Vista: `src/app/_tablero/`. La página de salud de OPR-1 pasa a `/salud`; `/api/salud` no cambia.
+- El cursor de `/api/tablero/cambios` junta el del puerto, el último `audit_event.id` y si BzzzBX respondía. Cuando BzzzBX cae o vuelve, cuenta como cambio.

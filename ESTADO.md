@@ -3,7 +3,8 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-22, stand-ins de BzzzBX (rama `opr-22-stand-ins-bzzzbx`): PR contra `main`, sin fusionar. Henry autorizó adelantar la parte local de OPR-22 y la forma del puerto de OPR-23 sin OPR-6.
+- OPR-25, tablero y tarjetas (rama `opr-25-tablero`): PR contra `main`, sin fusionar. Construido sobre el stand-in de BzzzBX, con el spec `docs/spec/opr-25-tablero.md` aprobado por Henry. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
+- OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
 - OPR-1, imagen y deploy (PR #8): fusionado en `main`. El primer deploy en el servidor de PINCH espera la red de OPR-6.
 
 ## Hecho
@@ -50,8 +51,18 @@
   - Pruebas de contrato que reciben la implementación: corren contra el falso y, con `BZZZBX_CONTRATO_REAL=1`, contra el real (hoy fallan a propósito).
   - La seed ya no arma `bx-job-`, `bx-msg-`, `bx-thread-` ni el job number con el R number, que en una base usada no empieza en 1: salen del id fijo de cada request. Verificado en una base temporal local.
   - En local: lint, typecheck, Vitest y `pnpm test:db` (11 archivos, 148 pruebas) en verde.
+- 2026-11-24: OPR-25, tablero y tarjetas:
+  - `/` es el tablero. Barra superior con un marcador de logo, Live, Alerts con el conteo de toda la operación, Alarms, Anomalies y Actions en gris, y el filtro de operador (Only me espera a OPR-21). En el riel, Rosie activa y Observe, Geo, Incidents, Activity y Map en gris con "Available in a later release".
+  - Cinco columnas con conteo y alertas abiertas. La etapa sale de OPR-20 §5; los jobs cancelados no aparecen; las Paid van en una fila colapsada de Validation.
+  - Las tarjetas muestran nombre y número, estado bajo el número (Delayed parpadea), ciudad, type | service con ícono, chat, flags PO, PO missing y OSS, y los colores: verde, sombreado rojo, borde rojo y oscura. Lo que falta se ve "— —".
+  - Server components: opsRUN por `opsrun_app` y BzzzBX por su puerto. Con BzzzBX caído se muestra lo último conocido, en memoria, con aviso.
+  - El navegador pregunta cada 15 s a `/api/tablero/cambios`, que junta `cambiosDesde` con el último Audit, y refresca si hubo cambio.
+  - `POST /api/falso` controla el stand-in desde los E2E (404 sin falso o en el servidor). La página de salud pasa a `/salud`. Variable nueva `OPSRUN_ZONA_HORARIA`.
+  - En local pasan lint, typecheck, Vitest (194) y `next build`; el servidor de producción sirve el tablero contra el Postgres local. Playwright no corrió en local: el Supabase local solo tiene Postgres (Docker saturado) y su seed es anterior al arreglo de crosswalk IDs de OPR-22. E2E y la consulta contra la seed, en la CI.
 
 ## Pendiente
+- OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
+- Base local: `pnpm db:reset` para cargar la seed nueva (pide OK de Henry).
 - OPR-22, preguntas para Henry en el spec §9: P-0 (stand-in en memoria o en la base, como dice el Runbook §6.2), P-1 (proyecciones con realtime o vistas por HTTP), P-2 (siete pasos frente a los cinco estados de `opsrun.instruction`), P-3 (lista de instrucciones del Runbook §4.3 frente al catálogo de OPR-20) y P-4 (Fase A).
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
 - Con el equipo de BzzzBX: cómo se aplican las migraciones en la caja (`scripts/migrar.mjs` como `opsrun_migrador` u otro mecanismo), cómo llega la clave de `opsrun_app` al archivo de secretos y el límite de conexiones de `opsrun_app` (el pool abre hasta 4).
@@ -66,5 +77,6 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry revisa el PR de OPR-22 y contesta P-0 a P-4. Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`.
+- Henry revisa el PR de OPR-25 y comparte el prototipo R23 para ajustar el aspecto. Después, OPR-26 (Job window), que espera también a OPR-4.
+- Henry contesta P-0 a P-4 de OPR-22.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.
