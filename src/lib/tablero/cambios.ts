@@ -3,7 +3,7 @@
  * puerto de BzzzBX (`cambiosDesde`) con una marca de opsRUN (el último Audit:
  * toda escritura de opsRUN deja uno). Solo dice si hubo cambio; nunca datos.
  */
-import { BzzzbxNoDisponible, CursorCaducado } from "../bzzzbx/errores";
+import { esCursorCaducado, esNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
 import type { Cursor } from "../bzzzbx/tipos";
 
@@ -54,7 +54,7 @@ export async function revisarCambios({
         }
         b = lote.cursor;
       } catch (e) {
-        if (!(e instanceof CursorCaducado)) throw e;
+        if (!esCursorCaducado(e)) throw e;
         b = (await lectura.cambiosDesde(null)).cursor;
         cambioBzzzbx = true;
       }
@@ -62,7 +62,7 @@ export async function revisarCambios({
     const cambio = forzado || cambioBzzzbx || (previo !== null && (previo.o !== marca || !previo.d));
     return { cambio, disponible: true, cursor: codificar({ b, o: marca, d: true }) };
   } catch (e) {
-    if (!(e instanceof BzzzbxNoDisponible)) throw e;
+    if (!esNoDisponible(e)) throw e;
     const cambio = forzado || (previo !== null && (previo.o !== marca || previo.d));
     return { cambio, disponible: false, cursor: codificar({ b: previo?.b ?? null, o: marca, d: false }) };
   }

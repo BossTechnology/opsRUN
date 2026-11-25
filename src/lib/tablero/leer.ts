@@ -3,7 +3,7 @@
  * que piden las requests de opsRUN y arma el tablero. Si BzzzBX no responde,
  * usa lo último leído (en memoria del proceso, nunca en la base) y lo avisa.
  */
-import { BzzzbxNoDisponible } from "../bzzzbx/errores";
+import { esNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
 
 import { armarTablero } from "./armar";
@@ -70,7 +70,7 @@ export async function leerTablero({
     memoria.en = ahora.toISOString();
     return armarTablero({ filas, leidos, ahora, zona, bzzzbx: { disponible: true, actualizadoEn: memoria.en } });
   } catch (e) {
-    if (!(e instanceof BzzzbxNoDisponible)) throw e;
+    if (!esNoDisponible(e)) throw e;
     return armarTablero({
       filas,
       leidos: memoria.leidos ?? LEIDOS_VACIOS,

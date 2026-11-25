@@ -58,6 +58,13 @@ describe("leerTablero", () => {
     expect(caido.columnas).toEqual(antes.columnas);
   });
 
+  it("reconoce BzzzBX caído aunque el error venga de otra copia del módulo", async () => {
+    const otra = Object.assign(new Error("x"), { name: "BzzzbxNoDisponible" });
+    const lectura = new Proxy({}, { get: () => () => Promise.reject(otra) }) as Parameters<typeof leerTablero>[0]["lectura"];
+    const t = await leerTablero({ filas: filasDeLaSeed(AHORA), lectura, ahora: AHORA, zona: "UTC", memoria: { leidos: null, en: null } });
+    expect(t.bzzzbx.disponible).toBe(false);
+  });
+
   it("caído sin nada conocido: lo de opsRUN con — — y el aviso", async () => {
     const { falso, leer } = preparar();
     falso.lectura.noDisponible(true);

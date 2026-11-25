@@ -68,6 +68,22 @@ describe("revisarCambios", () => {
     expect(vuelve).toMatchObject({ disponible: true, cambio: true });
   });
 
+  it("reconoce los errores aunque vengan de otra copia del módulo (rutas y páginas de Next)", async () => {
+    const otra = (nombre: string) => Object.assign(new Error("x"), { name: nombre });
+    let falla: string | null = "BzzzbxNoDisponible";
+    const lectura = {
+      cambiosDesde: async () => {
+        if (falla) throw otra(falla);
+        return { cambios: [], cursor: "c" as never, hay_mas: false };
+      },
+    } as unknown as Parameters<typeof revisarCambios>[0]["lectura"];
+    const caido = await revisarCambios({ cursor: null, lectura, marcaOpsrun: async () => "1" });
+    expect(caido.disponible).toBe(false);
+    falla = null;
+    const vuelve = await revisarCambios({ cursor: caido.cursor, lectura, marcaOpsrun: async () => "1" });
+    expect(vuelve).toMatchObject({ disponible: true, cambio: true });
+  });
+
   it("un cursor que no es nuestro se trata como uno caducado", async () => {
     const { revisar } = preparar();
     const r = await revisar("no-es-un-cursor");
