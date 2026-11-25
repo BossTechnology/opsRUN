@@ -52,7 +52,8 @@
   - En local: lint, typecheck, Vitest y `pnpm test:db` (11 archivos, 148 pruebas) en verde.
 
 ## Pendiente
-- OPR-22, preguntas para Henry en el spec §9: P-0 (stand-in en memoria o en la base, como dice el Runbook §6.2), P-1 (proyecciones con realtime o vistas por HTTP), P-2 (siete pasos frente a los cinco estados de `opsrun.instruction`), P-3 (lista de instrucciones del Runbook §4.3 frente al catálogo de OPR-20) y P-4 (Fase A).
+- OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
+- OPR-22, cuando toque: `acknowledge_alert` al construir Clear alert; quitar los `ai_*` del catálogo con una migración nueva (pide OK); cambiar la migración de estados solo si una pantalla necesita "Waiting for approval" o "Couldn't confirm" desde la base (P-2).
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
 - Con el equipo de BzzzBX: cómo se aplican las migraciones en la caja (`scripts/migrar.mjs` como `opsrun_migrador` u otro mecanismo), cómo llega la clave de `opsrun_app` al archivo de secretos y el límite de conexiones de `opsrun_app` (el pool abre hasta 4).
 - Protección de la rama `main`.
@@ -66,5 +67,5 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry revisa el PR de OPR-22 y contesta P-0 a P-4. Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`.
+- Henry revisa y fusiona el PR de OPR-22 (P-0 a P-4 ya contestadas). Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`. Fase A (OPR-42): `buscarJobs` primero.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.
