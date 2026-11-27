@@ -6,7 +6,8 @@
  *     sin mandar nada a BzzzBX. La interfaz no es la defensa;
  *  2. valida el motivo (recortado, no vacío si es obligatorio);
  *  3. si `version` no es el `change_seq` actual de la request, rechaza por
- *     cambio concurrente (S-12);
+ *     cambio concurrente (S-12), salvo en las acciones con
+ *     `concurrencia: "ninguna"` (OPR-27, P-6);
  *  4. llama al ejecutor con el actor de la transacción (P-2). El ejecutor
  *     escribe por funciones SQL, que dejan su Audit (principio 5); el marco no
  *     escribe nada por su cuenta;
@@ -37,6 +38,13 @@ export type DependenciasDeEjecucion = {
 
 const rechazada = (codigo: string, mensaje: string): ResultadoAccion => ({ tipo: "rechazada", codigo, mensaje });
 
+/**
+ * Lo que está en la interfaz pero no corre en V1.1 beta (OPR-27, spec §5.2):
+ * Edit To, Cc y Temporary number. No hay Server Action que los atienda: si
+ * alguien los manda de todos modos, se rechazan aquí, antes de leer nada.
+ */
+export const CAMPOS_DE_UN_RELEASE_POSTERIOR = ["to", "cc", "from_number"] as const;
+
 /** Lo que llega de la Server Action viene del navegador: se revisa la forma. */
 function esEntrada(valor: unknown): valor is EntradaAccion {
   if (typeof valor !== "object" || valor === null) return false;
@@ -61,6 +69,10 @@ export async function ejecutar(deps: DependenciasDeEjecucion, entrada: EntradaAc
   const def = deps.registro.find((d) => d.codigo === entrada.codigo);
   if (!def) return rechazada("no_disponible", "Unknown action.");
 
+  if (CAMPOS_DE_UN_RELEASE_POSTERIOR.some((campo) => Object.hasOwn(entrada.datos, campo))) {
+    return rechazada("no_disponible", "Available in a later release");
+  }
+
   const ventana = await deps.leerVentana(entrada.requestId);
   if (!ventana) return rechazada("no_encontrada", "Job not found.");
 
@@ -78,12 +90,14 @@ export async function ejecutar(deps: DependenciasDeEjecucion, entrada: EntradaAc
     return rechazada("motivo_invalido", `The reason is too long (${MOTIVO_MAX} characters at most).`);
   }
 
-  if (entrada.version !== ventana.version) {
+  if (def.concurrencia !== "ninguna" && entrada.version !== ventana.version) {
     return rechazada("cambio_concurrente", "This job changed. Review and try again.");
   }
 
   const actor = await deps.actor();
   if (!actor) return rechazada("sin_actor", "Choose who is acting first.");
+  // Solo un operador actúa por aquí: un proceso del sistema o de la IA no corre acciones (principio 3).
+  if (actor.tipo !== "operador") return rechazada("sin_actor", "Only an operator can run this action.");
 
   let resultado: ResultadoAccion;
   try {

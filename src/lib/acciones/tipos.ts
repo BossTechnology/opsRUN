@@ -69,6 +69,13 @@ export type DefinicionAccion = {
   panel?: ComponentType<PropsPanelAccion>;
   /** Interna: la usa una ranura (por ejemplo el rechazo del enlace) y no sale en la action bar. */
   interna?: boolean;
+  /**
+   * Si un cambio en la request desde que el operador la vio rechaza la acción
+   * (`change_seq`, S-12). `"request"` por defecto; `"ninguna"` para lo que no
+   * depende del estado de la request: una nota, un mensaje, descartar un
+   * borrador de IA (OPR-27, P-6).
+   */
+  concurrencia?: "request" | "ninguna";
 };
 
 export type Disponibilidad =

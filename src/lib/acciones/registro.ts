@@ -15,7 +15,14 @@
  * solo escriben una decisión en opsRUN (asignar, confirmar, aprobar, marcar
  * OSS, limpiar una alerta) siguen disponibles con BzzzBX caído (S-13).
  */
+import { disponibilidadDelComposer } from "../conversacion/composer";
+import type { Etapa } from "../tablero/tipos";
+
 import type { DefinicionAccion } from "./tipos";
+
+/** La conversación (OPR-27): los ejecutores reales se cargan al usarlos; así este registro no arrastra la base al navegador. */
+const conversacion = () => import("../conversacion/reales").then((m) => m.ejecutoresReales);
+const TODAS_LAS_ETAPAS: Etapa[] = ["requests", "scheduled", "in_progress", "complete", "validation"];
 
 export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   // Requests (OPR-28)
@@ -177,5 +184,65 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     motivo: "no",
     necesitaBzzzbx: true,
     bloqueo: (v) => (v.datos.poRequerido && !v.datos.tienePo ? "Add PO" : null),
+  },
+  // Conversación (OPR-27). Internas: las usa el Composer, no la action bar. No dependen
+  // del estado de la request (P-6): una nota o un mensaje no se rechaza porque alguien
+  // asignó la request. Con el job cancelado no aplican (etapa `cancelled`).
+  {
+    codigo: "add_note",
+    etiqueta: "Add note",
+    descripcion: "Write an internal note on the request.",
+    etapas: TODAS_LAS_ETAPAS,
+    enRelease: true,
+    motivo: "no",
+    necesitaBzzzbx: false,
+    interna: true,
+    concurrencia: "ninguna",
+    ejecutor: async (ctx, entrada) => (await conversacion()).add_note(ctx, entrada),
+  },
+  {
+    codigo: "send_email",
+    etiqueta: "Send email",
+    descripcion: "Reply to the customer in the email thread of the request.",
+    etapas: TODAS_LAS_ETAPAS,
+    enRelease: true,
+    motivo: "no",
+    // Una instrucción abierta no bloquea el siguiente mensaje (§5.3): el bloqueo es propio.
+    necesitaBzzzbx: false,
+    interna: true,
+    concurrencia: "ninguna",
+    bloqueo: (v) => {
+      const d = disponibilidadDelComposer({ etapa: v.etapa, bzzzbxDisponible: v.bzzzbx.disponible, hilos: v.hilos, equipoId: v.equipoId });
+      return d.customer.disponible ? null : d.customer.razon;
+    },
+    ejecutor: async (ctx, entrada) => (await conversacion()).send_email(ctx, entrada),
+  },
+  {
+    codigo: "send_text",
+    etiqueta: "Send text",
+    descripcion: "Text the cleaner of the job.",
+    etapas: TODAS_LAS_ETAPAS,
+    enRelease: true,
+    motivo: "no",
+    necesitaBzzzbx: false,
+    interna: true,
+    concurrencia: "ninguna",
+    bloqueo: (v) => {
+      const d = disponibilidadDelComposer({ etapa: v.etapa, bzzzbxDisponible: v.bzzzbx.disponible, hilos: v.hilos, equipoId: v.equipoId });
+      return d.cleaner.disponible ? null : d.cleaner.razon;
+    },
+    ejecutor: async (ctx, entrada) => (await conversacion()).send_text(ctx, entrada),
+  },
+  {
+    codigo: "discard_ai_draft",
+    etiqueta: "Discard AI draft",
+    descripcion: "Discard a draft written by the AI without sending it.",
+    etapas: TODAS_LAS_ETAPAS,
+    enRelease: true,
+    motivo: "no",
+    necesitaBzzzbx: false,
+    interna: true,
+    concurrencia: "ninguna",
+    ejecutor: async (ctx, entrada) => (await conversacion()).discard_ai_draft(ctx, entrada),
   },
 ];
