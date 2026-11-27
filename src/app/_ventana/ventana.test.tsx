@@ -75,6 +75,22 @@ describe("Pestanas", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("$ y People tienen por nombre accesible el símbolo o la palabra y la nota como descripción", () => {
+    pintar(3);
+    for (const nombre of ["$", "People"]) {
+      const t = tab(nombre);
+      expect(t.getAttribute("aria-label")).toBe(nombre);
+      const ids = (t.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+      expect(ids, `${nombre}: aria-describedby`).toHaveLength(1);
+      expect(document.getElementById(ids[0])?.textContent).toBe("Not available in this release");
+      // La nota no es parte del nombre: el nombre sigue siendo el de la pestaña.
+      expect(t.textContent).toBe(nombre);
+    }
+    // Las pestañas disponibles no llevan descripción.
+    expect(tab("7C").getAttribute("aria-describedby")).toBeNull();
+    expect(tab("Audit").getAttribute("aria-describedby")).toBeNull();
+  });
+
   it("elegir una pestaña muestra su panel y pone ?tab= en la URL, sin pedir nada al servidor", () => {
     pintar(3);
     window.history.replaceState(null, "", "/job/x?otro=1");
