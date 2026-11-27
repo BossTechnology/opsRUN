@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import pg from "pg";
 
 /**
  * La Job window (OPR-26, criterios A1 a A16 del spec) contra el build de
@@ -278,10 +279,12 @@ test("A8: en cada etapa aparecen las acciones de esa etapa y ninguna de otra", a
     await expect(page.getByTestId("barra-acciones")).toBeVisible();
     expect(await etiquetasDeAcciones(page), id).toEqual(esperadas);
   }
-  // En OPR-26 ninguna corre.
+  // Solo corren las que ya tienen ejecutor: Schedule (OPR-28). El rechazo del enlace es interno y no sale en la barra.
   await page.goto(`/job/${R(2)}`);
-  const habilitadas = await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').count();
-  expect(habilitadas).toBe(0);
+  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').evaluateAll((os) => os.map((o) => o.getAttribute("value")))).toEqual(["schedule"]);
+  await expect(page.locator('[data-testid="accion"] option[value="reject_job_link"]')).toHaveCount(0);
+  await page.goto(`/job/${R(5)}`);
+  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').count()).toBe(0);
 });
 
 test("A9: el panel pide Reason obligatorio y Go no se habilita con vacío ni con espacios", async ({ page }) => {
@@ -402,9 +405,7 @@ test("A14: las ranuras en su lugar", async ({ page }) => {
   await expect(page.locator('[data-ranura="billing"]')).toBeVisible();
 });
 
-// El aviso de `truncado` lo pinta la ranura del enlace de OPR-28. OPR-26 fija el
-// lugar y las props (`propuesta.truncado`); el caso se activa cuando exista.
-test.fixme("A15: aviso de truncado con 50 jobs de la propiedad de R2 (se activa con OPR-28)", async ({ page }) => {
+test("A15: aviso de truncado con 50 jobs de la propiedad de R2", async ({ page }) => {
   for (let i = 0; i < 50; i++) {
     await control(page, {
       accion: "poner",
@@ -456,4 +457,138 @@ test("Acting as: solo con la demo activa, y se puede elegir un operador de la se
   await expect(page.getByLabel("Acting as")).toHaveValue("0a000000-0000-4000-8000-0000000000a1");
   await page.getByLabel("Acting as").selectOption({ label: "Nobody (read only)" });
   await expect(page.getByLabel("Acting as")).toHaveValue("");
+});
+
+// ── Enlace de la Fase A (OPR-28) ────────────────────────────────────────────
+// R7 es la request de la demo: con dueño y las tres confirmaciones, y bx-job-0107
+// del falso encaja con su borrador. Confirmar la enlaza (no se deshace: queda
+// Scheduled), así que la prueba que la enlaza va al final y cada corrida pide una
+// base nueva (en la CI siempre lo es; en local, `pnpm db:reset`).
+
+/** Consulta como opsrun_app, el mismo login del servidor: lo que el Audit y la request guardaron de verdad. */
+async function consultar<T extends Record<string, unknown>>(sql: string, parametros: unknown[]): Promise<T[]> {
+  const cliente = new pg.Client({
+    // playwright.config.mts la pone para los workers.
+    connectionString: process.env.OPSRUN_DATABASE_URL,
+  });
+  await cliente.connect();
+  try {
+    return (await cliente.query<T>(sql, parametros)).rows;
+  } finally {
+    await cliente.end();
+  }
+}
+
+const estadoDeR7 = async () =>
+  (
+    await consultar<{ status: string; bzzzbx_job_id: string | null; job_number: string | null }>(
+      "select status::text as status, bzzzbx_job_id, job_number from opsrun.request where id = $1",
+      [R(7)],
+    )
+  )[0]!;
+
+const ENLACE = '[data-ranura="enlace"]';
+const OPERADOR_A1 = "0a000000-0000-4000-8000-0000000000a1";
+
+test("OPR-28: sin actor elegido, confirmar se rechaza y no escribe nada", async ({ page }) => {
+  test.skip((await estadoDeR7()).status !== "open", "R7 ya está enlazada: esta prueba pide una base nueva");
+  await page.goto(`/job/${R(7)}?tab=property`);
+  const fila = page.locator(`${ENLACE} [data-testid="candidato-enlace"][data-job="bx-job-0107"]`);
+  await expect(fila).toBeVisible();
+  await expect(fila.getByTestId("sugerido")).toHaveText("Suggested");
+  await expect(page.locator(ENLACE)).toHaveAttribute("data-gate", "ODSC");
+  // Se repite hasta que la página termina de hidratarse y React atiende el clic.
+  await expect(async () => {
+    await fila.getByRole("button", { name: "Confirm EX-00107" }).click();
+    await expect(page.getByTestId("resultado-enlace")).toHaveText("Choose who is acting first.", { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
+  expect((await estadoDeR7()).status).toBe("open");
+});
+
+test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Audit", async ({ page }) => {
+  test.skip((await estadoDeR7()).status !== "open", "R7 ya está enlazada: esta prueba pide una base nueva");
+  // bx-job-0105 pasa a encajar con R7. Es el mismo rechazo (job, motivo y actor) que espera B5 de Audit
+  // (e2e/audit.spec.ts): R7 solo se enlaza una vez por base, y esta prueba y B1 dejan la misma historia.
+  const jobId = "bx-job-0105";
+  await control(page, {
+    accion: "cambiar",
+    entidad: "job",
+    id: jobId,
+    parche: {
+      bzzzbx_customer_id: "bx-cust-0002",
+      bzzzbx_property_id: "bx-prop-0004",
+      service_date: new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10),
+      window_start: "13:00",
+      window_end: "16:00",
+    },
+  });
+
+  await page.goto(`/job/${R(7)}?tab=property`);
+  await page.getByLabel("Acting as").selectOption(OPERADOR_A1);
+  await expect(page.getByLabel("Acting as")).toHaveValue(OPERADOR_A1);
+  const fila = page.locator(`${ENLACE} [data-testid="candidato-enlace"][data-job="${jobId}"]`);
+  await expect(fila).toBeVisible();
+  await fila.getByRole("button", { name: "Reject EX-00105" }).click();
+  await fila.getByTestId("motivo-rechazo").fill("Different customer.");
+  await fila.getByTestId("enviar-rechazo").click();
+  await expect(fila).toHaveCount(0);
+  await expect(page.locator(`${ENLACE} [data-job="bx-job-0107"]`)).toBeVisible();
+
+  const eventos = await consultar<{ reason: string | null; actor: string | null }>(
+    `select a.reason, a.actor_operator_id::text as actor from opsrun.audit_event as a
+      where a.request_id = $1 and a.event_type = 'job_link_rejected' and a.details ->> 'bzzzbx_job_id' = $2`,
+    [R(7), jobId],
+  );
+  expect(eventos).toEqual([{ reason: "Different customer.", actor: OPERADOR_A1 }]);
+  expect((await estadoDeR7()).status).toBe("open");
+
+  // Ya no se vuelve a proponer, ni recargando la ventana.
+  await page.reload();
+  await expect(page.locator(`${ENLACE} [data-job="bx-job-0107"]`)).toBeVisible();
+  await expect(page.locator(`${ENLACE} [data-job="${jobId}"]`)).toHaveCount(0);
+});
+
+test("OPR-28: de punta a punta, elegir actor, abrir R7 y confirmar bx-job-0107: pasa a Scheduled y su Audit tiene request_scheduled", async ({
+  page,
+}, testInfo) => {
+  // R7 se enlaza una sola vez por base: si otra prueba (Audit, OPR-35) ya la enlazó, esta se salta limpio.
+  // Solo un reintento propio (testInfo.retry > 0) comprueba el resultado de su corrida anterior.
+  test.skip((await estadoDeR7()).status !== "open" && testInfo.retry === 0, "R7 ya está enlazada: esta prueba pide una base nueva");
+  if ((await estadoDeR7()).status === "open") {
+    await (await tarjetaDelTablero(page, R(7))).click();
+    await expect(page.getByTestId("encabezado")).toBeVisible();
+    await expect(page.getByTestId("stage")).toHaveText("Requests");
+    await page.getByLabel("Acting as").selectOption(OPERADOR_A1);
+    await expect(page.getByLabel("Acting as")).toHaveValue(OPERADOR_A1);
+    // La propuesta está en la pestaña de la propiedad, que es la inicial de R7.
+    const fila = page.locator(`${ENLACE} [data-testid="candidato-enlace"][data-job="bx-job-0107"]`);
+    await expect(fila).toBeVisible();
+    await expect(fila.getByTestId("sugerido")).toHaveText("Suggested");
+    await expect(fila).toContainText("EX-00107");
+    await expect(page.getByTestId("gate-enlace")).toHaveCount(0);
+    await expect(async () => {
+      await fila.getByRole("button", { name: "Confirm EX-00107" }).click();
+      await expect(page.getByTestId("stage")).toHaveText("Scheduled", { timeout: 2000 });
+    }).toPass({ timeout: 15_000 });
+  } else {
+    await page.goto(`/job/${R(7)}`);
+  }
+
+  await expect(page.getByTestId("stage")).toHaveText("Scheduled");
+  // Ya no es de Requests: la ranura se va y aparece la pestaña Audit.
+  await expect(page.locator(ENLACE)).toHaveCount(0);
+  await expect(pestana(page, "audit")).toHaveCount(1);
+
+  expect(await estadoDeR7()).toEqual({ status: "scheduled", bzzzbx_job_id: "bx-job-0107", job_number: "EX-00107" });
+  const eventos = await consultar<{ details: Record<string, unknown>; actor: string | null }>(
+    `select a.details, a.actor_operator_id::text as actor from opsrun.audit_event as a
+      where a.request_id = $1 and a.event_type = 'request_scheduled'`,
+    [R(7)],
+  );
+  expect(eventos).toEqual([
+    { details: { mode: "linked", bzzzbx_job_id: "bx-job-0107", job_number: "EX-00107" }, actor: OPERADOR_A1 },
+  ]);
+  // Fase A: el enlace no manda instrucciones a BzzzBX.
+  const instrucciones = await consultar<{ n: string }>("select count(*)::text as n from opsrun.instruction where request_id = $1", [R(7)]);
+  expect(instrucciones[0]!.n).toBe("0");
 });

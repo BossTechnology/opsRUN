@@ -12,7 +12,6 @@ import {
   TEXTO_RANURA_PENDIENTE,
   type PropsRanuraBase,
   type PropsRanuraBilling,
-  type PropsRanuraEnlace,
   type PropsRanuraTracker,
 } from "@/lib/ventana/ranuras";
 
@@ -27,19 +26,8 @@ function Pendiente({ nombre, titulo, base }: { nombre: string; titulo: string; b
 /** OPR-27: columna izquierda, con su propio Suspense. Vive en `../_conversacion/`. */
 export { RanuraConversacion } from "../_conversacion/ranura";
 
-/** OPR-28: arriba de la pestaña de la propiedad, solo en Requests. */
-export function RanuraEnlace(props: PropsRanuraEnlace) {
-  return (
-    <section
-      className="ranura"
-      data-ranura="enlace"
-      data-gate={`${props.gate.dueno ? "O" : "-"}${props.gate.details ? "D" : "-"}${props.gate.sender ? "S" : "-"}${props.gate.cleaner ? "C" : "-"}`}
-      aria-label="Link to the job in PINCH tools"
-    >
-      <p>{TEXTO_RANURA_PENDIENTE}</p>
-    </section>
-  );
-}
+/** OPR-28: arriba de la pestaña de la propiedad, solo en Requests (cliente: tiene estado). */
+export { RanuraEnlace } from "./ranura-enlace";
 
 /** OPR-35: pestaña Audit, desde Scheduled. Ya está construida en `./ranura-audit`. */
 export { RanuraAudit } from "./ranura-audit";
