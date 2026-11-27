@@ -180,7 +180,7 @@ En local, con el falso, la tarjeta aparece en unos 30 s. En staging el total dep
 | `CursorCaducado` | El cursor pasa a `null`: la vuelta siguiente hace la recuperación de §4.3 |
 | El real no existe (servidor, hasta OPR-6) | `lecturaOAusente` responde siempre no disponible: se comporta como BzzzBX caído |
 | La base falla en un mensaje | No avanza el cursor; se reintenta en la vuelta siguiente |
-| Un mensaje que la base rechaza siempre (`22023`, `OP025`) | Se registra en el log con su `bzzzbx_message_id` y se salta, para no frenar la entrada entera [S-12]. Queda visible en la conversación si su hilo es de una request (OPR-27 P-7) |
+| Un mensaje que la base rechaza siempre (`22023`, `OP030`) | Se registra en el log con su `bzzzbx_message_id` y se salta, para no frenar la entrada entera [S-12]. Queda visible en la conversación si su hilo es de una request (OPR-27 P-7) |
 | Un mensaje que el puerto ya no conoce (`obtenerVarios` no lo trae) | Se ignora |
 | El proceso se reinicia | Cursor perdido: recuperación desde la marca de agua (§4.3) |
 
@@ -196,11 +196,11 @@ Archivo nuevo `entrada_correo.test.sql`, con fixtures propios dentro de la trans
 - `linked`: un segundo mensaje del mismo hilo se vincula a la misma request, no original, con `email_received`; también si la request está `scheduled`;
 - sin hilo: dos mensajes sin hilo dan dos requests;
 - `p_bzzzbx_message_id` vacío o `p_received_at` nulo → `22023`;
-- un hilo con mensajes vinculados a dos requests distintas (fixture escrita como el dueño) → `OP025`, sin escribir;
+- un hilo con mensajes vinculados a dos requests distintas (fixture escrita como el dueño) → `OP030`, sin escribir;
 - el índice nuevo: insertar a mano un segundo original en el mismo hilo falla con `23505`;
 - el catálogo trae `email_received` con label (lo sigue comprobando `audit_catalogo.test.sql`).
 
-**Guard nuevo G14** (o el número libre que siga a los specs en curso), en `guard_escrituras.test.sql`: la única función que inserta en `opsrun.request` es `opsrun.ingest_request_email`. Descubre en `pg_proc` las funciones de los esquemas de opsRUN cuyo `prosrc` contiene un `insert into opsrun.request` (sin contar `request_message`, `request_confirmation`, …) y compara con esa sola. **Se ve fallar en cada corrida:** crea dentro de la transacción una función de prueba que inserta una request, comprueba que el guard la detecta y hace rollback. Si una tarjeta futura necesita crear requests de otra forma, el guard falla a propósito y pide la decisión.
+**Guard nuevo G15** (G14 es del spec de las etapas, PR #24), en `guard_escrituras.test.sql`: la única función que inserta en `opsrun.request` es `opsrun.ingest_request_email`. Descubre en `pg_proc` las funciones de los esquemas de opsRUN cuyo `prosrc` contiene un `insert into opsrun.request` (sin contar `request_message`, `request_confirmation`, …) y compara con esa sola. **Se ve fallar en cada corrida:** crea dentro de la transacción una función de prueba que inserta una request, comprueba que el guard la detecta y hace rollback. Si una tarjeta futura necesita crear requests de otra forma, el guard falla a propósito y pide la decisión.
 
 ### 9.2 Vitest (TDD, cada una en rojo primero)
 
@@ -208,7 +208,7 @@ Archivo nuevo `entrada_correo.test.sql`, con fixtures propios dentro de la trans
   - un cambio de `message` entrante de correo llama a la función una vez; saliente, texto o de otra entidad, ninguna;
   - el orden por `sent_at` y `bzzzbx_message_id`;
   - el cursor avanza solo si todo salió bien; con un fallo de la base, la vuelta siguiente pide desde el mismo cursor;
-  - `22023` y `OP025` se saltan y avanzan; cualquier otro error, no;
+  - `22023` y `OP030` se saltan y avanzan; cualquier otro error, no;
   - `BzzzbxNoDisponible` no toca el cursor y no llama a la base; el log avisa una vez por caída;
   - sin cursor: pide `cambiosDesde(null)` **antes** de `buscarMensajes`, desde la marca de agua menos 24 h, y pagina con `despuesDe`; sin requests en la base, no busca;
   - `CursorCaducado` deja el cursor en `null` y la vuelta siguiente recupera;
@@ -239,7 +239,7 @@ Contra el build de producción, la seed y el falso, con la entrada corriendo den
 
 ### 10.1 Migración nueva (pide OK, P-0)
 
-`supabase/migrations/20261202120000_entrada_correo.sql` (fecha tentativa: va después de la de OPR-28, `2026120112xxxx`, y se coordina con la del spec en paralelo que usa `OP019` en adelante), solo hacia adelante, como `opsrun_migrador`.
+`supabase/migrations/20261204120000_entrada_correo.sql` (va después de la de OPR-28, `2026120112xxxx`, y de la de las etapas de OPR-30/31/32, `20261203120000`), solo hacia adelante, como `opsrun_migrador`.
 
 **No cambia tablas, columnas, tipos, triggers ni vistas `v1_*`.** Agrega:
 
@@ -267,15 +267,15 @@ Contra el build de producción, la seed y el falso, con la entrada corriendo den
 
 ### 10.2 Códigos de error
 
-A partir de `OP025` (OPR-28 usa hasta `OP018` y el spec en paralelo empieza en `OP019`; este spec se reserva `OP025` a `OP029`). Se documentan en la cabecera de la migración, como en `20261130120000_conversacion.sql`:
+A partir de `OP030` (OPR-28 usa hasta `OP018` y el spec de las etapas, OPR-30/31/32, PR #24, usa `OP019` a `OP027`; este spec se reserva `OP030` a `OP034`). Se documentan en la cabecera de la migración, como en `20261130120000_conversacion.sql`:
 
 | Código | Cuándo | Lo lanza |
 |---|---|---|
-| `OP025` | El hilo ya tiene mensajes vinculados a más de una request: no se elige una al azar | `ingest_request_email` |
+| `OP030` | El hilo ya tiene mensajes vinculados a más de una request: no se elige una al azar | `ingest_request_email` |
 | `22023` | `p_bzzzbx_message_id` vacío o `p_received_at` nulo | `ingest_request_email` |
 | `42501` | Sin actor de sistema o con operador (de `require_system()`) | `ingest_request_email` |
 
-`OP025` no debería pasar con esta tarjeta (solo la entrada vincula correos entrantes); aparece si un día un operador mueve mensajes a mano (`link_message`) o si alguien escribe a mano en la base.
+`OP030` no debería pasar con esta tarjeta (solo la entrada vincula correos entrantes); aparece si un día un operador mueve mensajes a mano (`link_message`) o si alguien escribe a mano en la base.
 
 ### 10.3 Fuera de la base
 
