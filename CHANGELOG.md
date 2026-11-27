@@ -3,6 +3,8 @@
 Una línea por cambio entregado, en lenguaje de usuario.
 
 ## Sin publicar
+- OPR-26: la Job window. Desde una tarjeta del tablero se abre encima de él (con su propia URL `/job/<request>`, que la recarga abre como página): encabezado con stage, propiedad y espacio, job line, precio y dueño con la carga de cada operador; pestañas por etapa ($ y People en gris); action bar con las acciones de cada etapa, que por ahora salen "Not built yet" (Reject · re-clean, "Not available in this release") y que el servidor rechaza si no corren; y el aviso de BzzzBX caído con lo último leído. Conversación, enlace de la Fase A y Audit tienen ya su lugar y llegan con sus tarjetas.
+- OPR-26: para la demo local, el selector "Acting as" (solo con `OPSRUN_ACTOR_DEMO=1`, el stand-in de BzzzBX y fuera del servidor) deja actuar a un operador de la seed sin login; la seed trae una request nueva, R7, lista para enlazar, y el stand-in trae el precio de cada job.
 - OPR-25: el tablero de opsRUN con sus cinco columnas, conteos y alertas, las tarjetas con sus estados y colores, lo que no entra en V1.1 beta en gris, y actualización sola en menos de 1 minuto. Por ahora lee del stand-in de BzzzBX; el aspecto sigue supuestos hasta revisarlo contra el prototipo R23.
 - OPR-28 (Fase A): opsRUN propone qué job de PINCH es el de cada request, buscando por cliente o propiedad y fecha; el operador confirma el enlace, que deja la request Scheduled, o rechaza un candidato, y las dos cosas quedan en Audit. Todavía sin pantalla.
 - OPR-22: opsRUN lee de BzzzBX y le manda instrucciones por dos puertos con un stand-in en memoria y datos inventados, para construir las pantallas sin esperar el contrato real (provisional hasta OPR-6).

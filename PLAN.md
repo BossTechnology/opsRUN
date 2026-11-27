@@ -67,6 +67,7 @@ BZZZBX_…                      # el resto, por definir en OPR-6
 OPSRUN_DATABASE_URL=          # solo local y CI: conexión como opsrun_app
 OPSRUN_MIGRADOR_URL=          # solo para aplicar migraciones (scripts/migrar.mjs), como opsrun_migrador
 OPSRUN_MIGRADOR_SECRETS_FILE= # en el deploy: archivo montado solo en el contenedor de migraciones, con OPSRUN_MIGRADOR_URL
+OPSRUN_ACTOR_DEMO=            # solo local: 1 enciende el selector "Acting as" de la Job window (OPR-26). Exige además BZZZBX_MODO=falso y sin OPSRUN_SERVIDOR=1; con OPSRUN_SERVIDOR=1 el servidor no arranca si está definida
 ```
 
 El servidor se conecta directo a Postgres como `opsrun_app`. Lee todo en tiempo de ejecución, así que el mismo build sirve en staging y en producción. La clave no va en variables de entorno: va en un archivo de secretos montado en el contenedor, por defecto `/run/secrets/opsrun/app.env`.
@@ -75,7 +76,7 @@ Con `OPSRUN_SERVIDOR=1` el servidor no arranca si:
 - falta `OPSRUN_DB_HOST`, `OPSRUN_GOTRUE_URL` o el archivo de secretos;
 - `OPSRUN_GOTRUE_URL` no es una URL http(s) limpia;
 - el login es superusuario o BYPASSRLS (si la base no responde al arrancar, arranca y la primera consulta lo vuelve a comprobar: con ese login no corre ninguna);
-- está definida alguna variable que el servidor no debe tener. Las llaves de Supabase (service role, secret key, JWT secret), `POSTGRES_PASSWORD`, `OPSRUN_DATABASE_URL`, `OPSRUN_APP_CLAVE` y `OPSRUN_MIGRADOR_URL` se rechazan solo por el nombre, sin mostrar su valor.
+- está definida alguna variable que el servidor no debe tener. Las llaves de Supabase (service role, secret key, JWT secret), `POSTGRES_PASSWORD`, `OPSRUN_DATABASE_URL`, `OPSRUN_APP_CLAVE`, `OPSRUN_MIGRADOR_URL` y `OPSRUN_ACTOR_DEMO` se rechazan solo por el nombre, sin mostrar su valor.
 
 En local y en CI no hay archivos `.env`: `pnpm local`, `pnpm test:db`, Vitest y Playwright arman la conexión desde `supabase status`, con las claves locales del alta local.
 
