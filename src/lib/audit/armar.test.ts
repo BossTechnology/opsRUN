@@ -21,6 +21,8 @@ function fila(parcial: Partial<FilaDeAudit> & Pick<FilaDeAudit, "event_type">): 
     de_operador: null,
     metodo: null,
     modo: null,
+    marca_oss: null,
+    po_numero: null,
     job_number: null,
     bzzzbx_job_id: null,
     sugerencias: null,
@@ -40,6 +42,44 @@ function fila(parcial: Partial<FilaDeAudit> & Pick<FilaDeAudit, "event_type">): 
 }
 
 const AHORA = new Date("2026-11-27T15:00:00Z");
+
+describe("armarAudit: las etapas (OPR-30 a OPR-32)", () => {
+  const complemento = (f: FilaDeAudit) => armarAudit({ filas: [f], identificadores: { r_number: 3, job_number: "EX-00003" }, nombres: SIN_NOMBRES, zona: "UTC", ahora: new Date("2026-11-27T15:00:00Z") }).filas[0]!.complemento;
+
+  it("Marked as OSS / Not OSS dice cuál se marcó; la marca automática de la seed no trae complemento", () => {
+    expect(complemento(fila({ event_type: "oss_marked", actor_kind: "operator", actor_nombre: "Ops Uno", marca_oss: "oss" }))).toBe("· OSS");
+    expect(complemento(fila({ event_type: "oss_marked", actor_kind: "operator", actor_nombre: "Ops Uno", marca_oss: "not_oss" }))).toBe("· Not OSS");
+    expect(complemento(fila({ event_type: "oss_marked" }))).toBeNull();
+  });
+
+  it("PO entered dice el PO que escribió el operador", () => {
+    expect(complemento(fila({ event_type: "po_entered", actor_kind: "operator", actor_nombre: "Ops Uno", po_numero: "PO-EX-0108" }))).toBe("· PO PO-EX-0108");
+    expect(complemento(fila({ event_type: "po_entered" }))).toBeNull();
+  });
+
+  it("Alert cleared lleva la regla con su nombre, el nivel y 'Cleared by operator', y el motivo", () => {
+    const f = fila({
+      event_type: "alert_cleared", actor_kind: "operator", actor_nombre: "Ops Uno", reason: "Large unit.",
+      alerta_regla: "MEC-003", alerta_nivel: "amber", alerta_resolucion: "cleared_by_operator",
+    });
+    const vista = armarAudit({ filas: [f], identificadores: { r_number: 3, job_number: "EX-00003" }, nombres: SIN_NOMBRES, zona: "UTC", ahora: new Date("2026-11-27T15:00:00Z") }).filas[0]!;
+    expect(vista.complemento).toBe("· MEC-003 Running long · Amber · Cleared by operator");
+    expect(vista.motivo).toBe("Large unit.");
+    expect(vista.persona).toBe("Ops Uno");
+  });
+
+  it("los hechos observados (Checked in, Started, Completed, Paid) salen marcados como observados, de BzzzBX y sin complemento", () => {
+    for (const tipo of ["job_checked_in", "job_started", "job_completed", "job_paid"]) {
+      const v = armarAudit({
+        filas: [fila({ event_type: tipo, source: "bzzzbx_observed", actor_kind: "bzzzbx" })],
+        identificadores: { r_number: 3, job_number: "EX-00003" }, nombres: SIN_NOMBRES, zona: "UTC", ahora: new Date("2026-11-27T15:00:00Z"),
+      }).filas[0]!;
+      expect(v.observado, tipo).toBe(true);
+      expect(v.persona, tipo).toBe("BzzzBX");
+      expect(v.complemento, tipo).toBeNull();
+    }
+  });
+});
 const IDS = { r_number: 3, job_number: "EX-00003" };
 const armar = (filas: FilaDeAudit[], extra: { nombres?: Nombres; zona?: string; ahora?: Date } = {}) =>
   armarAudit({ filas, identificadores: IDS, nombres: extra.nombres ?? SIN_NOMBRES, zona: extra.zona ?? "UTC", ahora: extra.ahora ?? AHORA });

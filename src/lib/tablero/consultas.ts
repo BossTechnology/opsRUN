@@ -24,6 +24,11 @@ export const COLUMNAS_FILA = `r.id::text,
        ${iso("r.ended_manually_at")} as ended_manually_at,
        r.oss_mark::text,
        ${iso("r.approved_at")} as approved_at,
+       r.entered_po_number,
+       ${iso("r.validated_at")} as validated_at,
+       coalesce((select array_agg(a.bzzzbx_alert_id order by a.bzzzbx_alert_id)
+                   from opsrun.alert_occurrence as a
+                  where a.request_id = r.id and a.resolved_at is not null), '{}'::text[]) as alertas_limpiadas,
        m.bzzzbx_thread_id`;
 
 export const DESDE_FILA = `from opsrun.request as r

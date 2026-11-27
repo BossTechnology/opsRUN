@@ -86,7 +86,7 @@ describe("VistaTablero", () => {
 
   it("Alerts con el conteo de la operación", () => {
     render(<VistaTablero tablero={tablero()} zona="UTC" sondeoMs={15_000} cursor="c0" />);
-    expect(screen.getByTestId("alertas-operacion").textContent).toContain("1");
+    expect(screen.getByTestId("alertas-operacion").textContent).toContain("2");
   });
 
   it("filtro de operador: Only me espera al login", () => {

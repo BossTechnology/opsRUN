@@ -41,7 +41,7 @@ export function lecturaOAusente(crear: () => LecturaBzzzbx = () => obtenerBzzzbx
   } catch (e) {
     console.error("[opsRUN] tablero: BzzzBX no está disponible:", e instanceof Error ? e.message : e);
     const ausente = () => Promise.reject(new BzzzbxNoDisponible());
-    return { obtener: ausente, obtenerVarios: ausente, listarPor: ausente, buscarJobs: ausente, cambiosDesde: ausente };
+    return { obtener: ausente, obtenerVarios: ausente, listarPor: ausente, buscarJobs: ausente, leerFoto: ausente, cambiosDesde: ausente };
   }
 }
 

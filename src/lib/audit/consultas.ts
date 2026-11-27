@@ -38,6 +38,8 @@ select a.id::text as id,
        de_op.display_name as de_operador,
        a.details ->> 'method' as metodo,
        a.details ->> 'mode' as modo,
+       case when a.event_type = 'oss_marked' then a.details ->> 'mark' end as marca_oss,
+       case when a.event_type = 'po_entered' then a.details ->> 'po_number' end as po_numero,
        a.details ->> 'job_number' as job_number,
        a.details ->> 'bzzzbx_job_id' as bzzzbx_job_id,
        case when a.details ->> 'ai_analysis_id' ~* ${UUID_SQL}

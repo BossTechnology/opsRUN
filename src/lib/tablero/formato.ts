@@ -40,6 +40,20 @@ export function horaConFecha(instante: string, ahora: Date, zona: string): strin
   return `${dia}, ${hora(instante, zona)}`;
 }
 
+/** "just now", "45 min ago", "3 h ago", "2 d ago": hace cuánto pasó algo, para el panel de Clear alert. */
+export function hace(instante: string, ahora: Date): string {
+  const minutos = Math.max(0, Math.floor((ahora.getTime() - Date.parse(instante)) / 60_000));
+  if (minutos < 1) return "just now";
+  if (minutos < 60) return `${minutos} min ago`;
+  if (minutos < 24 * 60) return `${Math.floor(minutos / 60)} h ago`;
+  return `${Math.floor(minutos / (24 * 60))} d ago`;
+}
+
+/** "Nov 27": el día corto en la zona de la operación (Approved, Validated, Paid). */
+export function diaCorto(instante: string, zona: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zona }).format(new Date(instante));
+}
+
 /** "13:30" → "1:30 PM". */
 function horaDeReloj(hhmm: string): string {
   const [h = 0, m = 0] = hhmm.split(":").map(Number);

@@ -197,8 +197,8 @@ describe("armarVentana: alertas (S-8)", () => {
     expect(v.inicial).toEqual({ id: "alerts", porRegla: true });
   });
 
-  it("R4: la alerta ya resuelta no pide acción", () => {
-    expect(ventana(4).alertas).toEqual([]);
+  it("R4: la Delayed ya resuelta no pide acción; la Running long abierta sí", () => {
+    expect(ventana(4).alertas.map((a) => [a.id, a.regla])).toEqual([["bx-alert-0006", "MEC-003"]]);
   });
 });
 

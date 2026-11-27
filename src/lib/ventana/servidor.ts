@@ -5,12 +5,16 @@ import "server-only";
  * `opsrun_app` en una transacción de solo lectura, y BzzzBX por su puerto, con
  * el presupuesto de §2. Nada de esto se lee desde el navegador.
  */
+import { cache } from "react";
+
+import { armarBilling, type VistaBilling } from "../billing/armar";
 import { comoOpsrunApp } from "../db/servidor";
 import { crearDatosDeEnlace } from "../fase-a/datos-sql";
 import type { DependenciasDeEnlace } from "../fase-a/enlace";
 import { lecturaOAusente, zonaDeLaOperacion } from "../tablero/servidor";
+import { armarTracker, type VistaTracker } from "../tracker/armar";
 
-import { armarVentana } from "./armar";
+import { alertasAbiertas, armarVentana, type EntradaVentana } from "./armar";
 import { leerParaConfirmar } from "./confirmar";
 import { esIdDeRequest, leerDeOpsrun } from "./consultas";
 import { leerVentanaDeBzzzbx, type MemoriaVentana } from "./leer";
@@ -27,11 +31,8 @@ export function olvidarVentanas(): void {
   global.__opsrunMemoriaVentana = new Map();
 }
 
-/**
- * La ventana de una request, recalculada con los datos de este momento; null si
- * el id no es un uuid o la request no existe. `tab` es el `?tab=` de la URL.
- */
-export async function obtenerVentana(requestId: string, tab: string | null = null): Promise<VentanaJob | null> {
+/** Lo leído de opsRUN y de BzzzBX para una request, listo para armar la ventana y las ranuras que leen lo mismo. */
+async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab"> | null> {
   if (!esIdDeRequest(requestId)) return null;
   // Todo de opsRUN en una sola transacción de solo lectura: la ventana y lo que piden los paneles de Confirm (OPR-28).
   const leido = await comoOpsrunApp(async (db) => {
@@ -49,7 +50,7 @@ export async function obtenerVentana(requestId: string, tab: string | null = nul
     ahora,
     memoria: memoria(),
   });
-  return armarVentana({
+  return {
     fila: deOpsrun.fila,
     leidos,
     hilos: deOpsrun.hilos,
@@ -59,10 +60,67 @@ export async function obtenerVentana(requestId: string, tab: string | null = nul
     ahora,
     zona: zonaDeLaOperacion(),
     bzzzbx,
-    tab,
     respuestaDelCleaner: confirmar.respuestaDelCleaner,
     sugerencias: confirmar.sugerencias,
+  };
+}
+
+/**
+ * La ventana de una request, recalculada con los datos de este momento; null si
+ * el id no es un uuid o la request no existe. `tab` es el `?tab=` de la URL.
+ */
+export async function obtenerVentana(requestId: string, tab: string | null = null): Promise<VentanaJob | null> {
+  const entrada = await leerEntrada(requestId);
+  return entrada ? armarVentana({ ...entrada, tab }) : null;
+}
+
+/** Lo leído de la request, una vez por render: lo piden las ranuras Job tracker y Billing (React `cache`). */
+const entradaParaRanura = cache(leerEntrada);
+
+export type DatosDeTracker = { vista: VistaTracker; etapa: string };
+
+/** La pestaña Job tracker de una request (OPR-30), con las fotos y las alertas ya leídas; null si no existe. */
+export async function datosDeTracker(requestId: string): Promise<DatosDeTracker | null> {
+  const entrada = await entradaParaRanura(requestId);
+  if (!entrada) return null;
+  const { fila, leidos, hilos, ahora, zona, bzzzbx } = entrada;
+  const ventana = armarVentana({ ...entrada, tab: null });
+  const jobId = fila.bzzzbx_job_id;
+  const vista = armarTracker({
+    requestId: fila.id,
+    etapa: ventana.encabezado.stage.texto,
+    job: jobId ? leidos.jobs.find((j) => j.bzzzbx_job_id === jobId) : undefined,
+    eventos: jobId ? leidos.eventos.filter((e) => e.bzzzbx_job_id === jobId) : [],
+    fotos: jobId ? leidos.fotos.filter((f) => f.bzzzbx_job_id === jobId) : [],
+    alertas: alertasAbiertas({ fila, leidos, hilos }),
+    finAMano: fila.ended_manually_at,
+    ahora,
+    zona,
+    bzzzbxDisponible: bzzzbx.disponible,
   });
+  return { vista, etapa: ventana.etapa };
+}
+
+export type DatosDeBilling = { vista: VistaBilling; etapa: string; version: string };
+
+/** La pestaña Billing de una request (OPR-32); null si no existe. */
+export async function datosDeBilling(requestId: string): Promise<DatosDeBilling | null> {
+  const entrada = await entradaParaRanura(requestId);
+  if (!entrada) return null;
+  const { fila, leidos, zona, bzzzbx } = entrada;
+  const ventana = armarVentana({ ...entrada, tab: null });
+  const jobId = fila.bzzzbx_job_id;
+  const job = jobId ? leidos.jobs.find((j) => j.bzzzbx_job_id === jobId) : undefined;
+  const clienteId = job?.bzzzbx_customer_id ?? fila.bzzzbx_customer_id;
+  const vista = armarBilling({
+    fila,
+    job,
+    customer: clienteId ? leidos.customers.find((c) => c.bzzzbx_customer_id === clienteId) : undefined,
+    pago: jobId ? leidos.pagos.find((p) => p.bzzzbx_job_id === jobId) : undefined,
+    zona,
+    bzzzbxDisponible: bzzzbx.disponible,
+  });
+  return { vista, etapa: ventana.etapa, version: ventana.version };
 }
 
 /**

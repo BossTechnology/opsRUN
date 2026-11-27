@@ -12,6 +12,7 @@ import type {
   FiltroDeJobs,
   Filtros,
   Instruccion,
+  ImagenDeFoto,
   Job,
   Leido,
   LoteDeCambios,
@@ -32,6 +33,12 @@ export interface LecturaBzzzbx {
   listarPor<E extends EntidadHija>(entidad: E, filtro: Filtros[E]): Promise<Leido<Entidades[E]>[]>;
   /** Jobs candidatos para enlazar una request en la Fase A (Runbook §6.1). */
   buscarJobs(filtro: FiltroDeJobs): Promise<Leido<Job>[]>;
+  /**
+   * La imagen de una foto por su `ref` (`Photo.ref`); null si BzzzBX no la conoce.
+   * PROVISIONAL hasta OPR-6 y OPR-9 (spec OPR-30 §4.2, P-8). opsRUN nunca la guarda
+   * ni la cachea: la sirve tal cual por `/api/fotos/[id]`.
+   */
+  leerFoto(ref: string): Promise<ImagenDeFoto | null>;
   /**
    * Qué cambió desde el cursor. Con null, ningún cambio y el cursor de ahora.
    * Un cambio dice solo entidad, id y versión: el dato se relee con `obtener`.

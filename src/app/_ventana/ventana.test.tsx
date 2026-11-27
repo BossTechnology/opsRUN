@@ -322,7 +322,11 @@ describe("BarraAcciones", () => {
   it("con el registro real de OPR-26 ninguna acción de R3 se puede elegir", () => {
     render(<BarraAcciones requestId="r" version="1" acciones={accionesVisibles(ventana(3))} ejecutar={vi.fn()} />);
     const opciones = (screen.getAllByRole("option") as HTMLOptionElement[]).slice(1);
-    expect(opciones.map((o) => o.textContent)).toEqual(["Reschedule — Not built yet", "Cancel job — Not built yet"]);
+    // Reschedule y Cancel job son de la Fase B (OPR-30, P-10): en gris, con el texto de OPR-42.
+    expect(opciones.map((o) => o.textContent)).toEqual([
+      "Reschedule — Available when actions are switched on",
+      "Cancel job — Available when actions are switched on",
+    ]);
     expect(opciones.every((o) => o.disabled)).toBe(true);
   });
 

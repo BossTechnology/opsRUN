@@ -16,8 +16,14 @@ export const esIdDeRequest = (valor: string) => UUID.test(valor);
 export const CONSULTA_FILA_VENTANA = `
 select ${COLUMNAS_FILA},
        r.bzzzbx_contact_id, r.bzzzbx_team_id, r.access_notes,
-       r.change_seq::text as change_seq
+       r.change_seq::text as change_seq,
+       to_char(r.entered_po_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as entered_po_at,
+       r.oss_source::text as oss_source,
+       ap.display_name as approved_by_nombre,
+       va.display_name as validated_by_nombre
 ${DESDE_FILA}
+left join opsrun.operator as ap on ap.id = r.approved_by
+left join opsrun.operator as va on va.id = r.validated_by
 where r.id = $1::uuid`;
 
 /** Los hilos de la request, el original primero. */

@@ -5,9 +5,11 @@
  * La etapa, el nombre y el estado salen de `armarTablero` (OPR-25), con la
  * misma request como única fila: la ventana y la tarjeta nunca discrepan.
  */
+import { poVigente } from "../billing/po";
 import type { AlertResult, Job } from "../bzzzbx/tipos";
+import { esReglaLimpiable } from "../etapas/reglas";
 import { armarTablero } from "../tablero/armar";
-import { fechaYVentana } from "../tablero/formato";
+import { fechaYVentana, hace, horaConFecha } from "../tablero/formato";
 import { SIN_VALOR, TITULOS, type Tablero, type Tarjeta } from "../tablero/tipos";
 
 import {
@@ -79,7 +81,8 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
   const serviceId = job?.bzzzbx_service_id ?? fila.bzzzbx_service_id;
   const customerId = job?.bzzzbx_customer_id ?? fila.bzzzbx_customer_id;
   const teamId = job ? job.bzzzbx_team_id : fila.bzzzbx_team_id;
-  const po = job ? job.po_number : fila.po_number;
+  // El PO vigente (OPR-32, P-2): el capturado en opsRUN, el del job en PINCH o el del borrador.
+  const vigente = poVigente({ capturado: fila.entered_po_number, pinch: job?.po_number, borrador: fila.po_number });
   const fecha = job?.service_date ?? fila.service_date;
   const inicio = job ? job.window_start : fila.window_start;
   const fin = job ? job.window_end : fila.window_end;
@@ -117,7 +120,7 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
     { clave: "service", etiqueta: "Service", valor: service?.name ?? SIN_VALOR, noEncontrado: noEncontrado(serviceId, service) },
     { clave: "date", etiqueta: "Date and window", valor: fechaYVentana(fecha, inicio, fin), noEncontrado: false },
     { clave: "cleaner", etiqueta: "Cleaner", valor: team?.name ?? SIN_VALOR, noEncontrado: noEncontrado(teamId, team) },
-    { clave: "po", etiqueta: "PO", valor: po ?? SIN_VALOR, noEncontrado: false },
+    { clave: "po", etiqueta: "PO", valor: vigente?.valor ?? SIN_VALOR, noEncontrado: false },
     { clave: "access", etiqueta: "Access notes", valor: fila.access_notes?.trim() || SIN_VALOR, noEncontrado: false },
   ];
 
@@ -133,6 +136,7 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
         texto: cancelado ? "Cancelled" : TITULOS[tarjeta.etapa],
         pagada: !cancelado && tarjeta.color === "pagada",
       },
+      oss: fila.oss_mark === "oss",
       nombre: tarjeta.nombre,
       linea: {
         numero: tarjeta.numero,
@@ -156,9 +160,20 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
     equipoId: teamId ?? null,
     gate: { dueno: fila.owner_operator_id !== null, ...confirmaciones },
     datos: {
+      bzzzbxJobId: fila.bzzzbx_job_id,
       tienePropiedad: Boolean(propertyId),
       poRequerido: Boolean(customer?.po_required),
-      tienePo: Boolean(po),
+      tienePo: vigente !== null,
+      poVigente: vigente,
+      // Solo las del job o la request (no las de un mensaje) y de las reglas limpiables (OPR-30, P-6).
+      alertasLimpiables: abiertas
+        .filter((a) => a.sujeto.tipo !== "message" && esReglaLimpiable(a.rule_id))
+        .map((a) => ({ id: a.bzzzbx_alert_id, regla: a.rule_id, nivel: a.level, razon: a.reason_text, abierta: hace(a.opened_at, ahora) })),
+      oss: fila.oss_mark,
+      ossAuto: fila.oss_mark !== null && fila.oss_source === "auto",
+      aprobada: fila.approved_at !== null,
+      validada: fila.validated_at !== null,
+      fin: instanteDeFin(fila, leidos) ? horaConFecha(instanteDeFin(fila, leidos)!, ahora, zona) : null,
       faltanDetalles: faltanDetalles(fila),
       tieneCliente: Boolean(fila.bzzzbx_customer_id),
       tieneEquipo: Boolean(fila.bzzzbx_team_id),
@@ -188,14 +203,32 @@ function nombreDePestana(espacio: string | null | undefined, propiedad: string |
   return espacio?.trim() || propiedad || "Property";
 }
 
-/** Alertas abiertas de la request, de su job o de un mensaje de su hilo (S-8). */
-function alertasAbiertas({ fila, leidos, hilos }: EntradaVentana): AlertResult[] {
+/** Cuándo terminó el job: el `completed` del Job Tracker (el primero) o End manually. */
+function instanteDeFin(fila: FilaVentana, leidos: LeidosVentana): string | null {
+  const completado = leidos.eventos
+    .filter((e) => fila.bzzzbx_job_id !== null && e.bzzzbx_job_id === fila.bzzzbx_job_id && e.kind === "completed")
+    .map((e) => e.occurred_at)
+    .sort()[0];
+  return completado ?? fila.ended_manually_at;
+}
+
+/**
+ * Alertas abiertas de la request, de su job o de un mensaje de su hilo (S-8). Una
+ * alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando
+ * abierta (OPR-30, P-7).
+ */
+export function alertasAbiertas({
+  fila,
+  leidos,
+  hilos,
+}: Pick<EntradaVentana, "fila" | "leidos" | "hilos">): AlertResult[] {
+  const limpiadas = new Set(fila.alertas_limpiadas);
   const mensajes = new Set(
     leidos.mensajes.filter((m) => m.bzzzbx_thread_id !== null && hilos.includes(m.bzzzbx_thread_id)).map((m) => m.bzzzbx_message_id),
   );
   return leidos.alertas
     .filter((a) => {
-      if (a.cleared_at !== null) return false;
+      if (a.cleared_at !== null || limpiadas.has(a.bzzzbx_alert_id)) return false;
       switch (a.sujeto.tipo) {
         case "request":
           return a.sujeto.request_id === fila.id;

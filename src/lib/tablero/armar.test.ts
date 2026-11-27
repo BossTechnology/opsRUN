@@ -133,8 +133,10 @@ describe("armarTablero", () => {
     const t = armar();
     expect(tarjeta(t, "R1").alertas).toEqual({ total: 1, nivel: "amber" });
     expect(columna(t, "requests").alertas).toEqual({ total: 1, nivel: "amber" });
-    expect(columna(t, "in_progress").alertas).toEqual({ total: 0, nivel: null }); // la Delayed ya se limpió
-    expect(t.alertasAbiertas).toEqual({ total: 1, nivel: "amber" });
+    // La Delayed ya se limpió; R4 tiene abierta una Running long (OPR-30, P-14).
+    expect(columna(t, "in_progress").alertas).toEqual({ total: 1, nivel: "amber" });
+    expect(tarjeta(t, "EX-00004").alertas).toEqual({ total: 1, nivel: "amber" });
+    expect(t.alertasAbiertas).toEqual({ total: 2, nivel: "amber" });
   });
 
   it("una alerta roja pone la columna en rojo", () => {
@@ -145,7 +147,7 @@ describe("armarTablero", () => {
     });
     const t = armar(leidos);
     expect(columna(t, "requests").alertas).toEqual({ total: 2, nivel: "red" });
-    expect(t.alertasAbiertas).toEqual({ total: 2, nivel: "red" });
+    expect(t.alertasAbiertas).toEqual({ total: 3, nivel: "red" });
   });
 
   it("lleva el estado de BzzzBX", () => {
