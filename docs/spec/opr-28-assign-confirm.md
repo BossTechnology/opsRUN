@@ -1,7 +1,7 @@
 # OPR-28 — Requests: Assign / Reassign y Confirm details, sender y cleaner
 
 - **Tarjeta:** OPR-28 (P3 · Requests (single job): assign, confirm, schedule). Depende de OPR-15 (intake), OPR-23 (instruction layer), OPR-36 (análisis de IA) y OPR-26 (Job window). De esas, solo OPR-26 está en `main`; esta parte no las necesita (§3).
-- **Estado:** spec para revisión. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§12). No hay código ni migración escritos.
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-11 según las recomendaciones, incluida la migración de P-0 (§12.1). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§12). No hay código ni migración escritos.
 - **Construye sobre:** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md` §3.2, §3.3, §3.4, §3.9 y §4; migración `20261124130000_modelo_de_datos.sql`), el enlace de la Fase A (`docs/spec/fase-a-enlace.md`, migración `20261125120000_fase_a_enlace.sql`), la Job window y su registro de acciones (`docs/spec/opr-26-job-window.md` §5, `src/lib/acciones/`), la conversación (`20261130120000_conversacion.sql`, que usa hasta `OP012`) y Audit (`docs/spec/opr-35-audit.md` §2.4 y §3).
 - **Tarjeta en Relevo:** leída (OPR-28, 2026-11-27). De ella salen "Assign to me", "Assigned to for any operator", los campos de Job details, "Confirm / Change" del sender y "confirm on reply or Confirm by phone" del cleaner. **No se pudieron leer** el User Guide cap. 4 ni el Release Definition §4.3 y §4.8 (no están en este repo, que es público), ni el prototipo R23 [S-1].
 - **Fuera de alcance:** editar el borrador (Change, la búsqueda de cliente y contacto, cambiar de equipo: la función `update_request_detail` de OPR-20 §4), Ask cleaner y la lectura de la respuesta (OPR-17), Cleaner declined y OPS-020 (P-6), el aviso de "varios jobs" (OPR-36, OPR-37), Schedule de la Fase B (`create_job` y `schedule_request`, OPR-23), el botón "Assign to me" dentro de la pestaña Alerts (OPR-34) y el login (OPR-21).
@@ -333,7 +333,7 @@ D1 es la parte de request de E2E-1 que se puede probar en local. E2E-1, E2E-2, E
 | S-9 | Con BzzzBX caído se puede confirmar viendo lo último leído o `— —` en los nombres, como cualquier acción que solo escribe en opsRUN (OPR-26 S-13). |
 | S-10 | La pestaña de la propiedad marca cada sección como confirmada o no con `v.gate`; el detalle visual se revisa contra R23. |
 
-## 12. Preguntas para Henry
+## 12. Preguntas para Henry y sus decisiones
 
 - **P-0. Migración.** §8 agrega cuatro funciones del operador, siete helpers privados y un trigger, sin cambiar tablas, tipos, catálogos ni vistas. Sin ella no hay cómo escribir dueño ni confirmaciones. **Recomiendo sí.**
 - **P-1. Motivo en Assign / Reassign.** El catálogo no lo exige y el registro dice `"no"`. **Recomiendo opcional:** sirve para decir por qué se pasa una request a otro sin frenar la asignación normal. Alternativa: sin motivo, como hoy.
@@ -347,3 +347,20 @@ D1 es la parte de request de E2E-1 que se puede probar en local. E2E-1, E2E-2, E
 - **P-9. Confirm by phone con una pregunta por texto abierta.** **Recomiendo** cerrarla como `confirmed` si es al mismo equipo (sale de Waiting) y `withdrawn` si es a otro. Alternativa: dejarla abierta, que deja en Waiting algo ya resuelto.
 - **P-10. Versión dentro de la función.** **Recomiendo pasar `p_version` y compararla con la fila bloqueada** (`OP013`), porque el valor confirmado se calcula de esa fila. Alternativa: confiar solo en el chequeo de `ejecutarAccion`, como `link_observed_job`, con una ventana chica de carrera.
 - **P-11. Volver a confirmar.** **Recomiendo "Already confirmed"** (`bloqueada` y `OP017`); para reconfirmar tiene que cambiar el borrador. Alternativa: reconfirmar invalida la anterior y crea otra, que deja más filas sin decir nada nuevo.
+
+### 12.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con las doce recomendaciones. Quedó así:
+
+- **P-0:** sí a la migración de §8: cuatro funciones del operador, siete helpers privados y un trigger, sin cambiar tablas, tipos, catálogos ni vistas `v1_*`.
+- **P-1:** el motivo de Assign / Reassign es opcional.
+- **P-2:** cualquier operador activo asigna y confirma, y Audit dice quién. Se revisa con OPR-2.
+- **P-3:** Confirm details exige propiedad, servicio, fecha y ventana; espacio, unidad, camas, notas y PO son opcionales.
+- **P-4:** cada confirmación se invalida por sus propias columnas (§5.1), y la del cleaner también por fecha, ventana y propiedad.
+- **P-5:** la invalidación la hace el trigger `request_confirmation_supersede`, con G13 comprobando el reparto.
+- **P-6:** una sola función `confirm_cleaner` con los métodos `phone` y `cleaner_text`, sin `operator`, con motivo opcional. Declined y "choose another team" quedan para OPR-17.
+- **P-7:** se agregan R8 a la seed y `bx-job-0108` al falso (§10).
+- **P-8:** en V1.1 beta no se puede quitar el dueño.
+- **P-9:** Confirm by phone cierra como `confirmed` la pregunta abierta al mismo equipo y como `withdrawn` la de otro equipo.
+- **P-10:** cada función recibe `p_version` y la compara con la fila bloqueada (`OP013`).
+- **P-11:** una confirmación vigente bloquea la acción con "Already confirmed" (`OP017`); para reconfirmar tiene que cambiar el borrador.
