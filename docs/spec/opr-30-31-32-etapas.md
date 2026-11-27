@@ -1,7 +1,7 @@
 # OPR-30, OPR-31 y OPR-32 — In Progress, Complete y Validation/Billing hasta Paid (Fase A)
 
 - **Tarjetas:** OPR-30 (P3 · In Progress: Job tracker, photos, Clear alert, End manually), OPR-31 (P3 · Complete: Approve & confirm, Mark as OSS / Not OSS) y OPR-32 (P3 · Validation and Billing: Validate (PO check), Paid). Leídas en Relevo el 2026-11-27, junto con el comentario oficial de OPR-42 (Fase A). Las tarjetas son información; este spec manda sobre la construcción solo cuando Henry lo apruebe.
-- **Estado:** spec para revisión de Henry. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§13).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-15 según las recomendaciones y P-9 dentro del único ciclo de fondo de opsRUN (§13.1). **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§13).
 - **Meta:** que **E2E-1 llegue hasta Paid sobre el stand-in**: una request recorre Requests → Scheduled → In Progress → Complete → Validation → Paid en local, con cada paso en Audit.
 - **Construye sobre (todo en `main`):** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md` §3.2, §3.8, §3.11, §4 y §5; migración `20261124130000_modelo_de_datos.sql`), el puerto de BzzzBX y su falso (`docs/spec/opr-22-stand-ins.md`, `src/lib/bzzzbx/`), el tablero (OPR-25), la Job window con su registro de acciones y sus ranuras (`docs/spec/opr-26-job-window.md` §5 y §7, `src/lib/acciones/`, `src/lib/ventana/ranuras.ts`), la conversación (OPR-27, migración `20261130120000_conversacion.sql`, hasta `OP012`), el enlace de la Fase A (`docs/spec/fase-a-enlace.md`) y Audit (`docs/spec/opr-35-audit.md`).
 - **Depende además de un spec aprobado sin construir:** `docs/spec/opr-28-assign-confirm.md` (Assign y Confirm, con R8 y `bx-job-0108`, y los códigos `OP013` a `OP018`). E2E-1 empieza en Requests, así que su prueba de punta a punta (§11.3, E1) corre después de esa implementación.
@@ -245,7 +245,7 @@ Las entradas ya existen en `REGISTRO_DE_ACCIONES`. Se conservan los códigos [S-
 
 ### 7.5 Observador de hechos (si P-9)
 
-`src/lib/observados/`: a lo sumo cada 15 s por proceso, desde `/api/tablero/cambios` (como el despacho de OPR-27), lee los `JobTrackerEvent` y `Payment` de los jobs enlazados que estén en Scheduled a Validation y llama a `record_observed_event` como actor de sistema `observador`. Deduplica por `bzzzbx_event_id` (la base lo hace con `unique`). Provisional hasta la read layer de OPR-22.
+`src/lib/observados/`: corre en segundo plano **dentro del único ciclo de fondo de opsRUN** que define OPR-15 (su P-1, en `instrumentation`, ADR 0006), nunca desde una consulta de lectura como `/api/tablero/cambios`. En cada vuelta del ciclo, a lo sumo cada 15 s, lee los `JobTrackerEvent` y `Payment` de los jobs enlazados que estén en Scheduled a Validation y llama a `record_observed_event` como actor de sistema `observador`. Deduplica por `bzzzbx_event_id` (la base lo hace con `unique`). Provisional hasta la read layer de OPR-22.
 
 ## 8. Migración nueva (pide OK, P-0)
 
@@ -473,3 +473,24 @@ E2E-4, E2E-5, E2E-6, E2E-7 y "E2E-1 llega a Paid" completos (Hecho cuando de las
 - **P-13. PO después de validar.** **Recomiendo que no se cambie** (`OP025`). Alternativa: editable hasta Paid, con su Audit.
 - **P-14. Seed y falso.** **Recomiendo** R8 con `bx-cust-0003` y sin PO (coordinado con OPR-28), una MEC-003 abierta en R4, el pago de `bx-job-0108` y R6 validada (§9). Alternativa: una request nueva R9 solo para estas etapas, que duplica la parte de Requests.
 - **P-15. Guard G14 y la etiqueta `:job`.** **Recomiendo etiquetar las columnas de hechos del job con `opsrun:job`** y que G14 exija el candado con versión a toda función que las escribe. Alternativa: probar cada función a mano, sin guard que descubra.
+
+### 13.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con las dieciséis recomendaciones ("con un solo ciclo de fondo"). Quedó así:
+
+- **P-0:** sí a la migración de §8: cinco columnas en `request`, cinco funciones del operador, `record_observed_event` del sistema, tres helpers, constraints y `v1_request` ampliada.
+- **P-1:** el PO capturado después de programar vive en `entered_po_number`, `entered_po_at` y `entered_po_by` de `request`.
+- **P-2:** cualquiera de las tres fuentes de PO desbloquea Validate; Billing edita el de opsRUN y muestra "In PINCH: …" si difiere; `job_validated` dice la fuente.
+- **P-3:** Validate queda en `validated_at` y `validated_by` de `request`.
+- **P-4:** las columnas nuevas se agregan al final de `v1_request`.
+- **P-5:** Clear alert necesita BzzzBX: el servidor relee la alerta y la función crea la ocurrencia con su instantánea.
+- **P-6:** solo MEC-003 se limpia con Clear alert, desde `clearable_rules()`.
+- **P-7:** una alerta limpiada en opsRUN se ve resuelta aunque BzzzBX la siga dando abierta.
+- **P-8:** `leerFoto` en el puerto y la ruta `/api/fotos/[id]`, con un SVG inventado en el falso.
+- **P-9:** se agregan `record_observed_event` y el observador mínimo, provisionales hasta OPR-22. **El observador corre en segundo plano solo dentro del único ciclo de fondo de opsRUN que define OPR-15 (P-1, `instrumentation`, ADR 0006), nunca desde una consulta de lectura** (§7.5).
+- **P-10:** disponibilidad `fase_b` con "Available when actions are switched on" para End manually, Reschedule y Cancel job.
+- **P-11:** cualquier operador activo valida hasta OPR-2, con Audit diciendo quién.
+- **P-12:** la marca OSS no cambia después de aprobar (`OP023`).
+- **P-13:** el PO no cambia después de validar (`OP025`).
+- **P-14:** R8 con `bx-cust-0003` y sin PO (coordinado con OPR-28), una MEC-003 abierta en R4, el pago de `bx-job-0108` y R6 validada (§9).
+- **P-15:** las columnas de hechos del job llevan la etiqueta `opsrun:job` y el guard G14 exige el candado con versión a toda función que las escribe.
