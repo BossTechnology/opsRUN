@@ -30,11 +30,10 @@ import { leerConversacion } from "./leer";
 
 const R1 = "b0000000-0000-4000-8000-0000000000a1";
 const R2 = "b0000000-0000-4000-8000-0000000000a2";
-const R7 = "b0000000-0000-4000-8000-0000000000a7";
 const OPERADOR_ID = "0a000000-0000-4000-8000-0000000000a1";
 const OPERADOR: Actor = { tipo: "operador", authUserId: "de000000-0000-4000-8000-0000000000a1" };
 const BORRADOR_R2 = "5a000000-0000-4000-8000-0000000000d2";
-const BORRADOR_R7 = "5a000000-0000-4000-8000-0000000000d7";
+const BORRADOR_R1 = "5a000000-0000-4000-8000-0000000000d1";
 
 function urlAdmin(): string | null {
   if (process.env.OPSRUN_PRUEBA_ADMIN_URL) return process.env.OPSRUN_PRUEBA_ADMIN_URL;
@@ -268,17 +267,17 @@ conBase("conversación contra la base: notas, envíos, borradores, despacho y re
 
   it("Discard rechaza el borrador sin enviar nada y deja su Audit", async () => {
     const { falso, ejecutores, entregas } = montar();
-    const r = await ejecutores.discard_ai_draft(ctx(ventana([], null)), entrada(R7, "discard_ai_draft", { ai_suggestion_id: BORRADOR_R7 }));
+    const r = await ejecutores.discard_ai_draft(ctx(ventana([], null)), entrada(R1, "discard_ai_draft", { ai_suggestion_id: BORRADOR_R1 }));
     expect(r).toEqual({ tipo: "guardada" });
     expect(entregas).toEqual([]);
     const { rows } = await cliente.query(
       `select s.decision::text as decision, a.event_type from opsrun.ai_suggestion as s
          join opsrun.audit_event as a on a.ai_suggestion_id = s.id where s.id = $1`,
-      [BORRADOR_R7],
+      [BORRADOR_R1],
     );
     expect(rows).toEqual([{ decision: "rejected", event_type: "ai_suggestion_rejected" }]);
-    expect((await hilo(R7, falso)).borradores.customer).toBeNull();
-    expect((await cliente.query("select count(*)::int as n from opsrun.instruction where request_id = $1 and type = 'send_email'", [R7])).rows[0]!.n).toBe(0);
+    expect((await hilo(R1, falso)).borradores.customer).toBeNull();
+    expect((await cliente.query("select count(*)::int as n from opsrun.instruction where request_id = $1 and type = 'send_email'", [R1])).rows[0]!.n).toBe(0);
   });
 
   it("un fallo en BzzzBX se ve como 'Failed · …' en rojo, queda en Audit y se puede reenviar", async () => {

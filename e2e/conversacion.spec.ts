@@ -162,17 +162,17 @@ test("C8: el borrador de IA aparece marcado, no sale solo, y se envía solo con 
   await expect(conversacion(page).getByTestId("borrador-ia")).toHaveCount(0);
   await expect(caja(page)).toHaveValue("");
 
-  // Con otro borrador (R7), Discard lo quita sin enviar nada.
-  await page.goto(`/job/${R(7)}`);
+  // Con otro borrador (R1), Discard lo quita sin enviar nada.
+  await page.goto(`/job/${R(1)}`);
   await elegirModo(page, "customer");
   await expect(conversacion(page).getByTestId("borrador-ia")).toContainText("AI draft");
   const burbujas = await entradas(page).count();
-  const cursorR7 = await cursor(page);
+  const cursorR1 = await cursor(page);
   await conversacion(page).getByTestId("descartar-borrador").click();
   await expect(conversacion(page).getByTestId("borrador-ia")).toHaveCount(0);
   await expect(caja(page)).toHaveValue("");
   await expect(entradas(page)).toHaveCount(burbujas);
-  expect(await huboCambio(page, cursorR7)).toBe(true); // Audit: ai_suggestion_rejected
+  expect(await huboCambio(page, cursorR1)).toBe(true); // Audit: ai_suggestion_rejected
   await page.reload();
   await elegirModo(page, "customer");
   await expect(conversacion(page).getByTestId("borrador-ia")).toHaveCount(0);
