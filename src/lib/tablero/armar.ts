@@ -64,10 +64,8 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
   const mensajes = agrupar(leidos.mensajes, (m) => m.bzzzbx_thread_id);
 
   const requestDeJob = new Map(filas.filter((f) => f.bzzzbx_job_id).map((f) => [f.bzzzbx_job_id!, f.id]));
-  // Una alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando abierta (OPR-30, P-7).
-  const limpiadas = new Set(filas.flatMap((f) => f.alertas_limpiadas));
   const abiertas = agrupar(
-    leidos.alertas.filter((a) => a.cleared_at === null && !limpiadas.has(a.bzzzbx_alert_id)),
+    leidos.alertas.filter((a) => a.cleared_at === null),
     (a) =>
       a.sujeto.tipo === "request"
         ? a.sujeto.request_id
@@ -94,7 +92,8 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
     const customer = customerId ? customers.get(customerId) : undefined;
     const pago = fila.bzzzbx_job_id ? pagos.get(fila.bzzzbx_job_id) : undefined;
     const evs = fila.bzzzbx_job_id ? (eventos.get(fila.bzzzbx_job_id) ?? []) : [];
-    const alertas = abiertas.get(fila.id) ?? [];
+    // Una alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando abierta (OPR-30, P-7).
+    const alertas = (abiertas.get(fila.id) ?? []).filter((a) => !fila.alertas_limpiadas.includes(a.bzzzbx_alert_id));
 
     const checkIn = primero(evs, "checked_in");
     const fin = primero(evs, "completed")?.occurred_at ?? fila.ended_manually_at;

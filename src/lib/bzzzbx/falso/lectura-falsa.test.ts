@@ -10,6 +10,41 @@ import { ENTIDADES, type Cursor } from "../tipos";
 
 import { crearFalso, RelojManual } from ".";
 
+describe("lectura falsa: leerFoto (OPR-30, P-8)", () => {
+  it("devuelve un SVG inventado con la fase y el id: nunca una foto real ni un archivo", async () => {
+    const { lectura } = crearFalso();
+    const antes = await lectura.leerFoto("stand-in:photo/bx-photo-0001");
+    expect(antes?.contentType).toBe("image/svg+xml");
+    const svg = new TextDecoder().decode(antes!.bytes);
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain(">Before<");
+    expect(svg).toContain("bx-photo-0001");
+    const despues = new TextDecoder().decode((await lectura.leerFoto("stand-in:photo/bx-photo-0002"))!.bytes);
+    expect(despues).toContain(">After<");
+    // Sin scripts ni referencias externas.
+    expect(svg).not.toMatch(/<script|href=|xlink|<image|data:/i);
+  });
+
+  it("una referencia desconocida da null, y con BzzzBX caído lanza", async () => {
+    const { lectura } = crearFalso();
+    expect(await lectura.leerFoto("stand-in:photo/no-existe")).toBeNull();
+    lectura.noDisponible(true);
+    await expect(lectura.leerFoto("stand-in:photo/bx-photo-0001")).rejects.toBeInstanceOf(BzzzbxNoDisponible);
+  });
+
+  it("una foto que se agrega en el origen también se puede leer", async () => {
+    const { lectura } = crearFalso();
+    lectura.poner("photo", {
+      bzzzbx_photo_id: "bx-photo-7001",
+      bzzzbx_job_id: "bx-job-0108",
+      phase: "after",
+      taken_at: "2026-11-27T15:00:00.000Z",
+      ref: "stand-in:photo/bx-photo-7001",
+    });
+    expect(new TextDecoder().decode((await lectura.leerFoto("stand-in:photo/bx-photo-7001"))!.bytes)).toContain("bx-photo-7001");
+  });
+});
+
 describe("lectura falsa: datos", () => {
   it("tiene al menos una fila de cada entidad", async () => {
     const { lectura } = crearFalso();
@@ -31,6 +66,28 @@ describe("lectura falsa: datos", () => {
     for (const job of lectura.todos("job")) {
       expect(job.price, job.bzzzbx_job_id).toBeDefined();
     }
+  });
+
+  it("R4 trae una MEC-003 abierta para Clear alert, y R8 su pago y su salud para llegar a Paid (OPR-30 a OPR-32, P-14)", async () => {
+    const { lectura } = crearFalso();
+    const alerta = await lectura.obtener("alert_result", "bx-alert-0006");
+    expect(alerta).toMatchObject({
+      sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" },
+      rule_id: "MEC-003",
+      level: "amber",
+      reason_text: "Running 45 min over the window.",
+      cleared_at: null,
+    });
+    expect(await lectura.listarPor("photo", { bzzzbx_job_id: "bx-job-0004" })).toEqual([]);
+    expect((await lectura.obtener("payment", "bx-job-0108"))?.paid).toBe(false);
+    expect((await lectura.obtener("job_health", "bx-job-0108"))?.status).toBe("on_track");
+    // R8: su cliente exige PO y el job no trae.
+    const job = await lectura.obtener("job", "bx-job-0108");
+    expect(job?.po_number).toBeNull();
+    expect((await lectura.obtener("customer", job!.bzzzbx_customer_id))?.po_required).toBe(true);
+    // Sin eventos ni fotos al empezar: el E2E los pone con /api/falso.
+    expect(await lectura.listarPor("jobtracker_event", { bzzzbx_job_id: "bx-job-0108" })).toEqual([]);
+    expect(await lectura.listarPor("photo", { bzzzbx_job_id: "bx-job-0108" })).toEqual([]);
   });
 
   it("la alerta OPS-001 abierta es de la request R1 de opsRUN", async () => {

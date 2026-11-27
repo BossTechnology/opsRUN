@@ -154,3 +154,60 @@ describe("armarTablero", () => {
     expect(armar().bzzzbx.disponible).toBe(true);
   });
 });
+
+describe("armarTablero: las etapas (OPR-30 a OPR-32)", () => {
+  it("una alerta limpiada en opsRUN no cuenta en la tarjeta, en la columna ni en Alerts, aunque BzzzBX la dé abierta (P-7)", () => {
+    const filas = filasDeLaSeed(AHORA).map((f) => (f.bzzzbx_job_id === "bx-job-0004" ? { ...f, alertas_limpiadas: ["bx-alert-0006"] } : f));
+    const t = armar(leidosDelFalso(AHORA), filas);
+    expect(tarjeta(t, "EX-00004").alertas).toEqual({ total: 0, nivel: null });
+    expect(columna(t, "in_progress").alertas).toEqual({ total: 0, nivel: null });
+    expect(t.alertasAbiertas).toEqual({ total: 1, nivel: "amber" }); // solo la OPS-001 de R1
+  });
+
+  it("una alerta limpiada de una request no descuenta la de otra", () => {
+    const filas = filasDeLaSeed(AHORA).map((f) => (f.bzzzbx_job_id === "bx-job-0003" ? { ...f, alertas_limpiadas: ["bx-alert-0006"] } : f));
+    expect(tarjeta(armar(leidosDelFalso(AHORA), filas), "EX-00004").alertas.total).toBe(1);
+  });
+
+  it("el flag PO usa el PO vigente: el capturado en opsRUN, el del job o el del borrador; PO missing si no hay ninguno", () => {
+    const filas = filasDeLaSeed(AHORA);
+    const t = armar(leidosDelFalso(AHORA), filas);
+    expect(tarjeta(t, "EX-00006").flags).toContain("PO"); // el job de PINCH trae PO
+    expect(tarjeta(t, "EX-00003").flags).toContain("PO");
+    // El job de R6 pierde su PO en PINCH y el cliente lo exige: PO missing... hasta que el operador lo captura en opsRUN.
+    const leidos = leidosDelFalso(AHORA);
+    leidos.jobs = leidos.jobs.map((j) => (j.bzzzbx_job_id === "bx-job-0006" ? { ...j, po_number: null } : j));
+    expect(tarjeta(armar(leidos, filas), "EX-00006").flags).toContain("PO missing");
+    const capturado = filas.map((f) => (f.bzzzbx_job_id === "bx-job-0006" ? { ...f, entered_po_number: "PO-OPSRUN" } : f));
+    const flags = tarjeta(armar(leidos, capturado), "EX-00006").flags;
+    expect(flags).toContain("PO");
+    expect(flags).not.toContain("PO missing");
+    // El borrador también cuenta.
+    const borrador = filas.map((f) => (f.bzzzbx_job_id === "bx-job-0006" ? { ...f, po_number: "PO-DRAFT" } : f));
+    expect(tarjeta(armar(leidos, borrador), "EX-00006").flags).toContain("PO");
+  });
+
+  it("Validation: 'Approved <día>' aprobada, 'Validated <día>' validada y sin pagar, 'Paid <día>' pagada", () => {
+    const filas = filasDeLaSeed(AHORA);
+    const leidos = leidosDelFalso(AHORA);
+    // R6 de la seed: validada y pagada.
+    expect(tarjeta(armar(leidos, filas), "EX-00006").estado).toMatchObject({ tipo: "paid", texto: expect.stringMatching(/^Paid Nov \d+$/) });
+    // Sin pagar: queda "Validated".
+    const sinPagar = { ...leidos, pagos: leidos.pagos.map((p) => (p.bzzzbx_job_id === "bx-job-0006" ? { ...p, paid: false, paid_at: null } : p)) };
+    const validada = tarjeta(armar(sinPagar, filas), "EX-00006");
+    expect(validada.estado.tipo).toBe("validada");
+    expect(validada.estado.texto).toBe("Validated Nov 21");
+    expect(validada.color).not.toBe("pagada");
+    // Sin validar y sin pagar: "Approved".
+    const sinValidar = filas.map((f) => (f.bzzzbx_job_id === "bx-job-0006" ? { ...f, validated_at: null } : f));
+    expect(tarjeta(armar(sinPagar, sinValidar), "EX-00006").estado).toEqual({ tipo: "aprobada", texto: "Approved Nov 20" });
+  });
+
+  it("validar no mueve la tarjeta de columna ni de color: sigue en Validation", () => {
+    const filas = filasDeLaSeed(AHORA);
+    const leidos = leidosDelFalso(AHORA);
+    const sinPagar = { ...leidos, pagos: leidos.pagos.map((p) => (p.bzzzbx_job_id === "bx-job-0006" ? { ...p, paid: false, paid_at: null } : p)) };
+    const t = armar(sinPagar, filas);
+    expect(columna(t, "validation").tarjetas.map((x) => x.numero)).toEqual(["EX-00006"]);
+  });
+});
