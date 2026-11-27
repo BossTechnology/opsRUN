@@ -596,7 +596,8 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
     expect(lista.indexOf("Checked in")).toBeLessThan(lista.indexOf("Started"));
     expect(lista.indexOf("Started")).toBeLessThan(lista.indexOf("Completed"));
     for (const e of observados) await expect(filaDeAudit(page, e)).toContainText("Observed");
-    await expect(audit(page).getByText("Observed")).toHaveCount(4);
+    // exact: la fila de Scheduled dice "linked to observed job", que no es la marca.
+    await expect(audit(page).getByText("Observed", { exact: true })).toHaveCount(4);
     expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'job_paid'", [R(8)])).toBe(1);
     const desdeScheduled = lista.slice(lista.indexOf("Scheduled") + 1).filter((e) => !observados.includes(e));
     expect(desdeScheduled).toEqual([
