@@ -37,6 +37,8 @@ export type PropsRanuraEnlace = PropsRanuraBase & {
   confirmar: (bzzzbxJobId: string) => Promise<ResultadoAccion>;
   /** Server Action: pasa por `ejecutarAccion` con la acción interna `reject_job_link`. */
   rechazar: (bzzzbxJobId: string, motivo: string | null) => Promise<ResultadoAccion>;
+  /** Nombre del cleaner por `bzzzbx_team_id`, ya leído, para la línea de cada candidato. Sin nombre: "— —". */
+  equipos?: Record<string, string>;
 };
 
 /** Audit (OPR-35): pestaña Audit, desde Scheduled. La ranura lee `audit_event` de la request. */

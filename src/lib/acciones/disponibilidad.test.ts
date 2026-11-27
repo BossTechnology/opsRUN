@@ -131,12 +131,14 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(etiquetas(6)).toEqual(["Enter PO", "Validate"]);
   });
 
-  it("en OPR-26 ninguna corre: las de V1.1 beta salen Not built yet y Reject · re-clean fuera del release", () => {
+  it("solo corren las que ya tienen ejecutor (Schedule, de OPR-28); las demás de V1.1 beta salen Not built yet y Reject · re-clean fuera del release", () => {
     for (const n of [2, 3, 4, 5, 6]) {
       for (const accion of accionesVisibles(ventana(n))) {
+        if (accion.codigo === "schedule") continue;
         expect(accion.disponibilidad.tipo, `${accion.etiqueta} en R${n}`).not.toBe("disponible");
       }
     }
+    expect(accionesVisibles(ventana(2)).find((a) => a.codigo === "schedule")!.disponibilidad).toEqual({ tipo: "disponible" });
     const complete = accionesVisibles(ventana(5));
     expect(complete.find((a) => a.etiqueta === "Reject · re-clean")).toMatchObject({
       disponibilidad: { tipo: "fuera_de_release" },

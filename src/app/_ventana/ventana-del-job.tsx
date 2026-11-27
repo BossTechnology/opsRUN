@@ -8,7 +8,7 @@ import { operadoresElegibles, operadorElegidoId } from "@/lib/actor/servidor";
 import { hora } from "@/lib/tablero/formato";
 import { revisarCambiosDelTablero, SONDEO_MS } from "@/lib/tablero/servidor";
 import type { PropsRanuraBase } from "@/lib/ventana/ranuras";
-import { obtenerVentana, propuestaDeLaRequest } from "@/lib/ventana/servidor";
+import { nombresDeEquipos, obtenerVentana, propuestaDeLaRequest } from "@/lib/ventana/servidor";
 import type { IdPestana, VentanaJob } from "@/lib/ventana/tipos";
 
 import { ActorDemo } from "./actor-demo";
@@ -40,10 +40,15 @@ async function EnlaceDeLaRequest({ ventana }: { ventana: VentanaJob }) {
   const propuesta = await propuestaDeLaRequest(ventana.requestId);
   if ("motivo_vacio" in propuesta && propuesta.motivo_vacio === "request_no_abierta") return null;
   const base = baseDe(ventana);
+  const equipos =
+    "candidatos" in propuesta
+      ? await nombresDeEquipos(propuesta.candidatos.flatMap((c) => (c.job.bzzzbx_team_id ? [c.job.bzzzbx_team_id] : [])))
+      : {};
   return (
     <RanuraEnlace
       {...base}
       propuesta={propuesta}
+      equipos={equipos}
       gate={ventana.gate}
       confirmar={confirmarEnlace.bind(null, ventana.requestId, ventana.version)}
       rechazar={rechazarEnlace.bind(null, ventana.requestId, ventana.version)}

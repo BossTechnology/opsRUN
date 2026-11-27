@@ -79,6 +79,14 @@ export class EnlaceInvalido extends Error {
   }
 }
 
+/**
+ * Next empaqueta por separado rutas y páginas: la clase puede venir de otra
+ * copia del módulo y `instanceof` falla. Se reconoce por el nombre, como los
+ * errores de BzzzBX (`src/lib/bzzzbx/errores.ts`).
+ */
+export const esEnlaceInvalido = (e: unknown): e is EnlaceInvalido =>
+  e instanceof Error && e.name === "EnlaceInvalido" && typeof (e as { codigo?: unknown }).codigo === "string";
+
 /** Días alrededor de la fecha del borrador (supuesto S-3). */
 export const DIAS_ALREDEDOR = 3;
 /**

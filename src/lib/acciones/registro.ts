@@ -5,7 +5,7 @@
  * y se cambian aquí sin migrar datos.
  *
  * En OPR-26 ninguna tiene ejecutor: todas las de V1.1 beta salen
- * `sin_construir`. Cada tarjeta de etapa (OPR-28 a OPR-32) agrega a su entrada
+ * `sin_construir` (OPR-28 ya registró los de `schedule` y `reject_job_link`). Cada tarjeta de etapa (OPR-28 a OPR-32) agrega a su entrada
  * el `ejecutor` (y el `panel` si necesita campos propios) y pasa a `disponible`.
  * En la Fase A, las que se hacen en las herramientas de PINCH (crear,
  * reprogramar o cancelar el job) registran la decisión en opsRUN y opsRUN
@@ -15,7 +15,11 @@
  * solo escriben una decisión en opsRUN (asignar, confirmar, aprobar, marcar
  * OSS, limpiar una alerta) siguen disponibles con BzzzBX caído (S-13).
  */
+import { crearEjecutoresDeEnlace } from "./enlace";
 import type { DefinicionAccion } from "./tipos";
+
+// OPR-28: el enlace de la Fase A. El módulo de servidor se carga al correr, no al importar el registro.
+const enlace = crearEjecutoresDeEnlace(async () => (await import("../ventana/servidor")).dependenciasDeEnlaceDeLaVentana());
 
 export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   // Requests (OPR-28)
@@ -69,7 +73,7 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     // En la Fase A abre el enlace con el job observado (§7.2).
     codigo: "schedule",
     etiqueta: "Schedule",
-    descripcion: "Link this request to the job created in the PINCH tools.",
+    descripcion: "Link this request to the job created in the PINCH tools. Choose the job in the list on the property tab.",
     etapas: ["requests"],
     enRelease: true,
     motivo: "no",
@@ -79,6 +83,7 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
       if (!v.gate.sender) return "Confirm who it is from first";
       return null;
     },
+    ejecutor: enlace.schedule,
   },
   {
     // Interna: el rechazo de un candidato del enlace (§7.2). No sale en la action bar.
@@ -90,6 +95,7 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     motivo: "opcional",
     necesitaBzzzbx: false,
     interna: true,
+    ejecutor: enlace.reject_job_link,
   },
   // Scheduled (OPR-29)
   {

@@ -7,6 +7,7 @@ import "server-only";
  */
 import { comoOpsrunApp } from "../db/servidor";
 import { crearDatosDeEnlace } from "../fase-a/datos-sql";
+import type { DependenciasDeEnlace } from "../fase-a/enlace";
 import { lecturaOAusente, zonaDeLaOperacion } from "../tablero/servidor";
 
 import { armarVentana } from "./armar";
@@ -56,7 +57,31 @@ export async function obtenerVentana(requestId: string, tab: string | null = nul
   });
 }
 
+/**
+ * Lo que el enlace de la Fase A necesita: el puerto de BzzzBX (o uno que dice
+ * "no disponible") y los datos de opsRUN. Lo usan la propuesta de la ranura y
+ * los ejecutores de `schedule` y `reject_job_link`.
+ */
+export function dependenciasDeEnlaceDeLaVentana(): DependenciasDeEnlace {
+  return { lectura: lecturaOAusente(), datos: crearDatosDeEnlace() };
+}
+
+/**
+ * Nombre del cleaner de cada equipo dado, para la línea de los candidatos. Si
+ * BzzzBX no responde, vacío: la ranura muestra "— —" y no pierde la lista.
+ */
+export async function nombresDeEquipos(ids: string[]): Promise<Record<string, string>> {
+  const unicos = [...new Set(ids)];
+  if (unicos.length === 0) return {};
+  try {
+    const equipos = await dependenciasDeEnlaceDeLaVentana().lectura.obtenerVarios("cleaner_team", unicos);
+    return Object.fromEntries(equipos.map((t) => [t.bzzzbx_team_id, t.name]));
+  } catch {
+    return {};
+  }
+}
+
 /** La propuesta de enlace de una request en Requests, para la ranura de la Fase A (§7.2). */
 export function propuestaDeLaRequest(requestId: string): Promise<PropuestaDeRanura> {
-  return propuestaParaLaVentana({ lectura: lecturaOAusente(), datos: crearDatosDeEnlace() }, requestId);
+  return propuestaParaLaVentana(dependenciasDeEnlaceDeLaVentana(), requestId);
 }
