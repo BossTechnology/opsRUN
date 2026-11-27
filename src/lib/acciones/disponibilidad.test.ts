@@ -131,10 +131,10 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(etiquetas(6)).toEqual(["Enter PO", "Validate"]);
   });
 
-  it("solo corren las que ya tienen ejecutor (Schedule, de OPR-28); las demás de V1.1 beta salen Not built yet y Reject · re-clean fuera del release", () => {
+  it("solo corren las que ya tienen ejecutor (las de Requests de OPR-28); las demás de V1.1 beta salen Not built yet y Reject · re-clean fuera del release", () => {
     for (const n of [2, 3, 4, 5, 6]) {
       for (const accion of accionesVisibles(ventana(n))) {
-        if (accion.codigo === "schedule") continue;
+        if (["schedule", "assign", "confirm_details", "confirm_sender", "confirm_cleaner"].includes(accion.codigo)) continue;
         expect(accion.disponibilidad.tipo, `${accion.etiqueta} en R${n}`).not.toBe("disponible");
       }
     }
@@ -157,7 +157,8 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
       ["Cancel job", "BzzzBX unavailable"],
     ]);
     const requests = accionesVisibles(ventana(2, { disponible: false }));
-    expect(requests.find((a) => a.etiqueta === "Assign / Reassign")!.nota).toBe("Not built yet");
+    // Assign y Confirm solo escriben una decisión en opsRUN: siguen disponibles sin BzzzBX (S-13).
+    expect(requests.find((a) => a.etiqueta === "Assign / Reassign")!.disponibilidad).toEqual({ tipo: "disponible" });
     expect(requests.find((a) => a.etiqueta === "Ask cleaner")!.nota).toBe("BzzzBX unavailable");
   });
 
@@ -169,10 +170,10 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
   it("bloqueos por dato que falta (§6.2)", () => {
     const r1 = accionesVisibles(ventana(1));
     expect(r1.find((a) => a.codigo === "schedule")!.nota).toBe("Confirm who it is from first");
-    const sinPropiedad = { ...ventana(1), datos: { tienePropiedad: false, poRequerido: false, tienePo: false } };
+    const sinPropiedad = { ...ventana(1), datos: { ...ventana(1).datos, tienePropiedad: false, poRequerido: false, tienePo: false } };
     expect(accionesVisibles(sinPropiedad).find((a) => a.codigo === "schedule")!.nota).toBe("Choose a property first");
     expect(accionesVisibles(sinPropiedad).find((a) => a.codigo === "ask_cleaner")!.nota).toBe("Choose a property first");
-    const sinPo = { ...ventana(6), datos: { tienePropiedad: true, poRequerido: true, tienePo: false } };
+    const sinPo = { ...ventana(6), datos: { ...ventana(6).datos, tienePropiedad: true, poRequerido: true, tienePo: false } };
     expect(accionesVisibles(sinPo).find((a) => a.codigo === "record_validation")!.nota).toBe("Add PO");
     expect(accionesVisibles(ventana(6)).find((a) => a.codigo === "record_validation")!.nota).toBe("Not built yet");
   });
@@ -182,5 +183,72 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(porCodigo(3)).toEqual({ reschedule_job: "obligatorio", cancel_job: "obligatorio" });
     expect(porCodigo(4)).toEqual({ clear_alert: "obligatorio", end_job_manually: "obligatorio" });
     expect(porCodigo(2).schedule).toBe("no");
+    // OPR-28, P-1 y P-6: el motivo de asignar y el del cleaner es opcional; details y sender no lo piden.
+    expect(porCodigo(2)).toMatchObject({
+      assign: "opcional",
+      confirm_details: "no",
+      confirm_sender: "no",
+      confirm_cleaner: "opcional",
+    });
+  });
+});
+
+describe("Assign y Confirm (OPR-28, spec §4 y §7)", () => {
+  const codigo = (v: VentanaJob, c: string) => accionesVisibles(v).find((a) => a.codigo === c)!;
+  const con = (v: VentanaJob, parche: Partial<VentanaJob>) => ({ ...v, ...parche });
+  const sinConfirmar = (n: number) => ventana(n, { sinConfirmar: true });
+
+  it("las cuatro son de Requests: en Scheduled y después no aplican", () => {
+    for (const n of [3, 4, 5, 6]) {
+      const codigos = accionesVisibles(ventana(n)).map((a) => a.codigo);
+      for (const c of ["assign", "confirm_details", "confirm_sender", "confirm_cleaner"]) expect(codigos).not.toContain(c);
+    }
+  });
+
+  it("Assign corre en una request sin dueño y en una con dueño, sin bloqueo", () => {
+    expect(codigo(ventana(1), "assign").disponibilidad).toEqual({ tipo: "disponible" });
+    expect(codigo(ventana(2), "assign").disponibilidad).toEqual({ tipo: "disponible" });
+  });
+
+  it("con BzzzBX caído o una instrucción abierta, las cuatro siguen disponibles: no son instrucciones (S-13)", () => {
+    for (const parche of [{ disponible: false }, { instruccionAbierta: true }]) {
+      const v = ventana(2, { ...parche, sinConfirmar: true });
+      for (const c of ["assign", "confirm_details", "confirm_sender", "confirm_cleaner"]) {
+        expect(codigo(v, c).disponibilidad, `${c} con ${JSON.stringify(parche)}`).toEqual({ tipo: "disponible" });
+      }
+    }
+  });
+
+  it("Confirm details: Already confirmed primero, después lo que falta", () => {
+    expect(codigo(ventana(2), "confirm_details").disponibilidad).toEqual({ tipo: "bloqueada", motivo: "Already confirmed" });
+    const r1 = sinConfirmar(1);
+    expect(codigo(r1, "confirm_details").disponibilidad).toEqual({
+      tipo: "bloqueada",
+      motivo: "Complete the details first: Service, Date, Window",
+    });
+    // Con una confirmación vigente y datos que faltan, manda "Already confirmed".
+    const ambas = con(r1, { gate: { ...r1.gate, details: true } });
+    expect(codigo(ambas, "confirm_details").nota).toBe("Already confirmed");
+    expect(codigo(sinConfirmar(2), "confirm_details").disponibilidad).toEqual({ tipo: "disponible" });
+  });
+
+  it("Confirm sender: Already confirmed primero, después 'Choose who it is from first'", () => {
+    expect(codigo(ventana(2), "confirm_sender").nota).toBe("Already confirmed");
+    expect(codigo(sinConfirmar(1), "confirm_sender").nota).toBe("Choose who it is from first");
+    const ambas = con(sinConfirmar(1), { gate: { dueno: false, details: false, sender: true, cleaner: false } });
+    expect(codigo(ambas, "confirm_sender").nota).toBe("Already confirmed");
+    expect(codigo(sinConfirmar(2), "confirm_sender").disponibilidad).toEqual({ tipo: "disponible" });
+  });
+
+  it("Confirm cleaner: Already confirmed primero, después 'Choose a cleaner first'", () => {
+    expect(codigo(ventana(2), "confirm_cleaner").nota).toBe("Already confirmed");
+    expect(codigo(sinConfirmar(1), "confirm_cleaner").nota).toBe("Choose a cleaner first");
+    const ambas = con(sinConfirmar(1), { gate: { dueno: false, details: false, sender: false, cleaner: true } });
+    expect(codigo(ambas, "confirm_cleaner").nota).toBe("Already confirmed");
+    expect(codigo(sinConfirmar(2), "confirm_cleaner").disponibilidad).toEqual({ tipo: "disponible" });
+  });
+
+  it("el bloqueo de Schedule no cambia", () => {
+    expect(codigo(sinConfirmar(2), "schedule").nota).toBe("Confirm who it is from first");
   });
 });

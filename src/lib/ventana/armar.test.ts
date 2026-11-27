@@ -253,11 +253,11 @@ describe("armarVentana: lo que usan las acciones y las ranuras", () => {
     const v = ventana(2, { confirmaciones: { details: true, sender: true, cleaner: false } });
     expect(v.gate).toEqual({ dueno: true, details: true, sender: true, cleaner: false });
     expect(v.hilos).toEqual(["bx-thread-0002"]);
-    expect(v.datos).toEqual({ tienePropiedad: true, poRequerido: false, tienePo: false });
+    expect(v.datos).toMatchObject({ tienePropiedad: true, poRequerido: false, tienePo: false });
     expect(ventana(1).gate.dueno).toBe(false);
     expect(ventana(1).datos.tienePropiedad).toBe(true);
     expect(ventana(3).datos.tienePo).toBe(true);
-    expect(ventana(6).datos).toEqual({ tienePropiedad: true, poRequerido: true, tienePo: true });
+    expect(ventana(6).datos).toMatchObject({ tienePropiedad: true, poRequerido: true, tienePo: true });
   });
 
   it("instrucción abierta y zona pasan tal cual", () => {
@@ -265,5 +265,56 @@ describe("armarVentana: lo que usan las acciones y las ranuras", () => {
     expect(v.instruccionAbierta).toBe(true);
     expect(v.zona).toBe("America/Bogota");
     expect(v.requestId).toBe("b0000000-0000-4000-8000-0000000000a3");
+  });
+});
+
+describe("armarVentana: lo que piden Assign y Confirm (OPR-28, spec §7)", () => {
+  it("R1 solo trae la propiedad: faltan el servicio, la fecha y la ventana; sin cliente ni equipo", () => {
+    expect(ventana(1).datos).toMatchObject({
+      faltanDetalles: ["Service", "Date", "Window"],
+      tieneCliente: false,
+      tieneEquipo: false,
+      respuestaDelCleaner: null,
+      sugerencias: [],
+    });
+  });
+
+  it("R2 tiene todo lo obligatorio, cliente y equipo", () => {
+    expect(ventana(2).datos).toMatchObject({ faltanDetalles: [], tieneCliente: true, tieneEquipo: true });
+  });
+
+  it("cada obligatorio que falta se dice por su nombre, en el orden del panel", () => {
+    const sin = (parche: Partial<ReturnType<typeof filaVentana>>) =>
+      ventana(2, { fila: { ...filaVentana(AHORA, 2), ...parche } }).datos.faltanDetalles;
+    expect(sin({ bzzzbx_property_id: null })).toEqual(["Property"]);
+    expect(sin({ bzzzbx_service_id: null })).toEqual(["Service"]);
+    expect(sin({ service_date: null })).toEqual(["Date"]);
+    expect(sin({ window_start: null })).toEqual(["Window"]);
+    expect(sin({ window_end: null })).toEqual(["Window"]);
+    expect(sin({ bzzzbx_property_id: null, bzzzbx_service_id: null, service_date: null, window_start: null })).toEqual([
+      "Property",
+      "Service",
+      "Date",
+      "Window",
+    ]);
+  });
+
+  it("espacio, unidad, camas, notas y PO son opcionales: sin ellos no falta nada", () => {
+    const fila = { ...filaVentana(AHORA, 2), bzzzbx_space_id: null, unit: null, access_notes: null, po_number: null };
+    expect(ventana(2, { fila }).datos.faltanDetalles).toEqual([]);
+  });
+
+  it("tieneCliente y tieneEquipo salen del borrador de la request, no del job", () => {
+    const sinCliente = ventana(2, { fila: { ...filaVentana(AHORA, 2), bzzzbx_customer_id: null } }).datos;
+    expect(sinCliente.tieneCliente).toBe(false);
+    // R3 está programada y su job trae cliente y equipo, pero el borrador de la fila no.
+    const sinEquipo = ventana(3, { fila: { ...filaVentana(AHORA, 3), bzzzbx_team_id: null } }).datos;
+    expect(sinEquipo.tieneEquipo).toBe(false);
+  });
+
+  it("la respuesta del cleaner y las sugerencias abiertas pasan tal cual", () => {
+    const respuesta = { id: "5c000000-0000-4000-8000-000000000001", equipoId: "bx-team-0001", lectura: "The cleaner said yes." };
+    const sugerencias = [{ campo: "property", razon: "Address matches." }];
+    expect(ventana(2, { respuestaDelCleaner: respuesta, sugerencias }).datos).toMatchObject({ respuestaDelCleaner: respuesta, sugerencias });
   });
 });

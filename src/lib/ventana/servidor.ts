@@ -11,6 +11,7 @@ import type { DependenciasDeEnlace } from "../fase-a/enlace";
 import { lecturaOAusente, zonaDeLaOperacion } from "../tablero/servidor";
 
 import { armarVentana } from "./armar";
+import { leerParaConfirmar } from "./confirmar";
 import { esIdDeRequest, leerDeOpsrun } from "./consultas";
 import { leerVentanaDeBzzzbx, type MemoriaVentana } from "./leer";
 import { propuestaParaLaVentana, type PropuestaDeRanura } from "./propuesta";
@@ -32,8 +33,13 @@ export function olvidarVentanas(): void {
  */
 export async function obtenerVentana(requestId: string, tab: string | null = null): Promise<VentanaJob | null> {
   if (!esIdDeRequest(requestId)) return null;
-  const deOpsrun = await comoOpsrunApp((db) => leerDeOpsrun(db, requestId));
-  if (!deOpsrun) return null;
+  // Todo de opsRUN en una sola transacción de solo lectura: la ventana y lo que piden los paneles de Confirm (OPR-28).
+  const leido = await comoOpsrunApp(async (db) => {
+    const base = await leerDeOpsrun(db, requestId);
+    return base ? { base, confirmar: await leerParaConfirmar(db, requestId) } : null;
+  });
+  if (!leido) return null;
+  const { base: deOpsrun, confirmar } = leido;
 
   const ahora = new Date();
   const { leidos, bzzzbx } = await leerVentanaDeBzzzbx({
@@ -54,6 +60,8 @@ export async function obtenerVentana(requestId: string, tab: string | null = nul
     zona: zonaDeLaOperacion(),
     bzzzbx,
     tab,
+    respuestaDelCleaner: confirmar.respuestaDelCleaner,
+    sugerencias: confirmar.sugerencias,
   });
 }
 
