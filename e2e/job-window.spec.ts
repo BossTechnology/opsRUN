@@ -418,10 +418,11 @@ test("A14: las ranuras en su lugar", async ({ page }) => {
   // OPR-35 la llenó: ya no es el marcador, es la lista de Audit.
   await expect(page.locator('[data-ranura="audit"]').getByRole("list", { name: "Audit" })).toBeVisible();
 
+  // OPR-30 y OPR-32 las llenaron: ya no es el marcador, es la sección con su contenido (el marcador "Loading…" del Suspense lleva el mismo `data-ranura`).
   await page.goto(`/job/${R(4)}?tab=tracker`);
-  await expect(page.locator('[data-ranura="tracker"]')).toBeVisible();
+  await expect(page.locator('section[data-ranura="tracker"]')).toBeVisible();
   await page.goto(`/job/${R(6)}?tab=billing`);
-  await expect(page.locator('[data-ranura="billing"]')).toBeVisible();
+  await expect(page.locator('section[data-ranura="billing"]')).toBeVisible();
 });
 
 test("A15: aviso de truncado con 50 jobs de la propiedad de R2", async ({ page }) => {
