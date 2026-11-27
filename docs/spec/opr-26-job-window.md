@@ -2,7 +2,7 @@
 
 - **Tarjeta:** OPR-26 (P2 · Job window, tabs, action bar and unavailable states). Depende de OPR-25 (tablero, PR #11, sin fusionar) y de OPR-4 (nombres de las acciones, sin decidir).
 - **Estado:** borrador para revisión de Henry. **No se implementa nada hasta su OK.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con recomendación (§11).
-- **Construye sobre:** el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`, ADR 0005, en `main`), el tablero (`src/lib/tablero/`, `src/app/_tablero/`, PR #11) y el enlace de la Fase A (`src/lib/fase-a/`, PR #12). Este spec supone los dos PR fusionados antes de implementar.
+- **Construye sobre:** el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`, ADR 0005, en `main`), el enlace de la Fase A (`src/lib/fase-a/`, `docs/spec/fase-a-enlace.md`, PR #12, fusionado en `main` en `1f9a893`) y el tablero (`src/lib/tablero/`, `src/app/_tablero/`, PR #11, sin fusionar). La implementación empieza con el PR #11 fusionado.
 - **Fuera de alcance:** el contenido de la conversación (OPR-27), del enlace de la Fase A y del resto de la pestaña de la propiedad (OPR-28), de Alerts (OPR-34), de Audit (OPR-35), de Job tracker (OPR-30) y de Billing (OPR-32); cada acción concreta (OPR-28 a OPR-32); el login (OPR-21). De esas piezas OPR-26 entrega **su lugar en la ventana y su contrato de props** (§7).
 
 ## 1. Para qué
