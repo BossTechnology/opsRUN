@@ -395,7 +395,8 @@ test("A14: las ranuras en su lugar", async ({ page }) => {
   await expect(page.locator('[data-ranura="enlace"]')).toHaveCount(0); // solo en Requests
   await pestana(page, "audit").click();
   await expect(page.locator('[data-ranura="audit"]')).toBeVisible();
-  await expect(page.locator('[data-ranura="audit"]')).toContainText("Coming in a later build");
+  // OPR-35 la llenó: ya no es el marcador, es la lista de Audit.
+  await expect(page.locator('[data-ranura="audit"]').getByRole("list", { name: "Audit" })).toBeVisible();
 
   await page.goto(`/job/${R(4)}?tab=tracker`);
   await expect(page.locator('[data-ranura="tracker"]')).toBeVisible();

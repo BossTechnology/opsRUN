@@ -10,7 +10,6 @@
  */
 import {
   TEXTO_RANURA_PENDIENTE,
-  type PropsRanuraAudit,
   type PropsRanuraBase,
   type PropsRanuraBilling,
   type PropsRanuraConversacion,
@@ -43,10 +42,8 @@ export function RanuraConversacion(props: PropsRanuraConversacion) {
 /** OPR-28: arriba de la pestaña de la propiedad, solo en Requests (cliente: tiene estado). */
 export { RanuraEnlace } from "./ranura-enlace";
 
-/** OPR-35: pestaña Audit, desde Scheduled. */
-export function RanuraAudit(props: PropsRanuraAudit) {
-  return <Pendiente nombre="audit" titulo="Audit" base={props} />;
-}
+/** OPR-35: pestaña Audit, desde Scheduled. Ya está construida en `./ranura-audit`. */
+export { RanuraAudit } from "./ranura-audit";
 
 /** OPR-30: pestaña Job tracker, desde In Progress. */
 export function RanuraTracker(props: PropsRanuraTracker) {

@@ -23,6 +23,23 @@ export function horaOFecha(instante: string, ahora: Date, zona: string): string 
   return `${dia}, ${hora(instante, zona)}`;
 }
 
+/**
+ * Siempre con fecha, para el Audit, que se lee días después (OPR-35 §6):
+ * "Nov 25, 9:30 AM", y con el año delante si no es el año en curso en esa zona
+ * ("Nov 25, 2025, 9:30 AM").
+ */
+export function horaConFecha(instante: string, ahora: Date, zona: string): string {
+  const fecha = new Date(instante);
+  const anio = (d: Date) => new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: zona }).format(d);
+  const dia = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(anio(fecha) === anio(ahora) ? {} : { year: "numeric" as const }),
+    timeZone: zona,
+  }).format(fecha);
+  return `${dia}, ${hora(instante, zona)}`;
+}
+
 /** "13:30" → "1:30 PM". */
 function horaDeReloj(hhmm: string): string {
   const [h = 0, m = 0] = hhmm.split(":").map(Number);
