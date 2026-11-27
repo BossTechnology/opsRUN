@@ -43,8 +43,9 @@ test("cinco columnas, cada request en su etapa, con conteos", async ({ page }) =
     const total = await columna(page, etapa).getByTestId("tarjeta").count();
     await expect(columna(page, etapa).getByTestId("conteo")).toHaveText(String(total));
   }
-  await expect(columna(page, "requests").getByTestId("alertas-columna")).toHaveText("1");
-  await expect(page.getByTestId("alertas-operacion")).toContainText("1");
+  // R1 y R8 (OPR-28) siguen sin dueño con su OPS-001 abierta.
+  await expect(columna(page, "requests").getByTestId("alertas-columna")).toHaveText("2");
+  await expect(page.getByTestId("alertas-operacion")).toContainText("2");
 });
 
 test("anatomía de la tarjeta y — — en lo no definido", async ({ page }) => {

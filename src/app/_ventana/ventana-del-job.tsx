@@ -129,7 +129,7 @@ export async function VentanaDelJob({
       <Encabezado ventana={ventana} />
 
       <div className="ventana-acciones">
-        <BarraAcciones requestId={ventana.requestId} version={ventana.version} acciones={acciones} />
+        <BarraAcciones requestId={ventana.requestId} version={ventana.version} acciones={acciones} ventana={ventana} actorId={elegido} />
         {operadores.length > 0 ? (
           <ActorDemo operadores={operadores.map((o) => ({ id: o.id, nombre: o.nombre }))} elegido={elegido} />
         ) : null}

@@ -21,6 +21,8 @@ import {
   type LeidosVentana,
   type OperadorConCarga,
   type Pestana,
+  type RespuestaDelCleaner,
+  type SugerenciaAbierta,
   type VentanaJob,
 } from "./tipos";
 
@@ -39,6 +41,10 @@ export type EntradaVentana = {
   bzzzbx: Tablero["bzzzbx"];
   /** El `?tab=` de la URL, tal cual llegó. */
   tab?: string | null;
+  /** La respuesta del cleaner que Confirm cleaner puede aceptar (OPR-28); null si no hay. */
+  respuestaDelCleaner?: RespuestaDelCleaner | null;
+  /** Sugerencias de IA abiertas de los campos del borrador (OPR-28): las que marcan AI en los paneles. */
+  sugerencias?: SugerenciaAbierta[];
 };
 
 export const NO_DISPONIBLE_EN_RELEASE = "Not available in this release";
@@ -149,9 +155,32 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
     hilos,
     equipoId: teamId ?? null,
     gate: { dueno: fila.owner_operator_id !== null, ...confirmaciones },
-    datos: { tienePropiedad: Boolean(propertyId), poRequerido: Boolean(customer?.po_required), tienePo: Boolean(po) },
+    datos: {
+      tienePropiedad: Boolean(propertyId),
+      poRequerido: Boolean(customer?.po_required),
+      tienePo: Boolean(po),
+      faltanDetalles: faltanDetalles(fila),
+      tieneCliente: Boolean(fila.bzzzbx_customer_id),
+      tieneEquipo: Boolean(fila.bzzzbx_team_id),
+      respuestaDelCleaner: entrada.respuestaDelCleaner ?? null,
+      sugerencias: entrada.sugerencias ?? [],
+    },
     instruccionAbierta: entrada.instruccionAbierta,
   };
+}
+
+/**
+ * Lo obligatorio de Confirm details que el borrador no tiene (OPR-28, P-3), en
+ * el orden del panel: propiedad, servicio, fecha y ventana. Espacio, unidad,
+ * camas, notas y PO son opcionales.
+ */
+function faltanDetalles(fila: FilaVentana): string[] {
+  return [
+    fila.bzzzbx_property_id ? null : "Property",
+    fila.bzzzbx_service_id ? null : "Service",
+    fila.service_date ? null : "Date",
+    fila.window_start && fila.window_end ? null : "Window",
+  ].filter((campo): campo is string => campo !== null);
 }
 
 /** Nombre de la pestaña de la propiedad (§4.1): el espacio o unidad; si no, la propiedad; si no, "Property". */

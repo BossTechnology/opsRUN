@@ -46,6 +46,8 @@ export type PropsPanelAccion = {
   bzzzbx: { disponible: boolean; actualizadoEn: string | null };
   zona: string;
   ventana: VentanaJob;
+  /** Quién actúa (el operador de la transacción), para "Assign to me"; null si no hay. */
+  actorId?: string | null;
   onCambio: (datos: Record<string, unknown>, completo: boolean) => void;
 };
 

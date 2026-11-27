@@ -174,12 +174,9 @@ describe("reject_job_link: rechazar un candidato", () => {
 describe("el registro real", () => {
   const def = (codigo: string): DefinicionAccion => REGISTRO_DE_ACCIONES.find((d) => d.codigo === codigo)!;
 
-  it("schedule y reject_job_link tienen ejecutor; Assign y Confirm siguen sin construir (sin spec con su función SQL)", () => {
-    expect(def("schedule").ejecutor).toBeTypeOf("function");
-    expect(def("reject_job_link").ejecutor).toBeTypeOf("function");
-    for (const codigo of ["assign", "confirm_details", "confirm_sender", "confirm_cleaner"]) {
-      expect(def(codigo).ejecutor, codigo).toBeUndefined();
-      expect(disponibilidadDe(def(codigo), ventanaR2), codigo).toEqual({ tipo: "sin_construir" });
+  it("schedule y reject_job_link tienen ejecutor, igual que Assign y Confirm (OPR-28, requests.test.ts)", () => {
+    for (const codigo of ["schedule", "reject_job_link", "assign", "confirm_details", "confirm_sender", "confirm_cleaner"]) {
+      expect(def(codigo).ejecutor, codigo).toBeTypeOf("function");
     }
   });
 

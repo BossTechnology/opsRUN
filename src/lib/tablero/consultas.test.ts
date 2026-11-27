@@ -29,10 +29,10 @@ conBase("consultas del tablero (seed)", () => {
   const origen = crearPool({ tipo: "url", url: url ?? "postgresql://sin-base" });
   afterAll(() => origen.end());
 
-  it("lee las siete requests de la seed con sus tipos de texto", async () => {
+  it("lee las ocho requests de la seed con sus tipos de texto", async () => {
     const filas = await comoOpsrunApp(leerFilas, { origen });
     const seed = filas.filter((f) => f.id.startsWith("b0000000-0000-4000-8000-0000000000a"));
-    expect(seed).toHaveLength(7);
+    expect(seed).toHaveLength(8);
     const r2 = seed.find((f) => f.id.endsWith("a2"))!;
     expect(r2).toMatchObject({
       status: "open",

@@ -3,6 +3,7 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
+- OPR-28, Assign / Reassign y Confirm details, sender y cleaner (rama `opr-28-assign-confirm`, PR contra `main`): ver "Hecho" del 2026-11-27 más abajo. Pendiente de fusión por Henry.
 - Demo local de la Fase A (lunes): todo en `main` (`082e577`). Ensayada el 2026-11-27 de punta a punta: tablero → R7 → "Acting as" → nota interna → confirmar EX-00107 → Scheduled → Audit. Guion en `docs/demo-fase-a.md`. La base local se reseteó después del ensayo (OK de Henry): R7 vuelve a estar en Requests.
 - En `main`: OPR-20 (modelo de datos), OPR-22 (stand-ins), OPR-25 (tablero, PR #11), OPR-26 (Job window, PR #13 y #16), OPR-27 (conversación, PR #14 y #19), OPR-28 Fase A (enlace, PR #12 y #17), OPR-35 (Audit, PR #15 y #18) y OPR-1 (imagen y deploy, sin desplegar).
 - Nada está en staging: el primer deploy espera la red de OPR-6.
@@ -95,6 +96,13 @@
   - Pruebas: Vitest (`armar`, `nombres`, componente, `horaConFecha`, y la lectura contra la seed con `OPSRUN_REQUIERE_BASE=1`, que se vio fallar pasando `escritura: true`), pgTAP `audit_catalogo.test.sql` (label no vacío y nada de Zendesk en el catálogo, visto fallar en cada corrida) y Playwright B1 a B8 en `e2e/audit.spec.ts`.
   - Playwright: `audit.spec.ts` corre en un proyecto aparte, después del resto, porque B1 y B7 enlazan R7 (una vez por base; en una base usada se saltan). Como los botones del enlace (OPR-28) no están en la ventana, hacen las mismas llamadas SQL que harán esos botones (`reject_job_link` y `link_observed_job`, como `opsrun_app` y con el actor de Ops Uno). `playwright.config.mts` fija `OPSRUN_ZONA_HORARIA=America/New_York` y le pasa `OPSRUN_DATABASE_URL` a los workers.
 
+- 2026-11-27: OPR-28, Assign / Reassign y Confirm details, sender y cleaner (rama `opr-28-assign-confirm`), según `docs/spec/opr-28-assign-confirm.md` con las decisiones de §12.1:
+  - Migración `20261201120000_requests_assign_confirm.sql` (P-0): `assign_request`, `confirm_details`, `confirm_sender` y `confirm_cleaner` (del operador, `security definer`, `search_path = ''`, `require_operator()`, solo `opsrun_app`), siete helpers privados (`draft_fields`, `draft_invalidating_fields`, `ai_fields_of`, `draft_value`, `lock_open_request`, `confirm_request`, `supersede_confirmations`) y el trigger `request_confirmation_supersede`. Errores OP013 a OP018. Sin cambiar tablas, tipos, catálogos ni vistas. El Audit sale en la misma transacción; el valor confirmado lo calcula la base desde la fila bloqueada, el navegador no manda ninguno.
+  - pgTAP `requests_assign_confirm.test.sql` (107) y el guard G13 en `guard_borrador.test.sql` (reparto del borrador entre las tres confirmaciones y los campos de IA, descubierto por `COMMENT` y `ai_field`; se ve fallar en cada corrida). Cada guard se vio fallar una vez: sin `require_operator()` en `assign_request` (G6 y las pruebas de actor), sin la comprobación de versión, sin OP017, sin la comparación de equipo de OP018, sin el chequeo de dueño, sin el de operador activo, sin el trigger, y G13 con una columna `:draft`, un `ai_field` y un reparto que no existen.
+  - `src/lib/requests/` (tipos, `datos-sql.ts` como `opsrun_app` con el actor de la transacción) y `src/lib/acciones/requests.ts` (ejecutores; los errores se reconocen por nombre) registrados en `registro.ts`: Assign y Confirm cleaner con motivo opcional; los bloqueos "Already confirmed", "Complete the details first: …", "Choose who it is from first" y "Choose a cleaner first". `VentanaJob.datos` gana `faltanDetalles`, `tieneCliente`, `tieneEquipo`, `respuestaDelCleaner` y `sugerencias`; las dos últimas las lee `src/lib/ventana/confirmar.ts` (archivo nuevo, para no tocar `consultas.ts`).
+  - Paneles en la action bar (`paneles-accion.tsx`): Assign con la lista de operadores y su carga, "Assign to me"; Confirm con lo que se confirma y la marca AI; Confirm cleaner con "Confirm by phone" y, solo si hay una respuesta `replied` del equipo del borrador, "Cleaner replied yes".
+  - R8 en la seed (al final, sin cambiar IDs) y `bx-job-0108` / `EX-00108` con su alerta OPS-001 en el falso (P-7). Playwright D1 a D5 en `e2e/assign-confirm.spec.ts`, en un proyecto aparte que corre al final.
+
 - 2026-11-27: ensayo de la demo de la Fase A en local con `main` en `e51c33b` y la base recién reseteada. Funciona de punta a punta. Docker no levanta todos los servicios de Supabase: se levantan solo base, auth y API con `supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta,postgrest` (sin eso `pnpm local` falla por falta de `API_URL`).
 
 ## Pendiente
@@ -108,7 +116,7 @@
 - OPR-35: confirmar el Work App number contra el User Guide §10.3 (hoy es el mismo valor que el Job number, P-7) y revisar la pestaña contra el prototipo R23 (S-1 y S-2 del spec). Cuando OPR-28 ponga los botones del enlace, B1 y B7 pueden pasar a la interfaz; los dos enlazan R7, así que ninguna otra prueba puede enlazarla en la misma base. En la demo se dice que un check-in forzado con `/api/falso` no entra a Audit todavía (P-6).
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
 - OPR-26: revisar la Job window contra el prototipo R23 (S-1 del spec). Supuestos que tomó la implementación (ver el PR): 404 con estado HTTP 200 al ser streaming, A5 de R1 sigue el §4.1 (pestaña "4B"), `motivo: "no"` oculta el campo Reason, A7 entrega el clic al manejador de React porque React ignora los clics sobre un botón `disabled`.
-- Fase A (OPR-28): Assign y Confirm details/sender/cleaner sin spec ni función SQL (hoy no se puede dar dueño ni confirmar desde la UI; R7 de la seed ya lo trae); deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
+- Fase A (OPR-28): deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
 - `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` en una rama con una migración nueva: después hay que `pnpm db:reset` (pide OK de Henry).
 - OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
 - OPR-22, cuando toque: `acknowledge_alert` al construir Clear alert; quitar los `ai_*` del catálogo con una migración nueva (pide OK); cambiar la migración de estados solo si una pantalla necesita "Waiting for approval" o "Couldn't confirm" desde la base (P-2).
@@ -127,6 +135,6 @@
 ## Siguiente paso
 - Demo del lunes con `docs/demo-fase-a.md`. Si se ensaya otra vez, `pnpm db:reset` después (pide OK de Henry).
 - Decisiones P0 para seguir: OPR-2 (login y usuarios, bloquea OPR-21 → OPR-23), OPR-5 (Twilio, solo falta la firma), OPR-3 (límites de alertas), OPR-4 (Fernando: zona horaria de Delayed, nombres de acciones y de Clear alert).
-- Specs que se pueden adelantar sin esas decisiones: Assign y Confirm details/sender/cleaner (OPR-28, con su migración).
+- OPR-28: lo que sigue de Requests es de otras tarjetas: editar el borrador (`update_request_detail`, que dispara la invalidación del trigger), Ask cleaner y Cleaner declined (OPR-17), la IA que llena el borrador (OPR-36), y "Assign to me" con la sesión real (OPR-21) y dentro de Alerts (OPR-34).
 - Henry comparte el prototipo R23 para revisar el aspecto del tablero, la Job window y Audit.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.

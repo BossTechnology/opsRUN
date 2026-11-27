@@ -28,9 +28,16 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "chromium", testIgnore: /audit\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", testIgnore: /(audit|assign-confirm)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     // La pestaña Audit enlaza R7 (una vez por base): corre después del resto, no a la vez (OPR-35).
     { name: "chromium-audit", testMatch: /audit\.spec\.ts/, dependencies: ["chromium"], use: { ...devices["Desktop Chrome"] } },
+    // Assign y Confirm enlazan R8 (una vez por base) y mueven el dueño de R2: también después del resto (OPR-28).
+    {
+      name: "chromium-assign",
+      testMatch: /assign-confirm\.spec\.ts/,
+      dependencies: ["chromium-audit"],
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: {
     command: `pnpm db:prepare && pnpm build && pnpm start --port ${PUERTO}`,
