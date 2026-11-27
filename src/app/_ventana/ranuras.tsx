@@ -14,7 +14,6 @@ import {
   type PropsRanuraBase,
   type PropsRanuraBilling,
   type PropsRanuraConversacion,
-  type PropsRanuraEnlace,
   type PropsRanuraTracker,
 } from "@/lib/ventana/ranuras";
 
@@ -41,19 +40,8 @@ export function RanuraConversacion(props: PropsRanuraConversacion) {
   );
 }
 
-/** OPR-28: arriba de la pestaña de la propiedad, solo en Requests. */
-export function RanuraEnlace(props: PropsRanuraEnlace) {
-  return (
-    <section
-      className="ranura"
-      data-ranura="enlace"
-      data-gate={`${props.gate.dueno ? "O" : "-"}${props.gate.details ? "D" : "-"}${props.gate.sender ? "S" : "-"}${props.gate.cleaner ? "C" : "-"}`}
-      aria-label="Link to the job in PINCH tools"
-    >
-      <p>{TEXTO_RANURA_PENDIENTE}</p>
-    </section>
-  );
-}
+/** OPR-28: arriba de la pestaña de la propiedad, solo en Requests (cliente: tiene estado). */
+export { RanuraEnlace } from "./ranura-enlace";
 
 /** OPR-35: pestaña Audit, desde Scheduled. */
 export function RanuraAudit(props: PropsRanuraAudit) {
