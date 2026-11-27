@@ -1,7 +1,7 @@
 # OPR-26 — Job window, pestañas, action bar y estados no disponibles
 
 - **Tarjeta:** OPR-26 (P2 · Job window, tabs, action bar and unavailable states). Depende de OPR-25 (tablero, PR #11, sin fusionar) y de OPR-4 (nombres de las acciones, sin decidir).
-- **Estado:** borrador para revisión de Henry. **No se implementa nada hasta su OK.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con recomendación (§11).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-1 a P-6 según las recomendaciones y P-2 endurecida (§11.1). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§11).
 - **Construye sobre:** el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`, ADR 0005, en `main`), el enlace de la Fase A (`src/lib/fase-a/`, `docs/spec/fase-a-enlace.md`, PR #12, fusionado en `main` en `1f9a893`) y el tablero (`src/lib/tablero/`, `src/app/_tablero/`, PR #11, sin fusionar). La implementación empieza con el PR #11 fusionado.
 - **Fuera de alcance:** el contenido de la conversación (OPR-27), del enlace de la Fase A y del resto de la pestaña de la propiedad (OPR-28), de Alerts (OPR-34), de Audit (OPR-35), de Job tracker (OPR-30) y de Billing (OPR-32); cada acción concreta (OPR-28 a OPR-32); el login (OPR-21). De esas piezas OPR-26 entrega **su lugar en la ventana y su contrato de props** (§7).
 
@@ -37,7 +37,7 @@ Para cumplir los 2 s:
 | Stage | Requests, Scheduled, In Progress, Complete o Validation, calculada igual que en el tablero (OPR-25 §1.3, OPR-20 §5). Paid se ve como marca verde junto a Validation. Un job `cancelled` muestra "Cancelled" [S-3]. | opsRUN + puerto (misma función del tablero) |
 | Property and space | `Property.name` + espacio (`units[].label` o `request.unit`), como el nombre de la tarjeta (S-2 de OPR-25). | Puerto + opsRUN |
 | Job line | Número (`R<n>` o job number) · fecha y ventana · servicio · cleaner. En Requests, con lo del borrador; desde Scheduled, con lo del `Job` [S-4]. | opsRUN + puerto |
-| Price | Solo lectura, sin edición ni enlace. Hoy el puerto no trae precio: se ve `— —` (P-6). | Puerto (si P-6 dice sí) |
+| Price | Solo lectura, sin edición ni enlace. `Job.price` del puerto, nuevo y provisional (P-6); `— —` si no viene. | Puerto |
 | Assigned to | Nombre del dueño, o "Unassigned". Junto a cada operador activo, una **barra de carga** [S-5]. Cambiar el dueño es una acción (Assign / Reassign, OPR-28), no un control del encabezado. | `request.owner_operator_id`, `operator` |
 
 Lo que falte se ve como `— —`, igual que en el tablero.
@@ -314,6 +314,7 @@ La ventana usa el mismo sondeo del tablero (`/api/tablero/cambios`, cada 15 s, `
 - Disponibilidad: cada uno de los cinco valores de §5.2; BzzzBX caído bloquea solo las de `necesitaBzzzbx`.
 - `ejecutarAccion`: rechaza `sin_construir`, `fuera_de_release`, `bloqueada`, `no_aplica` y un código desconocido **sin llamar al ejecutor ni a la base**; exige motivo; detecta `cambio_concurrente`. El guard se ve fallar una vez quitando el chequeo de disponibilidad (principio 8).
 - Componentes con Testing Library: tablist con $ y People no seleccionables; panel con Go deshabilitado sin motivo.
+- Actor de demo (P-2, §11.1): una prueba por condición. Sin `OPSRUN_ACTOR_DEMO=1`, con `BZZZBX_MODO` distinto de `falso` o con `OPSRUN_SERVIDOR=1`, no hay selector y la cookie no declara actor, aunque las otras dos condiciones se cumplan. Otra prueba exige que `OPSRUN_ACTOR_DEMO` esté en `PROHIBIDAS_EN_SERVIDOR` y que, con `OPSRUN_SERVIDOR=1`, el servidor no arranque si está definida. Cada prueba se ve fallar una vez, quitando su condición del código (principio 8).
 
 ### 9.2 Playwright (criterios de aceptación)
 
@@ -323,7 +324,7 @@ Contra el build de producción, la seed y el falso, con `/api/falso` para los es
 |---|---|---|
 | A1 | **Abre en menos de 2 s.** | Clic en la tarjeta de EX-00003; se mide hasta que el encabezado y la action bar son visibles; `< 2000 ms`. Se repite con R1 y con EX-00006. |
 | A2 | Se abre encima del tablero y se cierra sin perderlo. | Tras abrir, el tablero sigue en el DOM; Esc vuelve a `/` y las tarjetas siguen ahí. La URL directa `/job/<R3>` abre como página completa con "Board". |
-| A3 | Encabezado completo. | EX-00003: stage "Scheduled", "Demo Lofts 7C", job line con EX-00003, fecha y ventana, Assigned to con el dueño de la seed y una barra por operador activo; Price `— —` (o el valor, si P-6 dice sí). |
+| A3 | Encabezado completo. | EX-00003: stage "Scheduled", "Demo Lofts 7C", job line con EX-00003, fecha y ventana, Assigned to con el dueño de la seed y una barra por operador activo; Price con el valor inventado del falso; `— —` en R1. |
 | A4 | Pestañas por etapa. | R2 (Requests): propiedad y Alerts, sin Audit. EX-00003: + Audit. EX-00004: + Job tracker. EX-00006: + Billing. En todas, $ y People con `aria-disabled` y "Not available in this release"; clic y teclado no las seleccionan ni cambian la URL. Alerts es la última. |
 | A5 | Nombre de la pestaña de la propiedad. | R2 → el label de `bx-space-0002`; EX-00003 → "7C"; R1 → el de su propiedad. |
 | A6 | Abre en Alerts si una alerta pide acción, y vuelve. | R1 (OPS-001 abierta) abre en Alerts. Con `/api/falso` se cierra la alerta (`cleared_at`); antes de 1 minuto la ventana está en la pestaña de la propiedad. Con `?tab=alerts` elegido a mano, no vuelve sola. |
@@ -366,3 +367,20 @@ Contra el build de producción, la seed y el falso, con `/api/falso` para los es
 - **P-6. Precio.** El encabezado lleva el precio, pero el puerto no lo trae (OPR-22 S-1). Recomiendo **agregar al `Job` del puerto un `price` opcional** (`{ amount_cents, currency } | null`), provisional hasta OPR-6, en el falso y en la prueba de contrato. Solo se muestra, nunca se guarda, y no toca la base. Alternativa: `— —` hasta OPR-6.
 
 Con las recomendaciones, OPR-26 no trae migración. P-2 y P-3 cambian `supabase/seed.sql` (datos inventados) y P-6 cambia el puerto.
+
+### 11.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con las seis recomendaciones. Quedó así:
+
+- **P-1:** la ventana se abre encima del tablero, con una ruta interceptada y su propia URL `/job/[requestId]`. La recarga y la URL directa la abren como página completa.
+- **P-2:** el selector "Acting as" va solo en local, **endurecido**:
+  - existe solo si se cumplen las tres condiciones: opt-in explícito `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`. Si falta cualquiera, **falla cerrado**: no hay selector, la cookie se ignora y no se declara ningún actor;
+  - `OPSRUN_ACTOR_DEMO` entra en `PROHIBIDAS_EN_SERVIDOR` (`src/lib/db/entorno.ts`): con `OPSRUN_SERVIDOR=1`, el servidor no arranca si está definida;
+  - la seed les pone a sus operadores `auth_user_id` inventados y fijos, sin migración;
+  - una prueba por condición, y cada una se ve fallar una vez (§9.1).
+- **P-3:** se agrega R7 a la seed, en Requests, con dueño y las tres confirmaciones, y un job inventado que encaja en el falso. No cambian los IDs que ya comparten la seed y el falso.
+- **P-4:** las acciones de V1.1 beta que aún no se construyen se ven en gris con "Not built yet".
+- **P-5:** los nombres de las acciones son los `label` de los catálogos de OPR-20 hasta que OPR-4 los firme.
+- **P-6:** el `Job` del puerto lleva un `price` opcional (`{ amount_cents, currency } | null`), provisional hasta OPR-6, en el falso y en la prueba de contrato. Solo se muestra y nunca se guarda.
+
+Ninguna decisión trae migración.
