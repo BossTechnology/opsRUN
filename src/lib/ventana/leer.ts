@@ -21,7 +21,7 @@ export type MemoriaVentana = Map<string, { leidos: LeidosVentana; en: string }>;
 /** Cuántas requests recuerda el proceso; la más vieja sale primero. */
 const MAX_RECORDADAS = 200;
 
-function conPresupuesto<T>(trabajo: Promise<T>, ms: number): Promise<T> {
+export function conPresupuesto<T>(trabajo: Promise<T>, ms: number): Promise<T> {
   let temporizador: ReturnType<typeof setTimeout>;
   const vencido = new Promise<never>((_, rechazar) => {
     temporizador = setTimeout(() => rechazar(new BzzzbxNoDisponible("BzzzBX tardó más que el presupuesto")), ms);
