@@ -7,6 +7,11 @@
  * contrato real la confirmación llega cuando el cambio se ve como proyección.
  *
  * Controles de prueba: `forzarError`, `exigirAprobacion` y `aprobar`.
+ *
+ * Los envíos (`send_email`, `send_text`) llevan crosswalk IDs y el cuerpo que
+ * escribió el operador (OPR-27, P-2): el hilo o el equipo, nunca una dirección
+ * ni un teléfono. El falso resuelve los destinatarios, como lo hará BzzzBX.
+ * PROVISIONAL hasta OPR-6.
  */
 import { BzzzbxNoDisponible, CursorCaducado, InstruccionRechazada } from "../errores";
 import type { InstruccionesBzzzbx } from "../puertos";
@@ -38,8 +43,16 @@ export type ErrorForzado = {
 
 const CUANDO: readonly CuandoFalla[] = ["al_entregar", "al_ejecutar", "sin_confirmar", "no_disponible"];
 const FORMA_CURSOR = /^if1\.(\d+)$/;
+/**
+ * Secuencia de los IDs de los mensajes que crea el falso. Vive fuera de la
+ * instancia: `reiniciarFalso` crea un falso nuevo y los IDs no se repiten, como
+ * en BzzzBX, para que un vínculo de opsRUN no apunte a otro mensaje.
+ */
+let ultimoMensaje = 9000;
 /** Marca del payload para provocar un error desde un E2E (supuesto S-9). Solo la lee el falso. */
 export const MARCA_ERROR = "__forzar_error";
+/** Los valores de `cuando` que acepta `forzarError`; los E2E los piden por HTTP (`/api/falso`). */
+export const VALORES_DE_CUANDO: readonly CuandoFalla[] = CUANDO;
 
 type Falla = { cuando: CuandoFalla; error_code: string; error_message: string };
 
@@ -242,15 +255,19 @@ export class InstruccionesFalsas implements InstruccionesBzzzbx {
         return undefined;
       case "send_email":
       case "send_text": {
-        const bzzzbx_message_id = `bx-msg-${++this.ultimoId}`;
+        const bzzzbx_message_id = `bx-msg-${++ultimoMensaje}`;
+        const esCorreo = tipo === "send_email";
+        // BzzzBX resuelve el destinatario con el crosswalk ID (OPR-27, P-2).
+        const hilo = esCorreo ? this.primeroDelHilo(texto("bzzzbx_thread_id")!) : undefined;
+        const equipo = esCorreo ? undefined : this.lectura.todos("cleaner_team").find((t) => t.bzzzbx_team_id === texto("bzzzbx_team_id"));
         this.lectura.poner("message", {
           bzzzbx_message_id,
-          bzzzbx_thread_id: texto("bzzzbx_thread_id"),
-          channel: tipo === "send_email" ? "email" : "text",
+          bzzzbx_thread_id: esCorreo ? texto("bzzzbx_thread_id") : null,
+          channel: esCorreo ? "email" : "text",
           direction: "outbound",
-          from: tipo === "send_email" ? "requests@example.test" : "opsrun",
-          to: (payload.to as string[]).map(String),
-          subject: tipo === "send_email" ? texto("subject") : null,
+          from: esCorreo ? "requests@example.test" : "opsrun",
+          to: esCorreo ? (hilo ? [hilo.from] : []) : equipo?.phone ? [equipo.phone] : [],
+          subject: esCorreo ? (hilo?.subject ? `Re: ${hilo.subject.replace(/^Re:\s*/i, "")}` : null) : null,
           body: texto("body")!,
           sent_at: this.reloj.ahora().toISOString(),
           delivery: "sent",
@@ -273,9 +290,15 @@ export class InstruccionesFalsas implements InstruccionesBzzzbx {
 
     switch (tipo) {
       case "send_email":
+        if (!tiene("body")) return invalido("An email needs a body.");
+        if (!tiene("bzzzbx_thread_id") || !this.primeroDelHilo(payload.bzzzbx_thread_id as string)) {
+          return invalido("Unknown thread.");
+        }
+        return null;
       case "send_text":
-        if (!Array.isArray(payload.to) || payload.to.length === 0 || !tiene("body")) {
-          return invalido("A message needs recipients and a body.");
+        if (!tiene("body")) return invalido("A text needs a body.");
+        if (!tiene("bzzzbx_team_id") || !this.lectura.existe("cleaner_team", payload.bzzzbx_team_id as string)) {
+          return invalido("Unknown cleaner team.");
         }
         return null;
       case "create_job":
@@ -320,6 +343,15 @@ export class InstruccionesFalsas implements InstruccionesBzzzbx {
       error_code: error.error_code ?? "forced_error",
       error_message: error.error_message ?? "Forced error (stand-in).",
     };
+  }
+
+  /** El primer mensaje del hilo (el de la request original); undefined si el falso no conoce el hilo. */
+  private primeroDelHilo(bzzzbx_thread_id: string) {
+    return this.lectura
+      .todos("message")
+      .filter((m) => m.bzzzbx_thread_id === bzzzbx_thread_id)
+      .sort((a, b) => a.sent_at.localeCompare(b.sent_at))
+      .find((m) => m.direction === "inbound");
   }
 
   private posicion(cursor: Cursor): number {

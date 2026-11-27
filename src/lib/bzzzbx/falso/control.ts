@@ -1,15 +1,19 @@
 /**
  * Controles del falso que los E2E piden por HTTP (spec OPR-25, P-7): simulan
- * un cambio en el origen o a BzzzBX caído. La ruta que los expone
+ * un cambio en el origen, a BzzzBX caído o un error en la próxima instrucción. La ruta que los expone
  * (`/api/falso`) responde 404 si no hay falso, y en el servidor nunca lo hay.
  */
-import { ENTIDADES, type Entidad, type Entidades } from "../tipos";
+import { ENTIDADES, TIPOS_INSTRUCCION, type Entidad, type Entidades, type TipoInstruccion } from "../tipos";
+
+import { VALORES_DE_CUANDO, type CuandoFalla } from "./instrucciones-falsas";
 
 import type { Falso } from "./index";
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
 const esEntidad = (v: unknown): v is Entidad => typeof v === "string" && (ENTIDADES as string[]).includes(v);
+const esTipo = (v: unknown): v is TipoInstruccion => typeof v === "string" && (TIPOS_INSTRUCCION as readonly string[]).includes(v);
+const esCuando = (v: unknown): v is CuandoFalla => typeof v === "string" && (VALORES_DE_CUANDO as readonly string[]).includes(v);
 const esObjeto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 export function aplicarControl(falso: Falso, pedido: unknown): Resultado {
@@ -23,6 +27,16 @@ export function aplicarControl(falso: Falso, pedido: unknown): Resultado {
       case "poner":
         if (!esEntidad(pedido.entidad) || !esObjeto(pedido.valor)) break;
         falso.lectura.poner(pedido.entidad, pedido.valor as Entidades[Entidad]);
+        return { ok: true };
+      case "forzar_error":
+        // La instrucción la escribe el servidor: un E2E no puede poner __forzar_error en su payload.
+        if (!esTipo(pedido.tipo) || !esCuando(pedido.cuando)) break;
+        if (pedido.error_message !== undefined && typeof pedido.error_message !== "string") break;
+        falso.instrucciones.forzarError({
+          tipo: pedido.tipo,
+          cuando: pedido.cuando,
+          ...(pedido.error_message ? { error_message: pedido.error_message } : {}),
+        });
         return { ok: true };
       case "no_disponible":
         if (typeof pedido.valor !== "boolean") break;
