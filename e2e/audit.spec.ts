@@ -122,6 +122,7 @@ test("B3: la historia completa de EX-00006, en orden de tiempo", async ({ page }
     "Alert opened",
     "PO entered",
     "Alert resolved",
+    "Validated",
     "Paid",
   ]);
 

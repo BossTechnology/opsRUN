@@ -45,7 +45,9 @@ test("cinco columnas, cada request en su etapa, con conteos", async ({ page }) =
   }
   // R1 y R8 (OPR-28) siguen sin dueño con su OPS-001 abierta.
   await expect(columna(page, "requests").getByTestId("alertas-columna")).toHaveText("2");
-  await expect(page.getByTestId("alertas-operacion")).toContainText("2");
+  // R4 (EX-00004) trae una Running long abierta para Clear alert (OPR-30).
+  await expect(columna(page, "in_progress").getByTestId("alertas-columna")).toHaveText("1");
+  await expect(page.getByTestId("alertas-operacion")).toContainText("3");
 });
 
 test("anatomía de la tarjeta y — — en lo no definido", async ({ page }) => {

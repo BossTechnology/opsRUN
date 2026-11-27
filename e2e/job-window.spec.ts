@@ -248,11 +248,14 @@ test("A7: las acciones que no corren no corren, ni forzando el disabled", async 
   const cursor = async () => (await (await page.request.get("/api/tablero/cambios")).json()) as { cursor: string };
   const antes = await cursor();
 
-  for (const [codigo, texto] of [
-    ["reject_reclean", "Not available in this release"],
-    ["approve_confirm", "Not built yet"],
+  for (const [id, codigo, texto] of [
+    [R(5), "reject_reclean", "Not available in this release"],
+    // Fase B (OPR-30, P-10): se hace en las herramientas de PINCH y opsRUN lo observa.
+    [R(3), "reschedule_job", "Available when actions are switched on"],
+    [R(3), "cancel_job", "Available when actions are switched on"],
+    [R(4), "end_job_manually", "Available when actions are switched on"],
   ] as const) {
-    await page.goto(`/job/${R(5)}`); // limpio: el disabled quitado a mano en la vuelta anterior no vuelve solo
+    await page.goto(`/job/${id}`); // limpio: el disabled quitado a mano en la vuelta anterior no vuelve solo
     await expect(page.getByTestId("barra-acciones")).toBeVisible();
     await elegirAunqueEsteDeshabilitada(page, codigo);
     const go = page.getByTestId("go");
@@ -294,8 +297,12 @@ test("A8: en cada etapa aparecen las acciones de esa etapa y ninguna de otra", a
     "schedule",
   ]);
   await expect(page.locator('[data-testid="accion"] option[value="reject_job_link"]')).toHaveCount(0);
+  // R5 (Complete): Approve & confirm y Mark as OSS corren (OPR-31); Reject · re-clean no entra en el release.
   await page.goto(`/job/${R(5)}`);
-  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').count()).toBe(0);
+  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').evaluateAll((os) => os.map((o) => o.getAttribute("value")))).toEqual([
+    "approve_confirm",
+    "mark_oss",
+  ]);
 });
 
 test("A9: el panel pide Reason obligatorio y Go no se habilita con vacío ni con espacios", async ({ page }) => {
@@ -329,9 +336,10 @@ test("A10: BzzzBX caído con la ventana abierta: franja, lo último leído y acc
   // Conserva lo último leído.
   await expect(page.getByTestId("nombre-job")).toHaveText("Demo Lofts 7C");
   await expect(page.getByTestId("precio")).toHaveText("$185.00");
+  // Reschedule y Cancel job son de la Fase B: eso manda sobre "BzzzBX unavailable" (OPR-30, P-10).
   for (const etiqueta of ["Reschedule", "Cancel job"]) {
     const opcion = page.locator('[data-testid="accion"] option', { hasText: etiqueta });
-    await expect(opcion).toHaveText(`${etiqueta} — BzzzBX unavailable`);
+    await expect(opcion).toHaveText(`${etiqueta} — Available when actions are switched on`);
     await expect(opcion).toBeDisabled();
   }
 
