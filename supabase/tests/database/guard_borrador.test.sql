@@ -1,4 +1,5 @@
 -- OPR-20 · Guard G11: el borrador de una request scheduled no cambia.
+-- OPR-28 · Guard G13: el reparto del borrador entre las tres confirmaciones.
 --
 -- Al programar, manda el job en PINCH y el borrador queda como registro de lo
 -- que se confirmó.
@@ -9,12 +10,22 @@
 --
 -- Se ve fallar en cada corrida: sin el trigger, el borrador cambia.
 --
+-- G13 (al final del archivo): toda columna :draft de opsrun.request está en
+-- opsrun_private.draft_fields de algún tipo de confirmación; ninguna columna de
+-- draft_fields ni de draft_invalidating_fields deja de ser :draft; todo
+-- opsrun.ai_field de borrador está en opsrun_private.ai_fields_of de algún
+-- tipo (todos menos multiple_jobs, cleaner_reply y los draft_*, que no son
+-- campos del borrador). Si alguien agrega una columna o un campo y se olvida
+-- del reparto, este guard lo encuentra. Se ve fallar en cada corrida: agrega
+-- una columna :draft de prueba, un campo de IA de prueba y funciones que
+-- nombran lo que no es, y comprueba que las detecta. El rollback lo deshace.
+--
 -- Actúa como el dueño: el rol que corre el test se concede opsrun_migrador con
 -- herencia; el rollback lo deshace.
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(9);
+select plan(18);
 
 grant opsrun_migrador to current_user with inherit true, set true;
 
@@ -133,6 +144,106 @@ select is(
   null::text,
   'G11 se ve fallar: el borrador quedó borrado'
 );
+
+-- ---------------------------------------------------------------------------
+-- G13: el reparto del borrador entre las confirmaciones (OPR-28, spec §5.1 y §9.1)
+-- ---------------------------------------------------------------------------
+create function pg_temp.draft_sin_tipo()
+returns setof name
+language sql
+stable
+as $$
+  select c from pg_temp.columnas_borrador() as c
+  where not exists (
+    select 1 from unnest(enum_range(null::opsrun.confirmation_kind)) as k
+    where c::text = any (opsrun_private.draft_fields(k))
+  )
+$$;
+
+create function pg_temp.campos_que_no_son_draft()
+returns setof text
+language sql
+stable
+as $$
+  select distinct f
+  from unnest(enum_range(null::opsrun.confirmation_kind)) as k
+  cross join lateral unnest(opsrun_private.draft_fields(k) || opsrun_private.draft_invalidating_fields(k)) as f
+  where f::name not in (select pg_temp.columnas_borrador())
+$$;
+
+-- Lo que se confirma tiene que invalidar la confirmación al cambiar.
+create function pg_temp.confirmado_que_no_invalida()
+returns setof text
+language sql
+stable
+as $$
+  select k::text || '.' || f
+  from unnest(enum_range(null::opsrun.confirmation_kind)) as k
+  cross join lateral unnest(opsrun_private.draft_fields(k)) as f
+  where f <> all (opsrun_private.draft_invalidating_fields(k))
+$$;
+
+create function pg_temp.ia_sin_tipo()
+returns setof text
+language sql
+stable
+as $$
+  select a.code
+  from opsrun.ai_field as a
+  where a.code not in ('multiple_jobs', 'cleaner_reply')
+    and a.code not like 'draft\_%'
+    and not exists (
+      select 1 from unnest(enum_range(null::opsrun.confirmation_kind)) as k
+      where a.code = any (opsrun_private.ai_fields_of(k))
+    )
+$$;
+
+select ok(
+  (select count(*) from pg_temp.columnas_borrador()) >= 13
+  and (select count(*) from unnest(enum_range(null::opsrun.confirmation_kind)) as k
+        where cardinality(opsrun_private.draft_fields(k)) > 0) = 3,
+  'G13 tiene qué mirar: las columnas :draft y los tres tipos con sus campos'
+);
+select is_empty('select * from pg_temp.draft_sin_tipo()',
+  'G13: toda columna :draft de opsrun.request está en draft_fields de algún tipo');
+select is_empty('select * from pg_temp.campos_que_no_son_draft()',
+  'G13: ninguna columna de draft_fields ni de draft_invalidating_fields deja de ser :draft');
+select is_empty('select * from pg_temp.confirmado_que_no_invalida()',
+  'G13: todo lo que se confirma invalida la confirmación al cambiar');
+select is_empty('select * from pg_temp.ia_sin_tipo()',
+  'G13: todo ai_field de borrador está en ai_fields_of de algún tipo');
+
+-- G13 se ve fallar: una columna :draft nueva que nadie repartió.
+alter table opsrun.request add column prueba_g13 text;
+comment on column opsrun.request.prueba_g13 is 'opsrun:draft · prueba';
+select ok('prueba_g13' in (select * from pg_temp.draft_sin_tipo()),
+  'G13 se ve fallar: detecta una columna :draft que ningún tipo de confirmación reparte');
+
+-- Un campo de IA nuevo que nadie repartió.
+insert into opsrun.ai_field (code, label) values ('campo_prueba_g13', 'Prueba');
+select ok('campo_prueba_g13' in (select * from pg_temp.ia_sin_tipo()),
+  'G13 se ve fallar: detecta un ai_field de borrador que ningún tipo reparte');
+
+-- Un tipo que nombra una columna que no es del borrador.
+create or replace function opsrun_private.draft_fields(p_kind opsrun.confirmation_kind)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$ select array['owner_operator_id', 'no_existe'] $$;
+select ok('owner_operator_id' in (select * from pg_temp.campos_que_no_son_draft())
+      and 'no_existe' in (select * from pg_temp.campos_que_no_son_draft()),
+  'G13 se ve fallar: detecta una columna de draft_fields que no es :draft');
+
+-- Algo que se confirma y no invalida.
+create or replace function opsrun_private.draft_invalidating_fields(p_kind opsrun.confirmation_kind)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$ select array['unit'] $$;
+select ok('details.owner_operator_id' in (select * from pg_temp.confirmado_que_no_invalida()),
+  'G13 se ve fallar: detecta lo que se confirma pero no invalida');
 
 select * from finish();
 rollback;
