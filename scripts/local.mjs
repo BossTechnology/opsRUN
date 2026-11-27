@@ -18,7 +18,9 @@ const app = spawn(`${raiz}node_modules/.bin/${next}`, ["dev", ...process.argv.sl
   cwd: raiz,
   stdio: "inherit",
   shell: process.platform === "win32",
-  env: { ...process.env, ...entornoSupabaseLocal() },
+  // La demo local: el stand-in de BzzzBX y el selector "Acting as" de la Job
+  // window (OPR-26, P-2), que solo existe con las dos variables y sin OPSRUN_SERVIDOR.
+  env: { ...process.env, ...entornoSupabaseLocal(), BZZZBX_MODO: "falso", OPSRUN_ACTOR_DEMO: "1" },
 });
 
 for (const senal of ["SIGINT", "SIGTERM"]) {
