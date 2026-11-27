@@ -92,6 +92,8 @@ export type VentanaJob = {
   alertasLeidas: AlertResult[];
   /** Hilos de la request, el original primero. */
   hilos: string[];
+  /** El cleaner de la request: el del job desde Scheduled, el del borrador antes (OPR-27); null si no hay. */
+  equipoId: string | null;
   gate: { dueno: boolean; details: boolean; sender: boolean; cleaner: boolean };
   /** Datos de los que dependen los bloqueos de las acciones (§6.2). */
   datos: { tienePropiedad: boolean; poRequerido: boolean; tienePo: boolean };

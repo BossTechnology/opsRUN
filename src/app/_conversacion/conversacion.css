@@ -1,0 +1,252 @@
+/* La conversación del job (spec OPR-27). Colores [S-4]: neutro el original,
+   azul el correo, verde el texto, ámbar la nota. Los tokens propios de esta
+   ranura van aquí; el resto viene de globals.css. */
+.ranura-conversacion {
+  --azul-borde: #2563b8;
+  --azul-fondo: #e8f0fb;
+  --verde-borde: #1f7a4d;
+  --verde-fondo: #e3f4ea;
+  --ambar-borde: #a15c00;
+  --ambar-fondo: #fdf1dc;
+  --neutro-fondo: #efefec;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ranura-conversacion {
+    --azul-borde: #7aa7e8;
+    --azul-fondo: #162338;
+    --verde-borde: #5cc68f;
+    --verde-fondo: #17311f;
+    --ambar-borde: #f0a84a;
+    --ambar-fondo: #3a2a12;
+    --neutro-fondo: #262624;
+  }
+}
+
+.ranura-conversacion .hilo-aviso {
+  color: var(--ambar);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.ranura-conversacion .hilo-vacio {
+  font-size: 0.85rem;
+}
+
+.ranura-conversacion .hilo {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.ranura-conversacion .entrada {
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--borde);
+  border-radius: 0.4rem;
+  background: var(--neutro-fondo);
+  padding: 0.4rem 0.6rem;
+  max-width: 92%;
+  color: var(--texto);
+}
+
+.ranura-conversacion .entrada-email {
+  border-left-color: var(--azul-borde);
+  background: var(--azul-fondo);
+}
+
+.ranura-conversacion .entrada-text {
+  border-left-color: var(--verde-borde);
+  background: var(--verde-fondo);
+}
+
+.ranura-conversacion .entrada-note {
+  border-left-color: var(--ambar-borde);
+  background: var(--ambar-fondo);
+}
+
+/* Entrante a la izquierda, saliente y notas a la derecha. */
+.ranura-conversacion .entrada-outbound,
+.ranura-conversacion .entrada-internal {
+  justify-self: end;
+}
+
+.ranura-conversacion .entrada-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.ranura-conversacion .entrada-etiqueta {
+  font-weight: 700;
+  color: var(--texto);
+}
+
+.ranura-conversacion .entrada-hora {
+  margin-left: auto;
+}
+
+.ranura-conversacion .entrada p {
+  margin: 0.15rem 0 0;
+  color: var(--texto);
+}
+
+.ranura-conversacion .entrada-asunto {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.ranura-conversacion .entrada-cuerpo {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ranura-conversacion .entrada-no-encontrada {
+  color: var(--ambar);
+  font-style: italic;
+}
+
+.ranura-conversacion .entrada-estado {
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.ranura-conversacion .entrada-error {
+  color: var(--rojo);
+  font-weight: 600;
+}
+
+.ranura-conversacion .entrada-reenviar {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.ranura-conversacion .composer {
+  border-top: 1px solid var(--borde);
+  padding-top: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ranura-conversacion .composer-modos {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.ranura-conversacion .composer-modos button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.4rem;
+}
+
+.ranura-conversacion .composer-modos button[aria-selected="true"] {
+  border-color: var(--texto);
+  font-weight: 700;
+}
+
+.ranura-conversacion .composer-modos button[aria-disabled="true"],
+.ranura-conversacion .gris-futuro {
+  color: var(--tenue);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ranura-conversacion .composer-razon,
+.ranura-conversacion .composer-razon-general {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--tenue);
+}
+
+.ranura-conversacion .composer-para {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.ranura-conversacion .composer-gris {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.ranura-conversacion .gris-futuro {
+  font-size: 0.75rem;
+  border: 1px dashed var(--tenue);
+  background: none;
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.ranura-conversacion .solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ranura-conversacion .borrador-ia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.ranura-conversacion .marca-ia {
+  background: var(--texto);
+  color: var(--superficie);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.4rem;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.ranura-conversacion .borrador-razon {
+  color: var(--tenue);
+}
+
+.ranura-conversacion .borrador-aviso {
+  font-size: 0.8rem;
+}
+
+.ranura-conversacion textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  resize: vertical;
+}
+
+.ranura-conversacion .composer-pie {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ranura-conversacion .contador {
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.ranura-conversacion .contador-excedido {
+  color: var(--rojo);
+  font-weight: 700;
+}
+
+.ranura-conversacion .composer-error {
+  color: var(--rojo);
+  font-size: 0.85rem;
+}

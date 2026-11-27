@@ -385,7 +385,8 @@ test("A14: las ranuras en su lugar", async ({ page }) => {
   await page.goto(`/job/${R(2)}?tab=property`);
   const conversacion = page.locator('[data-ranura="conversacion"]');
   await expect(conversacion).toBeVisible();
-  await expect(conversacion).toContainText("Coming in a later build");
+  await expect(conversacion).toContainText("Conversation"); // OPR-27: la conversación ya está en su ranura
+  await expect(conversacion).not.toContainText("Coming in a later build");
   const enlace = page.locator('[data-testid="panel"][data-panel="property"] [data-ranura="enlace"]');
   await expect(enlace).toBeVisible();
   const [izquierda, derecha] = await Promise.all([conversacion.boundingBox(), enlace.boundingBox()]);

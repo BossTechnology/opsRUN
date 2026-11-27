@@ -30,7 +30,7 @@ function montar() {
 const texto = (clave: string, extra: Partial<Instruccion> = {}): Instruccion => ({
   idempotency_key: clave,
   tipo: "send_text",
-  payload: { to: ["bx-team-0001"], body: "Can you confirm?" },
+  payload: { bzzzbx_team_id: "bx-team-0001", body: "Can you confirm?" },
   actor: OPERADOR,
   sujeto: { bzzzbx_job_id: "bx-job-0003" },
   ...extra,
@@ -147,10 +147,10 @@ describe("instrucciones falsas: error forzado", () => {
 
   it("la marca __forzar_error del payload sirve para los E2E", async () => {
     const { falso, cerrar } = montar();
-    await falso.instrucciones.entregar(texto("k13", { payload: { to: ["bx-team-0001"], body: "x", __forzar_error: "al_ejecutar" } }));
+    await falso.instrucciones.entregar(texto("k13", { payload: { bzzzbx_team_id: "bx-team-0001", body: "x", __forzar_error: "al_ejecutar" } }));
     expect(await cerrar("k13")).toMatchObject({ estado: "fallida" });
     await expect(
-      falso.instrucciones.entregar(texto("k14", { payload: { to: ["x"], body: "x", __forzar_error: "al_entregar" } })),
+      falso.instrucciones.entregar(texto("k14", { payload: { bzzzbx_team_id: "bx-team-0001", body: "x", __forzar_error: "al_entregar" } })),
     ).rejects.toBeInstanceOf(InstruccionRechazada);
   });
 
@@ -244,7 +244,7 @@ describe("instrucciones falsas: efectos en la lectura", () => {
     await falso.instrucciones.entregar({
       idempotency_key: "k26",
       tipo: "send_email",
-      payload: { to: ["contact.one@example.test"], subject: "Cleaning scheduled", body: "Scheduled.", bzzzbx_thread_id: "bx-thread-0002" },
+      payload: { body: "Scheduled.", bzzzbx_thread_id: "bx-thread-0002" },
       actor: OPERADOR,
     });
     for (const [clave, canal] of [["k25", "text"], ["k26", "email"]] as const) {
@@ -283,5 +283,58 @@ describe("instrucciones falsas: efectos en la lectura", () => {
     expect(await cerrar("k29")).toMatchObject({ estado: "confirmada" });
     expect(await cerrar("k30")).toMatchObject({ estado: "confirmada" });
     expect(foto()).toBe(antes);
+  });
+});
+
+describe("instrucciones falsas: envíos con crosswalk IDs (OPR-27, P-2)", () => {
+  const correo = (clave: string, payload: Record<string, unknown>): Instruccion => ({
+    idempotency_key: clave,
+    tipo: "send_email",
+    payload,
+    actor: OPERADOR,
+    sujeto: { request_id: "b0000000-0000-4000-8000-0000000000a2" },
+  });
+
+  it("send_email resuelve el destinatario: el remitente del original del hilo, en el mismo hilo", async () => {
+    const { falso, cerrar } = montar();
+    await falso.instrucciones.entregar(correo("k40", { bzzzbx_thread_id: "bx-thread-0002", body: "Scheduled for Friday." }));
+    const cierre = (await cerrar("k40")) as Extract<Resultado, { estado: "confirmada" }>;
+    const mensaje = await falso.lectura.obtener("message", cierre.datos!.bzzzbx_message_id as string);
+    expect(mensaje).toMatchObject({
+      channel: "email",
+      direction: "outbound",
+      bzzzbx_thread_id: "bx-thread-0002",
+      to: ["contact.one@example.test"],
+      subject: "Re: Clean for Sample Court unit 12",
+      body: "Scheduled for Friday.",
+    });
+  });
+
+  it("send_text resuelve el teléfono del equipo", async () => {
+    const { falso, cerrar } = montar();
+    await falso.instrucciones.entregar({ ...texto("k41"), payload: { bzzzbx_team_id: "bx-team-0002", body: "Ready?" } });
+    const cierre = (await cerrar("k41")) as Extract<Resultado, { estado: "confirmada" }>;
+    const mensaje = await falso.lectura.obtener("message", cierre.datos!.bzzzbx_message_id as string);
+    expect(mensaje).toMatchObject({ channel: "text", direction: "outbound", to: ["+1 555 0112"], bzzzbx_thread_id: null });
+  });
+
+  it("ya no exige `to`, y rechaza con invalid_payload un hilo, un equipo o un cuerpo que no conoce", async () => {
+    const { falso } = montar();
+    const rechazo = { error_code: "invalid_payload" };
+    await expect(falso.instrucciones.entregar(correo("k42", { bzzzbx_thread_id: "bx-thread-9999", body: "x" }))).rejects.toMatchObject(rechazo);
+    await expect(falso.instrucciones.entregar(correo("k43", { body: "x" }))).rejects.toMatchObject(rechazo);
+    await expect(falso.instrucciones.entregar(correo("k44", { bzzzbx_thread_id: "bx-thread-0002" }))).rejects.toMatchObject(rechazo);
+    await expect(falso.instrucciones.entregar({ ...texto("k45"), payload: { bzzzbx_team_id: "bx-team-9999", body: "x" } })).rejects.toMatchObject(rechazo);
+    await expect(falso.instrucciones.entregar({ ...texto("k46"), payload: { to: ["bx-team-0001"], body: "x" } })).rejects.toMatchObject(rechazo);
+  });
+
+  it("los IDs de los mensajes nuevos no se repiten aunque se cree otro falso", async () => {
+    const primero = montar();
+    await primero.falso.instrucciones.entregar(texto("k47"));
+    const a = ((await primero.cerrar("k47")) as Extract<Resultado, { estado: "confirmada" }>).datos!.bzzzbx_message_id;
+    const segundo = montar();
+    await segundo.falso.instrucciones.entregar(texto("k47"));
+    const b = ((await segundo.cerrar("k47")) as Extract<Resultado, { estado: "confirmada" }>).datos!.bzzzbx_message_id;
+    expect(a).not.toBe(b);
   });
 });

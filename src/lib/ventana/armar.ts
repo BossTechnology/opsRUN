@@ -147,6 +147,7 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
     alertas,
     alertasLeidas: abiertas,
     hilos,
+    equipoId: teamId ?? null,
     gate: { dueno: fila.owner_operator_id !== null, ...confirmaciones },
     datos: { tienePropiedad: Boolean(propertyId), poRequerido: Boolean(customer?.po_required), tienePo: Boolean(po) },
     instruccionAbierta: entrada.instruccionAbierta,

@@ -2,7 +2,16 @@
 import { describe, expect, it } from "vitest";
 
 import { aplicarControl } from "./control";
-import { crearFalso } from "./index";
+import { crearFalso, RelojManual, type Falso } from "./index";
+
+async function esperarCierre(falso: Falso, clave: string) {
+  for (let i = 0; i < 20; i++) {
+    const r = await falso.instrucciones.estado(clave);
+    if (r && r.estado !== "en_curso") return r;
+    (falso.reloj as RelojManual).adelantar(falso.instrucciones.pasoMs);
+  }
+  throw new Error("no cerró");
+}
 
 describe("aplicarControl (ruta de control del falso, solo E2E)", () => {
   it("cambiar una entidad", async () => {
@@ -28,6 +37,28 @@ describe("aplicarControl (ruta de control del falso, solo E2E)", () => {
     expect(falso.lectura.disponible).toBe(false);
     aplicarControl(falso, { accion: "no_disponible", valor: false });
     expect(falso.lectura.disponible).toBe(true);
+  });
+
+  it("forzar_error: el próximo envío del tipo falla como se pidió (OPR-27)", async () => {
+    const falso = crearFalso({ reloj: new RelojManual() });
+    expect(
+      aplicarControl(falso, { accion: "forzar_error", tipo: "send_email", cuando: "al_ejecutar", error_message: "Nope." }),
+    ).toEqual({ ok: true });
+    await falso.instrucciones.entregar({
+      idempotency_key: "kc1",
+      tipo: "send_email",
+      payload: { bzzzbx_thread_id: "bx-thread-0002", body: "x" },
+      actor: { tipo: "operator", operator_id: "0a000000-0000-4000-8000-0000000000a1" },
+    });
+    const cierre = await esperarCierre(falso, "kc1");
+    expect(cierre).toMatchObject({ estado: "fallida", error_code: "forced_error", error_message: "Nope." });
+  });
+
+  it("forzar_error rechaza un tipo o un momento que no existen", () => {
+    const falso = crearFalso();
+    expect(aplicarControl(falso, { accion: "forzar_error", tipo: "borrar", cuando: "al_ejecutar" })).toMatchObject({ ok: false });
+    expect(aplicarControl(falso, { accion: "forzar_error", tipo: "send_email", cuando: "nunca" })).toMatchObject({ ok: false });
+    expect(aplicarControl(falso, { accion: "forzar_error", tipo: "send_email", cuando: "al_ejecutar", error_message: 3 })).toMatchObject({ ok: false });
   });
 
   it("rechaza lo que no entiende", () => {

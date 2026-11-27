@@ -52,7 +52,7 @@ probarContratoDeInstrucciones("falso en memoria", async () => {
     instruccionValida: (idempotency_key) => ({
       idempotency_key,
       tipo: "send_text",
-      payload: { to: ["bx-team-0001"], body: "Can you confirm the job?" },
+      payload: { bzzzbx_team_id: "bx-team-0001", body: "Can you confirm the job?" },
       actor: { tipo: "operator", operator_id: "0a000000-0000-4000-8000-0000000000a1" },
       sujeto: { bzzzbx_job_id: "bx-job-0003" },
     }),

@@ -2,6 +2,7 @@ import { connection } from "next/server";
 
 import { obtenerFalso, reiniciarFalso } from "@/lib/bzzzbx";
 import { aplicarControl } from "@/lib/bzzzbx/falso/control";
+import { olvidarConversaciones } from "@/lib/conversacion/servidor";
 import { olvidarVentanas } from "@/lib/ventana/servidor";
 
 /**
@@ -19,6 +20,7 @@ export async function POST(pedido: Request) {
     reiniciarFalso();
     // Lo último leído de BzzzBX por la Job window es del falso anterior.
     olvidarVentanas();
+    olvidarConversaciones();
     return Response.json({ ok: true });
   }
   const resultado = aplicarControl(falso, cuerpo);

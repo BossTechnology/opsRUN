@@ -220,3 +220,47 @@ describe("ejecutarAccion: el camino feliz", () => {
     errores.mockRestore();
   });
 });
+
+describe("ejecutarAccion: concurrencia: ninguna (OPR-27, P-6)", () => {
+  it("una acción con concurrencia ninguna corre aunque la request haya cambiado", async () => {
+    const ejecutor = vi.fn(async () => ({ tipo: "guardada" as const }));
+    const deps = armar([base({ concurrencia: "ninguna", motivo: "no", ejecutor })]);
+    const r = await ejecutar(deps, entrada({ version: "99", motivo: null }));
+    expect(r).toEqual({ tipo: "guardada" });
+    expect(ejecutor).toHaveBeenCalledTimes(1);
+  });
+
+  it("con concurrencia request (la de por defecto) sigue rechazando un cambio", async () => {
+    const ejecutor = vi.fn(async () => ({ tipo: "guardada" as const }));
+    for (const concurrencia of [undefined, "request" as const]) {
+      const r = await ejecutar(armar([base({ concurrencia, ejecutor })]), entrada({ version: "99" }));
+      expect(r).toMatchObject({ tipo: "rechazada", codigo: "cambio_concurrente" });
+    }
+    expect(ejecutor).not.toHaveBeenCalled();
+  });
+});
+
+describe("ejecutarAccion: lo de un release posterior no corre (OPR-27 §5.2)", () => {
+  it.each(["to", "cc", "from_number"])("`datos` con %s se rechaza no_disponible sin leer la ventana ni llamar al ejecutor", async (campo) => {
+    const ejecutor = vi.fn(async () => ({ tipo: "guardada" as const }));
+    const deps = armar([base({ concurrencia: "ninguna", motivo: "no", ejecutor })]);
+    const r = await ejecutar(deps, entrada({ motivo: null, datos: { body: "Hola", [campo]: "someone@example.test" } }));
+    expect(r).toEqual({ tipo: "rechazada", codigo: "no_disponible", mensaje: "Available in a later release" });
+    expect(ejecutor).not.toHaveBeenCalled();
+    expect(deps.leerVentana).not.toHaveBeenCalled();
+    expect(deps.actor).not.toHaveBeenCalled();
+    expect(deps.refrescar).not.toHaveBeenCalled();
+  });
+});
+
+describe("ejecutarAccion: solo un operador actúa", () => {
+  it("un actor de sistema no corre ninguna acción", async () => {
+    const ejecutor = vi.fn(async () => ({ tipo: "guardada" as const }));
+    const deps = armar([base({ ejecutor })]);
+    deps.actor.mockResolvedValue({ tipo: "sistema", proceso: "reconciliador" } as never);
+    const r = await ejecutar(deps, entrada());
+    expect(r).toMatchObject({ tipo: "rechazada", codigo: "sin_actor" });
+    expect(ejecutor).not.toHaveBeenCalled();
+    expect(deps.refrescar).not.toHaveBeenCalled();
+  });
+});
