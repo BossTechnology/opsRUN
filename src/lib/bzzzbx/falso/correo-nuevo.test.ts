@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { BzzzbxNoDisponible } from "../errores";
+import { BzzzbxNoDisponible, CursorCaducado } from "../errores";
 import { BUSCAR_MENSAJES_MAX, type Message } from "../tipos";
 
 import { aplicarControl } from "./control";
@@ -104,5 +104,14 @@ describe("control correo_nuevo", () => {
     const falso = crearFalso();
     expect(aplicarControl(falso, { accion: "correo_nuevo", respuesta_a: "" })).toMatchObject({ ok: false });
     expect(aplicarControl(falso, { accion: "correo_nuevo", respuesta_a: 7 })).toMatchObject({ ok: false });
+  });
+});
+
+describe("cursores entre falsos", () => {
+  it("el cursor de un falso caduca siempre en otro nuevo, aunque esté en la misma posición (reiniciar)", async () => {
+    const a = crearFalso();
+    const { cursor } = await a.lectura.cambiosDesde(null);
+    const b = crearFalso();
+    await expect(b.lectura.cambiosDesde(cursor)).rejects.toBeInstanceOf(CursorCaducado);
   });
 });

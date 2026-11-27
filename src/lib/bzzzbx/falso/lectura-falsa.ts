@@ -47,12 +47,16 @@ const PREFIJO_CORREO_NUEVO = "9";
 const arranque = Date.now().toString(36);
 let correosNuevos = 0;
 
+/** Por proceso: dos falsos nunca comparten generación (spec OPR-15, E5). */
+let generacionesDadas = 0;
+
 const FORMA_CURSOR = /^lf1\.(\d+)\.(\d+)$/;
 
 export class LecturaFalsa implements LecturaBzzzbx {
   private tablas = new Map<Entidad, Map<string, Fila>>();
   private registro: Cambio[] = [];
-  private generacion = 1;
+  /** Única por falso y por reconstrucción: un cursor de otro falso (tras `reiniciar`) caduca siempre. */
+  private generacion = ++generacionesDadas;
   private ultimaVersion = 0;
   private caido = false;
 
@@ -212,7 +216,7 @@ export class LecturaFalsa implements LecturaBzzzbx {
     this.tablas.clear();
     for (const [entidad, tabla] of copia) this.tablas.set(entidad, tabla);
     this.registro = [];
-    this.generacion += 1;
+    this.generacion = ++generacionesDadas;
   }
 
   /** Todas las filas de una entidad, con su versión: para pruebas y para el falso de instrucciones. */

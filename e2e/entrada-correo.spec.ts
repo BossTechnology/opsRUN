@@ -64,6 +64,10 @@ test.beforeAll(async ({ request }) => {
   // Que el falso empiece de cero. Un E2E que lo reinicia caduca el cursor de la entrada: justo el caso de E5.
   const r = await request.post("/api/falso", { data: { accion: "reiniciar" } });
   expect(r.ok()).toBe(true);
+  // La entrada ve el cursor caducado en una vuelta y recupera en la siguiente (E5): se le dan las dos para que E1
+  // mida solo el tramo del correo, no el reinicio.
+  test.setTimeout(90_000);
+  await new Promise((resolver) => setTimeout(resolver, 32_000));
 });
 
 test("E1: llega un correo y aparece la request en el tablero en menos de 1 minuto", async ({ page }) => {
