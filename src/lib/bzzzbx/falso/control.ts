@@ -9,7 +9,9 @@ import { VALORES_DE_CUANDO, type CuandoFalla } from "./instrucciones-falsas";
 
 import type { Falso } from "./index";
 
-type Resultado = { ok: true } | { ok: false; error: string };
+type Resultado =
+  | { ok: true; bzzzbx_message_id?: string; bzzzbx_thread_id?: string }
+  | { ok: false; error: string };
 
 const esEntidad = (v: unknown): v is Entidad => typeof v === "string" && (ENTIDADES as string[]).includes(v);
 const esTipo = (v: unknown): v is TipoInstruccion => typeof v === "string" && (TIPOS_INSTRUCCION as readonly string[]).includes(v);
@@ -38,6 +40,11 @@ export function aplicarControl(falso: Falso, pedido: unknown): Resultado {
           ...(pedido.error_message ? { error_message: pedido.error_message } : {}),
         });
         return { ok: true };
+      case "correo_nuevo": {
+        // Un correo entrante inventado (spec OPR-15 §10.3): hilo nuevo, o respuesta en `respuesta_a`.
+        if (pedido.respuesta_a !== undefined && (typeof pedido.respuesta_a !== "string" || pedido.respuesta_a.trim() === "")) break;
+        return { ok: true, ...falso.lectura.correoNuevo(pedido.respuesta_a) };
+      }
       case "no_disponible":
         if (typeof pedido.valor !== "boolean") break;
         falso.lectura.noDisponible(pedido.valor);
