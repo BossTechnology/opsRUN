@@ -70,14 +70,13 @@ export type LecturaDeConversacion = {
 
 /** Todo lo de opsRUN que pide la conversación; null si la request no existe. */
 export async function leerConversacionDeOpsrun(db: Tx, requestId: string): Promise<LecturaDeConversacion | null> {
-  const [request, vinculos, envios, notas, operadores, borradores] = await Promise.all([
-    db.query<LecturaDeConversacion["request"]>(CONSULTA_REQUEST, [requestId]),
-    db.query<Vinculo>(CONSULTA_VINCULOS, [requestId]),
-    db.query<EnvioDeOpsrun>(CONSULTA_ENVIOS, [requestId]),
-    db.query<NotaDeOpsrun>(CONSULTA_NOTAS, [requestId]),
-    db.query<OperadorDeHilo>(CONSULTA_OPERADORES),
-    db.query<BorradorDeIA & { field: BorradorDeIA["field"] }>(CONSULTA_BORRADORES, [requestId]),
-  ]);
+  // Una tras otra: comparten el cliente de la transacción (pg no admite consultas concurrentes en él).
+  const request = await db.query<LecturaDeConversacion["request"]>(CONSULTA_REQUEST, [requestId]);
+  const vinculos = await db.query<Vinculo>(CONSULTA_VINCULOS, [requestId]);
+  const envios = await db.query<EnvioDeOpsrun>(CONSULTA_ENVIOS, [requestId]);
+  const notas = await db.query<NotaDeOpsrun>(CONSULTA_NOTAS, [requestId]);
+  const operadores = await db.query<OperadorDeHilo>(CONSULTA_OPERADORES);
+  const borradores = await db.query<BorradorDeIA & { field: BorradorDeIA["field"] }>(CONSULTA_BORRADORES, [requestId]);
   const fila = request.rows[0];
   if (!fila) return null;
   return {

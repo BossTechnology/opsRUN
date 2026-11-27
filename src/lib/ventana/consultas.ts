@@ -59,13 +59,12 @@ export type LecturaDeOpsrun = {
 
 /** Todo lo de opsRUN que pide la ventana; null si la request no existe. */
 export async function leerDeOpsrun(db: Tx, requestId: string): Promise<LecturaDeOpsrun | null> {
-  const [filas, hilos, operadores, confirmaciones, abierta] = await Promise.all([
-    db.query<FilaVentana>(CONSULTA_FILA_VENTANA, [requestId]),
-    db.query<{ bzzzbx_thread_id: string }>(CONSULTA_HILOS, [requestId]),
-    db.query<OperadorConCarga>(CONSULTA_OPERADORES),
-    db.query<{ kind: keyof Confirmaciones }>(CONSULTA_CONFIRMACIONES, [requestId]),
-    db.query<{ abierta: boolean }>(CONSULTA_INSTRUCCION_ABIERTA, [requestId]),
-  ]);
+  // Una tras otra: comparten el cliente de la transacción (pg no admite consultas concurrentes en él).
+  const filas = await db.query<FilaVentana>(CONSULTA_FILA_VENTANA, [requestId]);
+  const hilos = await db.query<{ bzzzbx_thread_id: string }>(CONSULTA_HILOS, [requestId]);
+  const operadores = await db.query<OperadorConCarga>(CONSULTA_OPERADORES);
+  const confirmaciones = await db.query<{ kind: keyof Confirmaciones }>(CONSULTA_CONFIRMACIONES, [requestId]);
+  const abierta = await db.query<{ abierta: boolean }>(CONSULTA_INSTRUCCION_ABIERTA, [requestId]);
   const fila = filas.rows[0];
   if (!fila) return null;
   const vigentes = new Set(confirmaciones.rows.map((c) => c.kind));

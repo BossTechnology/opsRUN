@@ -181,8 +181,11 @@ describe("RanuraEnlace: confirmar y rechazar", () => {
     await waitFor(() => expect(rechazar).toHaveBeenCalledWith("bx-job-0108", "Other building"));
     await waitFor(() => expect(screen.queryByTestId("rechazo-enlace")).toBeNull());
 
-    fireEvent.click(screen.getByRole("button", { name: "Reject EX-00107" }));
-    fireEvent.click(screen.getByTestId("enviar-rechazo"));
+    // Mientras la acción sigue en curso (`ocupado`) los botones están deshabilitados: se espera a que se habiliten.
+    const reject107 = screen.getByRole("button", { name: "Reject EX-00107" }) as HTMLButtonElement;
+    await waitFor(() => expect(reject107.disabled).toBe(false));
+    fireEvent.click(reject107);
+    fireEvent.click(await screen.findByTestId("enviar-rechazo"));
     await waitFor(() => expect(rechazar).toHaveBeenLastCalledWith("bx-job-0107", null));
   });
 

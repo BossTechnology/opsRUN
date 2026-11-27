@@ -20,7 +20,9 @@ type Props = {
  * uno. La pestaña activa va en la URL (`?tab=`) con `history.replaceState`,
  * que Next integra sin salir de la ruta interceptada.
  *
- * $ y People se ven pero no se seleccionan, ni con clic ni con teclado.
+ * $ y People se ven pero no se seleccionan, ni con clic ni con teclado. Su nombre
+ * accesible es "$" o "People" y la nota ("Not available in this release") es su
+ * descripción, no su nombre.
  */
 export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
   const [elegida, setElegida] = useState<IdPestana>(inicial.id);
@@ -82,6 +84,9 @@ export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
             aria-selected={!p.deshabilitada && p.id === activa}
             aria-controls={p.deshabilitada ? undefined : `panel-${p.id}`}
             aria-disabled={p.deshabilitada ? "true" : undefined}
+            // El nombre es la pestaña ("$", "People"); la nota va de descripción, no de nombre.
+            aria-label={p.deshabilitada ? p.nombre : undefined}
+            aria-describedby={p.deshabilitada && p.titulo ? `pestana-${p.id}-nota` : undefined}
             title={p.titulo}
             tabIndex={!p.deshabilitada && p.id === activa ? 0 : -1}
             className={p.id === "alerts" ? "pestana pestana-alertas" : "pestana"}
@@ -106,6 +111,13 @@ export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
           </button>
         ))}
       </div>
+      {pestanas
+        .filter((p) => p.deshabilitada && p.titulo)
+        .map((p) => (
+          <span key={p.id} id={`pestana-${p.id}-nota`} hidden>
+            {p.titulo}
+          </span>
+        ))}
       {pestanas
         .filter((p) => !p.deshabilitada)
         .map((p) => (

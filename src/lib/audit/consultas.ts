@@ -78,10 +78,9 @@ where r.id = $1::uuid`;
 
 /** La lectura dentro de una transacción ya abierta (la usan las pruebas contra la seed). */
 export async function leerAuditEn(db: Tx, requestId: string): Promise<LecturaDeAudit> {
-  const [ids, filas] = await Promise.all([
-    db.query<IdentificadoresDeAudit>(CONSULTA_IDENTIFICADORES, [requestId]),
-    db.query<FilaDeAudit>(CONSULTA_AUDIT, [requestId]),
-  ]);
+  // Una tras otra: comparten el cliente de la transacción (pg no admite consultas concurrentes en él).
+  const ids = await db.query<IdentificadoresDeAudit>(CONSULTA_IDENTIFICADORES, [requestId]);
+  const filas = await db.query<FilaDeAudit>(CONSULTA_AUDIT, [requestId]);
   return { identificadores: ids.rows[0] ?? null, filas: filas.rows };
 }
 

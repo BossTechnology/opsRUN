@@ -164,6 +164,12 @@ test("A4: pestañas por etapa, con $ y People que no se seleccionan, y Alerts al
       await expect(p).toHaveAttribute("aria-disabled", "true");
       await expect(p).toHaveAttribute("title", "Not available in this release");
     }
+    // Nombre accesible "$" y "People"; la nota es la descripción, no el nombre.
+    for (const [nombre, gris] of [["$", "dollar"], ["People", "people"]]) {
+      const p = page.getByRole("tab", { name: nombre, exact: true });
+      await expect(p, `${id} ${nombre}`).toHaveAttribute("data-pestana", gris);
+      await expect(p).toHaveAccessibleDescription("Not available in this release");
+    }
   }
 
   // Ni el clic ni el teclado las seleccionan, ni cambian la URL.
