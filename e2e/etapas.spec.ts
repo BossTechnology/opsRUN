@@ -60,9 +60,12 @@ const estadoDe = async (id: string) =>
 const pestana = (page: Page, id: string) => page.locator(`[data-testid="pestana"][data-pestana="${id}"]`);
 const columna = (page: Page, etapa: string) => page.locator(`[data-testid="columna"][data-etapa="${etapa}"]`);
 const audit = (page: Page) => page.locator('[data-ranura="audit"]');
-const tracker = (page: Page) => page.locator('[data-ranura="tracker"]');
-const billing = (page: Page) => page.locator('[data-ranura="billing"]');
+// La ranura ya cargada (no el marcador "Loading…" del Suspense, que lleva el mismo `data-ranura`).
+const tracker = (page: Page) => page.locator('section[data-ranura="tracker"]');
+const billing = (page: Page) => page.locator('section[data-ranura="billing"]');
 const resultado = (page: Page) => page.getByTestId("resultado-accion");
+/** Una escritura puede tardar con la máquina cargada: el servidor escribe, vuelve a leer y refresca. */
+const GUARDADO = { timeout: 20_000 };
 const opcion = (page: Page, codigo: string) => page.locator(`[data-testid="accion"] option[value="${codigo}"]`);
 const cursor = async (page: Page) => ((await (await page.request.get("/api/tablero/cambios")).json()) as { cursor: string }).cursor;
 
@@ -110,7 +113,18 @@ async function correrAccion(page: Page, codigo: string, motivo?: string) {
   if (motivo !== undefined) await page.getByTestId("motivo").fill(motivo);
   await expect(page.getByTestId("go")).toBeEnabled();
   await page.getByTestId("go").click();
-  await expect(resultado(page)).toHaveText("Saved");
+  await expect(resultado(page)).toHaveText("Saved", GUARDADO);
+}
+
+/**
+ * Approve & confirm: el job pasa a Validation y la acción deja de ser de esta etapa, así que el panel
+ * desaparece con la ventana nueva y no queda un "Saved" que mirar: se espera la etapa nueva.
+ */
+async function aprobar(page: Page) {
+  await elegirAccion(page, "approve_confirm");
+  await expect(page.getByTestId("go")).toBeEnabled();
+  await page.getByTestId("go").click();
+  await expect(page.getByTestId("stage")).toHaveText("Validation", { timeout: 60_000 });
 }
 
 async function abrir(page: Page, id: string, tab?: string) {
@@ -138,13 +152,13 @@ async function llevarR8AScheduled(page: Page) {
   await elegirAccion(page, "assign");
   await page.getByTestId("assign-to-me").click();
   await page.getByTestId("go").click();
-  await expect(resultado(page)).toHaveText("Saved");
+  await expect(resultado(page)).toHaveText("Saved", GUARDADO);
   await correrAccion(page, "confirm_details");
   await correrAccion(page, "confirm_sender");
   await elegirAccion(page, "confirm_cleaner");
   await page.getByRole("radio", { name: "Confirm by phone" }).check();
   await page.getByTestId("go").click();
-  await expect(resultado(page)).toHaveText("Saved");
+  await expect(resultado(page)).toHaveText("Saved", GUARDADO);
   await page.getByTestId("accion").selectOption("");
   await pestana(page, "property").click();
   const fila = page.locator('[data-ranura="enlace"] [data-testid="candidato-enlace"][data-job="bx-job-0108"]');
@@ -198,7 +212,7 @@ test("E2: Clear alert exige motivo; con motivo, Audit dice 'Alert cleared' con s
     await page.getByTestId("motivo").fill("Large unit, called ahead.");
     await expect(page.getByTestId("go")).toBeEnabled();
     await page.getByTestId("go").click();
-    await expect(resultado(page)).toHaveText("Saved");
+    await expect(resultado(page)).toHaveText("Saved", GUARDADO);
   }
 
   // Deja de contar en la ventana y en el tablero, aunque el stand-in de BzzzBX la siga dando abierta (P-7).
@@ -307,6 +321,8 @@ test("E5 y E8: R5 (Complete, OSS 'auto'): Mark as OSS, un cambio concurrente, y 
   const aprobada = async () => (await estadoDe(R(5))).approved;
   test.skip((await aprobada()) && testInfo.retry === 0, "R5 ya está aprobada en esta base: se necesita una base nueva");
 
+  const instrucciones = () => contar("select count(*)::text as n from opsrun.instruction where request_id = $1", [R(5)]);
+  const instruccionesAntes = await instrucciones();
   const contexto1 = await browser.newContext({ baseURL: baseURL! });
   const contexto2 = await browser.newContext({ baseURL: baseURL! });
   try {
@@ -332,7 +348,7 @@ test("E5 y E8: R5 (Complete, OSS 'auto'): Mark as OSS, un cambio concurrente, y 
       await uno.getByRole("radio", { name: "Not OSS" }).check();
       await uno.getByTestId("motivo").fill("Photos were fine");
       await uno.getByTestId("go").click();
-      await expect(resultado(uno)).toHaveText("Saved");
+      await expect(resultado(uno)).toHaveText("Saved", GUARDADO);
       expect(await consultar("select oss_mark::text, oss_source::text from opsrun.request where id = $1", [R(5)])).toEqual([
         { oss_mark: "not_oss", oss_source: "operator" },
       ]);
@@ -355,7 +371,6 @@ test("E5 y E8: R5 (Complete, OSS 'auto'): Mark as OSS, un cambio concurrente, y 
       await elegirAccion(uno, "approve_confirm");
       await expect(uno.getByTestId("approve-oss")).toContainText("Not OSS");
       await uno.getByTestId("go").click();
-      await expect(resultado(uno)).toHaveText("Saved");
     }
     await expect(uno.getByTestId("stage")).toHaveText("Validation", { timeout: 60_000 });
     await uno.goto("/");
@@ -363,7 +378,8 @@ test("E5 y E8: R5 (Complete, OSS 'auto'): Mark as OSS, un cambio concurrente, y 
     expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'job_approved'", [R(5)])).toBe(1);
     // Approve no manda nada al requester (S-9).
     expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'requester_notified'", [R(5)])).toBe(0);
-    expect(await contar("select count(*)::text as n from opsrun.instruction where request_id = $1", [R(5)])).toBe(1); // solo el end_job_manually de la seed
+    // Fase A: ni Mark as OSS ni Approve mandan una instrucción a BzzzBX.
+    expect(await instrucciones()).toBe(instruccionesAntes);
   } finally {
     await contexto1.close();
     await contexto2.close();
@@ -408,6 +424,8 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
   });
 
   await test.step("una MEC-003 abierta: Clear alert con motivo, y deja de contar en la tarjeta y en la ventana", async () => {
+    // La OPS-001 de R8 (sin dueño) la cierra BzzzBX cuando ve el dueño por el write-back; el stand-in no lo hace solo.
+    await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-0005", parche: { cleared_at: new Date().toISOString() } });
     await control(page, {
       accion: "poner",
       entidad: "alert_result",
@@ -437,7 +455,7 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
     await expect(page.getByTestId("go")).toBeDisabled();
     await page.getByTestId("motivo").fill("Large unit, called ahead.");
     await page.getByTestId("go").click();
-    await expect(resultado(page)).toHaveText("Saved");
+    await expect(resultado(page)).toHaveText("Saved", GUARDADO);
 
     await recargar(page, R(8));
     await expect(page.getByTestId("conteo-alertas")).toHaveCount(0);
@@ -469,7 +487,7 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
     await elegirAccion(page, "mark_oss");
     await page.getByRole("radio", { name: "OSS", exact: true }).check();
     await page.getByTestId("go").click();
-    await expect(resultado(page)).toHaveText("Saved");
+    await expect(resultado(page)).toHaveText("Saved", GUARDADO);
     await recargar(page, R(8));
     await expect(page.getByTestId("chip-oss")).toHaveText("OSS");
     await correrAccionOss(page, "Not OSS");
@@ -486,7 +504,7 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
       await expect(page.getByTestId("franja-bzzzbx")).toBeVisible();
       await expect(opcion(page, "approve_confirm")).toBeEnabled();
       await expect(opcion(page, "mark_oss")).toBeEnabled();
-      await correrAccion(page, "approve_confirm");
+      await aprobar(page);
       await recargar(page, R(8));
       await expect(page.getByTestId("stage")).toHaveText("Validation");
       await expect(opcion(page, "record_validation")).toHaveText("Validate — BzzzBX unavailable");
@@ -526,7 +544,7 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
       await expect(page.getByTestId("guardar-po")).toBeDisabled();
       await page.getByTestId("po-input").fill("PO-EX-0108");
       await page.getByTestId("guardar-po").click();
-      await expect(page.getByTestId("resultado-po")).toHaveText("Saved");
+      await expect(page.getByTestId("resultado-po")).toHaveText("Saved", GUARDADO);
       await expect(opcion(page, "record_validation")).toBeDisabled();
     } finally {
       await control(page, { accion: "no_disponible", valor: false });
@@ -602,5 +620,5 @@ async function correrAccionOss(page: Page, marca: "OSS" | "Not OSS") {
   await page.getByRole("radio", { name: marca, exact: true }).check();
   await expect(page.getByTestId("go")).toBeEnabled();
   await page.getByTestId("go").click();
-  await expect(resultado(page)).toHaveText("Saved");
+  await expect(resultado(page)).toHaveText("Saved", GUARDADO);
 }
