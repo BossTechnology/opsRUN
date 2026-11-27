@@ -1,7 +1,7 @@
 # OPR-15 — Entrada de correo: un correo nuevo es una request
 
 - **Tarjeta:** OPR-15 (C · Email intake, Gmail → BzzzBX → opsRUN requests). Depende de OPR-14 (acceso al buzón compartido, de PINCH IT), OPR-22 (read layer) y OPR-20 (modelo de datos). De esas, OPR-20 y la parte local de OPR-22 están en `main`; OPR-14 y el contrato real de BzzzBX (OPR-6) no existen.
-- **Estado:** spec para revisión de Henry. No hay código ni migración escritos. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§12).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-7 según las recomendaciones, incluida la migración de P-0; P-8 sigue abierta (§12.1). No hay código ni migración escritos. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§12).
 - **Construye sobre:** el puerto de lectura y su falso (`src/lib/bzzzbx/`, spec OPR-22, ADR 0005: `Message`, `cambiosDesde`, hilos `bx-thread-`), el modelo de datos (spec OPR-20 §3.2, §3.5, §3.11 y §4: `request`, `request_message`, `audit_event`, `require_system()`), la conversación (spec OPR-27: el hilo ya muestra los mensajes de los hilos de la request, P-7; despacho mínimo con actor de sistema) y el tablero (spec OPR-25: sondeo cada 15 s por `/api/tablero/cambios`, cuyo cursor incluye el último `audit_event.id`).
 - **Tarjeta en Relevo:** leída (OPR-15 y OPR-36, 2026-11-27). De OPR-15 salen: los correos nuevos del buzón compartido son requests con R number "at the top of Requests"; las respuestas del cliente van a su request "by email conversation and R/job number"; los adjuntos se quedan con el mensaje; un correo duplicado no da dos requests; cada request nueva pasa enseguida al análisis de IA. De OPR-36: el análisis sale por BzzzBX al llegar el correo, y si la IA tarda o cae los campos quedan vacíos con "AI pending". **No se pudieron leer** el Release Definition §4.3 ni el User Guide §4.1 y §3.3 (no están en este repo, que es público) [S-1].
 - **Fuera de alcance:** leer Gmail (lo hace BzzzBX con el acceso de OPR-14; opsRUN nunca), el análisis de IA y las sugerencias (OPR-36, OPR-37), enviar correo (OPR-16), textos entrantes del cleaner (OPR-17), la alerta Unassigned (OPS-001, la calcula Signal Maker, OPR-33), mover un mensaje a otra request a mano (`link_message` del operador) y cerrar una request sin programar (spam, duplicado: OPR-20 §11.6).
@@ -152,11 +152,11 @@ Así la meta "analizado en menos de 1 minuto" (OPR-36, OPR-39) cuenta desde `req
 
 ### 8.1 Quién lo corre
 
-Un bucle dentro del servidor de Next, arrancado por `src/instrumentation-node.ts` (solo runtime `nodejs`, nunca en `next build`), en local, CI, staging y producción (P-1). Módulo nuevo `src/lib/entrada/`:
+Una tarea del **ciclo de fondo** del servidor de Next (P-1, ADR 0006): el único de opsRUN, arrancado por `src/instrumentation-node.ts` (solo runtime `nodejs`, nunca en `next build`), en local, CI, staging y producción. El ciclo es una sola pieza que corre varias tareas, cada una con su cadencia y una vuelta a la vez; la entrada de correo es la primera y el registrador de alertas de OPR-34 (PR #26) corre en el mismo ciclo. Módulo nuevo `src/lib/entrada/`:
 
 - `crearEntrada({ lectura, datos, reloj, alCrearRequest })` → `{ vuelta() }`: la lógica de §4 y §5, pura respecto a sus dependencias, que es lo que prueban los unitarios;
 - `src/lib/entrada/datos-sql.ts`: la llamada a `opsrun.ingest_request_email` y la marca de agua, como `opsrun_app` con `escritura: true` y actor `{ tipo: "system", proceso: "entrada_correo" }`. El servidor fija `opsrun.system_actor`; nunca `opsrun.auth_user_id`;
-- `src/lib/entrada/servidor.ts`: `iniciarEntrada()` con un `setInterval` de 15 s, una sola instancia por proceso (en `globalThis`, como el reconciliador de OPR-27) y una vuelta a la vez (si la anterior sigue, se salta).
+- `src/lib/entrada/servidor.ts`: registra la tarea `entrada_correo` en el ciclo de fondo, cada 15 s. El ciclo garantiza una sola instancia por proceso (en `globalThis`, como el reconciliador de OPR-27) y una vuelta a la vez por tarea (si la anterior sigue, se salta). La entrada no abre su propio `setInterval`.
 
 No es un operador: no pasa por `ejecutarAccion` ni por la action bar, y ninguna función del operador acepta su actor (G6, `require_operator()`).
 
@@ -215,7 +215,7 @@ Archivo nuevo `entrada_correo.test.sql`, con fixtures propios dentro de la trans
   - `alCrearRequest` se llama solo con `created` y después del commit;
   - **nada de PINCH viaja a la base:** los parámetros de cada llamada son exactamente mensaje, hilo y hora; ni `from`, ni `to`, ni `subject`, ni `body`;
   - el actor es de sistema (`entrada_correo`), nunca operador.
-- `iniciarEntrada`: una instancia por proceso y una vuelta a la vez (reloj inyectable, sin esperas).
+- La tarea `entrada_correo` en el ciclo de fondo: una instancia por proceso y una vuelta a la vez (reloj inyectable, sin esperas).
 - Puerto: `buscarMensajes` entra a `probarContratoDeLectura` (orden, filtro, tope de 200, paginación, `hay_mas`) y corre contra el falso y, con `BZZZBX_CONTRATO_REAL=1`, contra el real.
 - Falso: el control `correo_nuevo` (§10) genera un mensaje y su cambio, y su respuesta trae los ids.
 - Integración contra la base (`OPSRUN_REQUIERE_BASE=1`, en CI): **la carrera**. Dos conexiones llaman a la vez a `ingest_request_email` con dos mensajes distintos de un hilo nuevo; queda una sola request, un original y el otro `linked`. Y con el mismo mensaje en las dos, un solo `request_received`. Cada transacción se deshace al final o usa ids únicos de la prueba.
@@ -282,10 +282,10 @@ A partir de `OP030` (OPR-28 usa hasta `OP018` y el spec de las etapas, OPR-30/31
 - **Puerto:** `buscarMensajes` (§4.3) en `LecturaBzzzbx`, en el falso y en las pruebas de contrato; `lecturaOAusente` lo agrega a su lista.
 - **Falso y `/api/falso`:** control nuevo `{ accion: "correo_nuevo", respuesta_a?: string }`. Pone un `Message` entrante de correo inventado (`from: "new.requester@example.test"`, `to: ["requests@example.test"]`, asunto y cuerpo genéricos, `sent_at` = ahora) con ids `bx-msg-9NNN` y, sin `respuesta_a`, un hilo nuevo `bx-thread-9NNN`, con un contador del falso. Los ids `9NNN` no chocan con los de la seed ni con R8 de OPR-28. La respuesta de la ruta pasa a `{ ok: true, bzzzbx_message_id, bzzzbx_thread_id }`. `poner` sigue sirviendo para casos a mano.
 - **Seed:** no cambia. Las requests de la seed ya tienen su original vinculado, así que la recuperación las ve como `duplicate`.
-- **`src/instrumentation-node.ts`:** arranca `iniciarEntrada()`. Hoy solo hace algo en el servidor; la entrada corre también en local y CI (las E2E la necesitan).
-- **Tablero:** "at the top of Requests" (P-8). Si Henry elige la tarjeta, cambia el orden de la columna Requests en `src/lib/tablero/armar.ts` y su prueba.
+- **`src/instrumentation-node.ts`:** arranca el ciclo de fondo (ADR 0006), que corre la tarea `entrada_correo`. Hoy solo hace algo en el servidor; la entrada corre también en local y CI (las E2E la necesitan).
+- **Tablero:** "at the top of Requests" (P-8, abierta). Mientras no se decida, no cambia: Requests sigue con la más vieja arriba (OPR-25 S-1).
 - **`CONTEXT.md`:** agregar "Entrada de correo" (el proceso de sistema `entrada_correo`), "Marca de agua" (desde dónde recupera) y "Email received".
-- **ADR:** P-1 es el primer trabajo de fondo de opsRUN; si Henry lo aprueba, va en una ADR (0006).
+- **ADR 0006:** el ciclo de fondo del servidor (P-1): una sola pieza, arrancada por `instrumentation`, que corre varias tareas; la entrada de correo es la primera y el registrador de alertas de OPR-34 (PR #26) corre en el mismo ciclo.
 
 ## 11. Supuestos
 
@@ -308,6 +308,7 @@ A partir de `OP030` (OPR-28 usa hasta `OP018` y el spec de las etapas, OPR-30/31
 
 - **P-0. Migración.** §10.1 agrega una función del sistema, dos índices y un tipo de Audit, sin cambiar tablas, columnas, tipos, triggers ni vistas `v1_*`. Sin ella no hay cómo crear una request. **Recomiendo sí.**
 - **P-1. Quién corre la entrada.** Opciones: (a) un bucle cada 15 s dentro del servidor de Next, arrancado por `instrumentation`; (b) colgarla del sondeo del tablero (`/api/tablero/cambios`), como el despacho de OPR-27, sin trabajos de fondo; (c) un proceso o cron aparte. Con (b), un correo de las 3 AM no es request hasta que alguien abre el tablero, y ni OPS-001 ni el análisis "ahead of time" de OPR-36 corren sin request. **Recomiendo (a)**, con su ADR: es el primer trabajo de fondo, no necesita otra imagen ni otro contenedor, y la base deduplica si hay dos procesos.
+  - **Decisión:** (a), y es el **único ciclo de fondo de opsRUN**: una sola pieza en el servidor, arrancada por `instrumentation`, que corre varias tareas, cada una con su cadencia y sin pisarse (una vuelta a la vez por tarea). La entrada de correo es la primera tarea; el registrador de alertas de OPR-34 (PR #26) corre en el mismo ciclo, no en otro. Ninguna tarjeta abre un ciclo propio. Va en la ADR 0006. §8.1 ya lo describe así.
 - **P-2. Dónde vive el cursor.** (a) En memoria, con la recuperación de §4.3 al arrancar; (b) en una tabla nueva de opsRUN. La recuperación hace falta igual por `CursorCaducado`, así que la tabla solo ahorraría una relectura corta al arrancar, y sería una tabla más para G4 y G9. **Recomiendo (a).**
 - **P-3. Vincular por R number o job number en el asunto.** La tarjeta lo pide ("by email conversation and R/job number"). Hoy los correos salientes no llevan el R number en el asunto (BzzzBX pone el asunto, OPR-27 P-2), y buscar "R12" en asuntos de clientes daría falsos positivos ("Room R2"). **Recomiendo solo por hilo en esta tarjeta**, y sumar el R number o el job number cuando OPR-16/OPR-18 fijen un marcador en el asunto (por ejemplo `[R123]`), buscando solo ese marcador y solo cuando el hilo no tenga request.
 - **P-4. Audit al vincular una respuesta.** El catálogo no tiene un tipo para un correo entrante. **Recomiendo agregar `email_received` ("Email received")**: es una acción del sistema (el vínculo), da la línea de la respuesta en el Audit de E2E-1 y no copia nada de PINCH. Alternativa: no escribir Audit al vincular, porque el mensaje ya se ve en la conversación.
@@ -315,8 +316,24 @@ A partir de `OP030` (OPR-28 usa hasta `OP018` y el spec de las etapas, OPR-30/31
 - **P-6. Respuestas automáticas, rebotes y spam.** Sin un campo de BzzzBX que los marque y sin forma de cerrar una request sin programarla (OPR-20 §11.6), cualquier filtro escondería correos sin dejar rastro. **Recomiendo no filtrar en esta tarjeta** y llevar a OPR-6 la pregunta de si BzzzBX marca auto-replies y rebotes, y a OPR-20 §11.6 la de cerrar una request.
 - **P-7. Cómo pasa la request a la IA.** **Recomiendo que la entrada no cree `ai_analysis` ni instrucciones `ai_*`** (OPR-22 P-3), y deje el enganche `alCrearRequest` más el barrido de requests sin análisis para OPR-36 (§7). Alternativa: crear en la misma transacción un `ai_analysis` `pending`, que hoy exige una instrucción `ai_analyze_request` del catálogo que se va a quitar.
 - **P-8. "At the top of Requests".** La tarjeta dice que la request nueva sale arriba; el tablero ordena Requests por `received_at` con la más vieja arriba (OPR-25 S-1, por revisar contra R23). Según `CLAUDE.md`, manda la tarjeta. **Recomiendo seguir la tarjeta (la más nueva arriba)** y cambiar ese orden con OPR-15, salvo que R23 diga otra cosa. E1 no depende de la posición.
+  - **Sigue abierta:** Henry no la decidió. Mientras tanto se mantiene el orden actual del tablero (OPR-25 S-1, la más vieja arriba) y OPR-15 no lo cambia.
 
 Con las recomendaciones, OPR-15 trae **una migración** (§10.1), un método nuevo en el puerto con su prueba de contrato, un control del falso, el proceso `src/lib/entrada/` arrancado desde `instrumentation`, un guard nuevo y una ADR.
+### 12.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec ("Apruebo los tres specs, con un solo ciclo de fondo") con P-0 a P-7 según las recomendaciones. Quedó así:
+
+- **P-0:** sí a la migración de §10.1: `opsrun.ingest_request_email` (del sistema), los dos índices de `request_message` y el tipo `email_received`, sin cambiar tablas, columnas, tipos, triggers ni vistas `v1_*`. Códigos `OP030` a `OP034`.
+- **P-1:** la entrada corre en un ciclo de fondo dentro del servidor de Next, arrancado por `instrumentation`, y ese ciclo es el **único** de opsRUN: una sola pieza que corre varias tareas (la entrada de correo y el registrador de alertas de OPR-34, PR #26, y las que vengan). Se escribe la ADR 0006.
+- **P-2:** el cursor vive en memoria, con la recuperación de §4.3 al arrancar y tras `CursorCaducado`. Sin tabla nueva.
+- **P-3:** solo se vincula por hilo. El R number o el job number en el asunto esperan al marcador que fijen OPR-16/OPR-18.
+- **P-4:** se agrega `email_received` ("Email received") al catálogo de Audit.
+- **P-5:** sin importar el buzón anterior: con la base sin requests, la entrada empieza en "ahora".
+- **P-6:** no se filtran auto-replies, rebotes ni spam; la pregunta va a OPR-6 y a OPR-20 §11.6.
+- **P-7:** la entrada no crea `ai_analysis` ni instrucciones `ai_*`; deja el enganche `alCrearRequest` y el barrido para OPR-36.
+- **P-8:** **abierta.** Se mantiene el orden actual de Requests (OPR-25 S-1, la más vieja arriba).
+
+OPR-15 trae una migración (P-0), un método nuevo en el puerto con su prueba de contrato, un control del falso, la tarea `entrada_correo` del ciclo de fondo (P-1), el guard G15 y la ADR 0006.
 
 ## 13. Lo que espera a otras tarjetas
 
