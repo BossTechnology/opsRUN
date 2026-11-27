@@ -6,10 +6,14 @@ export const metadata: Metadata = {
   description: "Operations console",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children, ventana }: LayoutProps<"/">) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* La Job window encima del tablero (ruta interceptada, OPR-26). */}
+        {ventana}
+      </body>
     </html>
   );
 }

@@ -10,17 +10,21 @@
 -- observados en Audit.
 --
 -- La carga scripts/base-local.mjs como opsrun_migrador (el dueño), justo
--- después de aplicar las migraciones. Los operadores van sin auth_user_id: el
--- enlace con el usuario del GoTrue de la caja llega con OPR-2.
+-- después de aplicar las migraciones. Los operadores llevan un auth_user_id
+-- INVENTADO y fijo, solo para el actor de demo de la Job window (OPR-26, P-2):
+-- sin login, es lo que deja a un operador elegido en el selector "Acting as"
+-- correr una escritura. El enlace con el usuario real del GoTrue de la caja
+-- llega con OPR-2 y OPR-21; esta seed no se carga en el servidor.
 
 -- ---------------------------------------------------------------------------
--- Operadores: dos de Operations y dos de Finance. Sin login enlazado (OPR-2).
+-- Operadores: dos de Operations y dos de Finance. Sus auth_user_id son
+-- inventados y fijos (prefijo de0…), no usuarios reales del GoTrue (OPR-2).
 -- ---------------------------------------------------------------------------
-insert into opsrun.operator (id, email, display_name, team) values
-  ('0a000000-0000-4000-8000-0000000000a1', 'ops.uno@example.test',     'Ops Uno',     'operations'),
-  ('0a000000-0000-4000-8000-0000000000a2', 'ops.dos@example.test',     'Ops Dos',     'operations'),
-  ('0a000000-0000-4000-8000-0000000000b1', 'finance.uno@example.test', 'Finance Uno', 'finance'),
-  ('0a000000-0000-4000-8000-0000000000b2', 'finance.dos@example.test', 'Finance Dos', 'finance');
+insert into opsrun.operator (id, auth_user_id, email, display_name, team) values
+  ('0a000000-0000-4000-8000-0000000000a1', 'de000000-0000-4000-8000-0000000000a1', 'ops.uno@example.test',     'Ops Uno',     'operations'),
+  ('0a000000-0000-4000-8000-0000000000a2', 'de000000-0000-4000-8000-0000000000a2', 'ops.dos@example.test',     'Ops Dos',     'operations'),
+  ('0a000000-0000-4000-8000-0000000000b1', 'de000000-0000-4000-8000-0000000000b1', 'finance.uno@example.test', 'Finance Uno', 'finance'),
+  ('0a000000-0000-4000-8000-0000000000b2', 'de000000-0000-4000-8000-0000000000b2', 'finance.dos@example.test', 'Finance Dos', 'finance');
 
 insert into opsrun.audit_event (event_type, actor_kind, occurred_at, details)
 select 'operator_added', 'system', now() - interval '30 days', jsonb_build_object('operator_id', id)
@@ -55,6 +59,9 @@ insert into opsrun.message_template (key, version, channel, subject, body, activ
 --   R4 In Progress (check-in observado)
 --   R5 Complete (terminada a mano, sin fotos: OSS automático)
 --   R6 Validation (aprobada, PO escrito, Paid observado)
+--   R7 Requests, lista para enlazar (OPR-26, P-3): dueño, las tres
+--      confirmaciones vigentes y un job inventado en el falso que encaja
+--      (bx-job-0107, EX-00107): cliente, propiedad, fecha, ventana y equipo.
 -- ---------------------------------------------------------------------------
 insert into opsrun.request (
   id, received_at, owner_operator_id,
@@ -83,7 +90,11 @@ insert into opsrun.request (
   ('b0000000-0000-4000-8000-0000000000a6', now() - interval '9 days', '0a000000-0000-4000-8000-0000000000b1',
    'bx-cust-0003', 'bx-cont-0004', 'bx-prop-0006', null,
    null, 4, 'bx-svc-0003', current_date - 5, '09:00', '15:00',
-   null, null, 'bx-team-0002');
+   null, null, 'bx-team-0002'),
+  ('b0000000-0000-4000-8000-0000000000a7', now() - interval '4 hours', '0a000000-0000-4000-8000-0000000000a2',
+   'bx-cust-0002', 'bx-cont-0002', 'bx-prop-0004', null,
+   null, 2, 'bx-svc-0001', current_date + 3, '13:00', '16:00',
+   null, null, 'bx-team-0001');
 
 -- El correo original de cada request.
 insert into opsrun.request_message (request_id, bzzzbx_message_id, bzzzbx_thread_id, channel, direction, is_original, actor_kind, linked_at)
@@ -189,6 +200,21 @@ from opsrun.request as r
 cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
 where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-0000000000a4',
                'b0000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-0000000000a6');
+
+-- R7: en Requests, con dueño y las tres confirmaciones vigentes: el gate de
+-- Schedule se cumple y se puede enlazar con bx-job-0107 (Fase A, OPR-28).
+insert into opsrun.request_confirmation (request_id, kind, method, confirmed_value, actor_operator_id, confirmed_at)
+select r.id, k, case when k = 'cleaner' then 'phone'::opsrun.confirmation_method else 'operator' end,
+       '{}', r.owner_operator_id, r.received_at + interval '30 minutes'
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id = 'b0000000-0000-4000-8000-0000000000a7';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at)
+select r.id, k::text || '_confirmed', 'operator', r.owner_operator_id, r.received_at + interval '30 minutes'
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id = 'b0000000-0000-4000-8000-0000000000a7';
 
 insert into opsrun.instruction (request_id, type, idempotency_key, payload, actor_kind, actor_operator_id,
                                 status, sent_at, resolved_at, attempts, bzzzbx_reference)

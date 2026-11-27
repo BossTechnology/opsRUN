@@ -9,8 +9,8 @@ import type { FilaRequest } from "./tipos";
 const ISO = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 const iso = (col: string) => `to_char(${col} at time zone 'UTC', ${ISO})`;
 
-export const CONSULTA_FILAS = `
-select r.id::text,
+/** Las columnas del tablero y de dónde salen; la Job window (OPR-26) agrega las suyas. */
+export const COLUMNAS_FILA = `r.id::text,
        r.r_number::int as r_number,
        r.status::text,
        ${iso("r.received_at")} as received_at,
@@ -24,14 +24,19 @@ select r.id::text,
        ${iso("r.ended_manually_at")} as ended_manually_at,
        r.oss_mark::text,
        ${iso("r.approved_at")} as approved_at,
-       m.bzzzbx_thread_id
-from opsrun.request as r
+       m.bzzzbx_thread_id`;
+
+export const DESDE_FILA = `from opsrun.request as r
 left join opsrun.operator as o on o.id = r.owner_operator_id
 left join lateral (
   select rm.bzzzbx_thread_id from opsrun.request_message as rm
   where rm.request_id = r.id and rm.is_original
   limit 1
-) as m on true
+) as m on true`;
+
+export const CONSULTA_FILAS = `
+select ${COLUMNAS_FILA}
+${DESDE_FILA}
 order by r.r_number`;
 
 /** Cambia con cada escritura de opsRUN: Audit es append-only y toda acción deja uno. */

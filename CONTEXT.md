@@ -99,6 +99,21 @@ Términos internos del esquema de opsRUN (no los ve el operador). Detalle en `do
 | Fase A | Primer lanzamiento (Runbook §6.1, OPR-42): el job se crea en las herramientas de PINCH y opsRUN registra decisiones y observa; casi no manda instrucciones. | OPR-28, OPR-42 |
 | Enlace (job link) | En la Fase A, la confirmación del operador de que un job observado en BzzzBX es el de una request. La deja Scheduled con el crosswalk ID y el job number del job; en Audit es `request_scheduled` con `mode: "linked"`. Un candidato rechazado (`job_link_rejected`) no se vuelve a proponer para esa request. | OPR-28, spec Fase A |
 
+## Job window (OPR-26)
+
+Términos de la ventana de cada job. Detalle en `docs/spec/opr-26-job-window.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Job window | La ventana de un job: arriba el encabezado y la action bar, a la izquierda la conversación y a la derecha las pestañas. Se abre encima del tablero en `/job/[requestId]` (ruta interceptada); la recarga y la URL directa la abren como página completa. | OPR-26 |
+| Action bar | `Action ▾` + `Go` de la Job window. Elegir una acción abre un panel con su nombre, Reason y `Cancel`/`Go`. | OPR-26, §5 |
+| Registro de acciones | Lista en `src/lib/acciones/` con cada acción de la action bar: etapas, motivo, si necesita BzzzBX, bloqueos y, cuando su tarjeta la construye, el ejecutor. | OPR-26 §5.4 |
+| `ejecutarAccion` | El único camino para correr una acción: recalcula la disponibilidad en el servidor y rechaza lo que no sea `disponible`. La interfaz no es la defensa. | OPR-26 §5.4 |
+| Disponibilidad | Estado de una acción para un job: `disponible`, `no_aplica` (no aparece), `bloqueada` (en gris con su motivo), `sin_construir` ("Not built yet") o `fuera_de_release` ("Not available in this release"). | OPR-26 §5.2 |
+| Ranura | Lugar de la Job window que otra tarjeta llena (conversación, enlace de la Fase A, Audit, Alerts, Job tracker, Billing), con su contrato de props y su marcador `data-ranura`. | OPR-26 §7 |
+| Acting as | Selector solo local con el que la demo elige qué operador de la seed actúa, sin login. Existe únicamente con `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`; si falta una, no hay selector y la cookie se ignora. | OPR-26, P-2 |
+| Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Provisional hasta que OPR-34 la separe de Waiting. | OPR-26 S-8, OPR-34 |
+
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
 - Reject · re-clean, las pestañas $ y People, editar To/Cc y el número temporal: se ven, no corren.

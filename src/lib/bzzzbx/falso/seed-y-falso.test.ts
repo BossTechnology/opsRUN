@@ -60,6 +60,8 @@ describe("seed y falso: IDs escritos en la seed", () => {
 });
 
 function urlApp(): string | null {
+  // OPSRUN_DATABASE_URL apunta a otra base (por ejemplo una temporal) sin tocar la compartida.
+  if (process.env.OPSRUN_DATABASE_URL) return process.env.OPSRUN_DATABASE_URL;
   try {
     return urlsSupabaseLocal().app;
   } catch {

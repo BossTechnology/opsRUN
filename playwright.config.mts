@@ -25,6 +25,8 @@ export default defineConfig({
     url: `http://127.0.0.1:${PUERTO}`,
     reuseExistingServer: !enCI,
     timeout: 180_000,
-    env: entornoSupabaseLocal(),
+    // OPSRUN_ACTOR_DEMO y BZZZBX_MODO=falso: el selector "Acting as" de la Job
+    // window existe solo con las dos (y sin OPSRUN_SERVIDOR). OPR-26, P-2.
+    env: { ...entornoSupabaseLocal(), BZZZBX_MODO: "falso", OPSRUN_ACTOR_DEMO: "1" },
   },
 });

@@ -3,7 +3,7 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementación por empezar.
+- OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementada en la rama `opr-26-job-window-impl` (PR contra `main`, sin fusionar: lo fusiona Henry). El PR #13 (solo el spec) sigue sin fusionar.
 - OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
 - OPR-28, Fase A: enlace request ↔ job observado (PR #12): fusionado en `main`, sin pantalla todavía.
 - OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
@@ -69,9 +69,19 @@
   - pgTAP `fase_a_enlace.test.sql` (27). G6 y la prueba nueva se vieron en rojo quitando `require_operator()`. Prueba de punta a punta contra la seed (`OPSRUN_REQUIERE_BASE=1`) dentro de una transacción que se deshace.
   - Validado en local en una base temporal del Supabase local (alta, migraciones y seed): los pgTAP en verde salvo `roles.test.sql`, que pide el esquema `auth` que una base vacía no tiene; Vitest de punta a punta en verde. lint, typecheck y `pnpm test` en verde. `supabase test db` completo, en la CI.
 
+- 2026-11-27: OPR-26, Job window (rama `opr-26-job-window-impl`):
+  - Ruta `/job/[requestId]` con ruta interceptada `@ventana/(.)job/[requestId]` (P-1): la tarjeta del tablero es un enlace y la ventana se abre encima; Esc, ✕ o atrás vuelven sin recargar. La recarga y la URL directa abren la página completa, con "Board". Con Cache Components, Next deja oculta (no desmontada) la ventana que se cerró.
+  - `src/lib/ventana/`: `armarVentana` (pura; saca etapa, nombre y estado de `armarTablero`), consultas de solo lectura de §8.1 (una transacción), lectura de BzzzBX con presupuesto de 1,5 s y memoria por request (`leerVentanaDeBzzzbx`), `propuestaParaLaVentana` para la ranura del enlace. Sin migración.
+  - `src/lib/acciones/`: registro de las acciones de §5.3, `disponibilidadDe` (los cinco valores) y `ejecutar` (el único camino; recalcula la disponibilidad, valida el motivo y la versión, y llama al ejecutor con el actor). Todas las de V1.1 beta salen `sin_construir`; Reject · re-clean, `fuera_de_release`. La Server Action `ejecutarAccion` está en `src/app/_ventana/acciones.ts`.
+  - UI en `src/app/_ventana/`: encabezado, pestañas (tablist accesible, estado en el cliente y `?tab=` con `history.replaceState`), action bar con panel, franja de BzzzBX caído, sondeo (mismo `/api/tablero/cambios`) y las ranuras con su contrato en `src/lib/ventana/ranuras.ts`.
+  - P-6: `Job.price` opcional en el puerto y en el falso (con prueba de contrato). P-3: R7 en la seed (dueño, las tres confirmaciones) y `bx-job-0107` en el falso. P-2: selector "Acting as" con las tres condiciones, `OPSRUN_ACTOR_DEMO` en `PROHIBIDAS_EN_SERVIDOR` y `auth_user_id` inventados en la seed.
+  - Pruebas: Vitest nuevos (`armar`, disponibilidad, `ejecutar`, `leer`, consultas contra la seed, actor de demo, componentes) y Playwright A1 a A16 (`e2e/job-window.spec.ts`; A15 queda `fixme` hasta que OPR-28 ponga la ranura). Cada guard de P-2 y el de `ejecutarAccion` se vieron fallar quitando su condición.
+  - En local: lint, typecheck y Vitest (sin `pool.test.ts`, que se deja a la CI) en verde; Playwright A1 a A16 y las del tablero contra el build de producción y una base temporal (alta, migraciones y seed nueva); pgTAP contra esa base, todos en verde salvo `roles.test.sql`, que pide el esquema `auth` que una base temporal no tiene.
+
 ## Pendiente
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
-- Base local: `pnpm db:reset` para cargar la seed nueva (pide OK de Henry).
+- Base local: `pnpm db:reset` para cargar la seed nueva, con R7 y los `auth_user_id` de demo (pide OK de Henry). Sin eso, la demo local no tiene R7 ni operadores que puedan actuar.
+- OPR-26: revisar la Job window contra el prototipo R23 (S-1 del spec). Supuestos que tomó la implementación (ver el PR): 404 con estado HTTP 200 al ser streaming, A5 de R1 sigue el §4.1 (pestaña "4B"), `motivo: "no"` oculta el campo Reason, A7 entrega el clic al manejador de React porque React ignora los clics sobre un botón `disabled`.
 - Fase A (OPR-28): botones de enlace en la Job window cuando exista OPR-26; deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
 - `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` con una migración nueva: la base local queda con una migración que otras ramas no tienen en disco, y `migrar` las rechaza hasta fusionar o hacer `pnpm db:reset`. Pasó con `20261125120000_fase_a_enlace`; el 2026-11-25 se reseteó la base local y se preparó con las migraciones de `main`. Hasta fusionar el PR de OPR-28, correr `pnpm test` en esta rama la vuelve a aplicar.
 - OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
@@ -89,6 +99,7 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- OPR-26: implementar la Job window según su spec. Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35).
+- Henry revisa y fusiona el PR de OPR-26 (y el #13 del spec). Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35) se enchufan en las ranuras de `src/app/_ventana/ranuras.tsx`; cada tarjeta de etapa agrega su `ejecutor` a `src/lib/acciones/registro.ts`.
+- Demo del lunes: `pnpm db:reset` (con OK de Henry), `pnpm local` y en la Job window elegir "Acting as".
 - Henry comparte el prototipo R23 para ajustar el aspecto del tablero.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.

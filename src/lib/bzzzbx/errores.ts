@@ -48,3 +48,4 @@ const conNombre = (e: unknown, nombre: string) => e instanceof Error && e.name =
 export const esNoDisponible = (e: unknown): boolean => conNombre(e, "BzzzbxNoDisponible");
 export const esCursorCaducado = (e: unknown): boolean => conNombre(e, "CursorCaducado");
 export const esInstruccionRechazada = (e: unknown): boolean => conNombre(e, "InstruccionRechazada");
+export const esFiltroInvalido = (e: unknown): boolean => conNombre(e, "FiltroInvalido");

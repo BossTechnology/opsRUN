@@ -12,6 +12,8 @@ import { comoOpsrunApp, crearPool } from "../db/pool";
 import { leerFilas, leerMarca } from "./consultas";
 
 function urlApp(): string | null {
+  // OPSRUN_DATABASE_URL apunta a otra base (por ejemplo una temporal) sin tocar la compartida.
+  if (process.env.OPSRUN_DATABASE_URL) return process.env.OPSRUN_DATABASE_URL;
   try {
     return urlsSupabaseLocal().app;
   } catch {
@@ -27,10 +29,10 @@ conBase("consultas del tablero (seed)", () => {
   const origen = crearPool({ tipo: "url", url: url ?? "postgresql://sin-base" });
   afterAll(() => origen.end());
 
-  it("lee las seis requests de la seed con sus tipos de texto", async () => {
+  it("lee las siete requests de la seed con sus tipos de texto", async () => {
     const filas = await comoOpsrunApp(leerFilas, { origen });
     const seed = filas.filter((f) => f.id.startsWith("b0000000-0000-4000-8000-0000000000a"));
-    expect(seed).toHaveLength(6);
+    expect(seed).toHaveLength(7);
     const r2 = seed.find((f) => f.id.endsWith("a2"))!;
     expect(r2).toMatchObject({
       status: "open",

@@ -405,3 +405,397 @@ h1 {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+a.tarjeta {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.tarjeta:hover {
+  border-color: var(--tenue);
+}
+
+a.tarjeta:focus-visible {
+  outline: 2px solid var(--texto);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Job window (OPR-26)
+   --------------------------------------------------------------------------- */
+
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: start center;
+  padding: 2vh 2vw;
+  background: rgb(0 0 0 / 0.45);
+  overflow-y: auto;
+}
+
+.modal-ventana {
+  position: relative;
+  width: min(75rem, 100%);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 0.75rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.3);
+  outline: none;
+}
+
+.modal-cerrar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  font: inherit;
+  color: inherit;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.375rem;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+}
+
+.pagina-job {
+  max-width: 75rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.ventana {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.ventana-vacia {
+  place-items: start;
+}
+
+.ventana-nav a,
+.ventana-vacia a {
+  color: inherit;
+}
+
+.franja-caida {
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--rojo);
+}
+
+.ventana-encabezado {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1.5rem;
+  /* A la derecha queda lugar para el ✕ del modal. */
+  padding: 0.75rem 3.25rem 0.75rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+}
+
+.ventana-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ventana-titulo h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.stage[data-etapa="cancelled"] {
+  color: var(--rojo);
+}
+
+.marca-paid {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.job-linea {
+  grid-column: 1;
+  margin: 0;
+  color: var(--tenue);
+}
+
+.ventana-datos {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+  align-content: start;
+}
+
+.ventana-datos dt {
+  font-size: 0.7rem;
+  color: var(--tenue);
+  text-transform: uppercase;
+}
+
+.ventana-datos dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.cargas {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.cargas li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.carga-barra {
+  display: inline-block;
+  width: 3rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--borde);
+  overflow: hidden;
+}
+
+.carga-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--tenue);
+}
+
+.ventana-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1.5rem;
+}
+
+.barra-acciones {
+  flex: 1;
+  min-width: 18rem;
+}
+
+.barra-acciones-fila {
+  display: flex;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.barra-acciones label,
+.actor-demo {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.etiqueta-campo {
+  font-size: 0.7rem;
+  color: var(--tenue);
+  text-transform: uppercase;
+}
+
+.ventana select,
+.ventana textarea,
+.ventana button {
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.ventana button {
+  cursor: pointer;
+}
+
+.ventana button:disabled,
+.ventana option:disabled {
+  color: var(--tenue);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.panel-accion {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+}
+
+.panel-accion h3,
+.panel-accion p {
+  margin: 0;
+}
+
+.nota-gris {
+  color: var(--tenue);
+}
+
+.panel-accion textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.contador {
+  justify-self: end;
+  font-size: 0.7rem;
+  color: var(--tenue);
+}
+
+.panel-acciones-botones {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.resultado {
+  min-height: 1.25rem;
+  font-weight: 600;
+}
+
+.resultado[data-tipo="rechazada"] {
+  color: var(--rojo);
+}
+
+.resultado[data-tipo="guardada"] {
+  color: var(--ok);
+}
+
+.ventana-cuerpo {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+@media (max-width: 52rem) {
+  .ventana-cuerpo {
+    grid-template-columns: 1fr;
+  }
+
+  .ventana-encabezado {
+    grid-template-columns: 1fr;
+  }
+
+  .ventana-datos {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.ventana-izquierda,
+.ventana-derecha {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  min-height: 12rem;
+}
+
+.ranura h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.ranura p {
+  margin: 0;
+  color: var(--tenue);
+}
+
+.pestanas-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--borde);
+  margin-bottom: 0.75rem;
+}
+
+.ventana .pestana {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: 0.4rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ventana .pestana[aria-selected="true"] {
+  border-bottom-color: var(--texto);
+  font-weight: 700;
+}
+
+.ventana .pestana[aria-disabled="true"] {
+  color: var(--tenue);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ventana .pestana-alertas {
+  margin-left: auto;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.campos dt {
+  font-size: 0.7rem;
+  color: var(--tenue);
+  text-transform: uppercase;
+}
+
+.campos dd {
+  margin: 0;
+}
+
+.no-encontrado {
+  color: var(--ambar);
+  font-size: 0.8rem;
+}
+
+.lista-alertas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
