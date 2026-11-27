@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import pg from "pg";
 
 /**
  * La entrada de correo (OPR-15, criterios E1 a E6 del spec) contra el build de
@@ -34,6 +35,23 @@ async function esperarTarjetaNueva(page: Page, antes: string[], timeout = UN_MIN
     nueva = distintas[0]!;
   }).toPass({ timeout, intervals: [1000] });
   return nueva;
+}
+
+/** Los eventos de Audit de una request, en orden, leídos como opsrun_app (la URL la fija playwright.config.mts). */
+async function auditDe(requestId: string): Promise<{ event_type: string; actor_kind: string }[]> {
+  const url = process.env.OPSRUN_DATABASE_URL;
+  if (!url) throw new Error("falta OPSRUN_DATABASE_URL (la fija playwright.config.mts)");
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    const { rows } = await c.query<{ event_type: string; actor_kind: string }>(
+      "select event_type, actor_kind::text as actor_kind from opsrun.audit_event where request_id = $1 order by id",
+      [requestId],
+    );
+    return rows;
+  } finally {
+    await c.end();
+  }
 }
 
 const tarjeta = (page: Page, requestId: string) => page.locator(`[data-testid="tarjeta"][data-request="${requestId}"]`);
@@ -83,7 +101,7 @@ test("E2: un correo, una request", async ({ page }) => {
   expect(await idsDeRequests(page)).toEqual(antes);
 });
 
-test("E3: la respuesta va a su hilo: no hay otra tarjeta, enciende el chat y Audit lo cuenta", async ({ page }) => {
+test("E3: la respuesta va a su hilo: no hay otra tarjeta, enciende el chat y Audit lo cuenta (leído de la base)", async ({ page }) => {
   test.setTimeout(150_000);
   await page.goto("/");
   const antes = await idsDeRequests(page);
@@ -93,14 +111,12 @@ test("E3: la respuesta va a su hilo: no hay otra tarjeta, enciende el chat y Aud
   await expect(tarjeta(page, requestId).getByTestId("chat")).toBeVisible({ timeout: UN_MINUTO });
   expect(await idsDeRequests(page)).toEqual(antes);
 
-  await page.goto(`/job/${requestId}?tab=audit`);
-  const audit = page.locator('[data-ranura="audit"]');
-  await expect(audit.getByRole("list", { name: "Audit" })).toBeVisible();
-  const fila = (evento: string) => audit.getByTestId("audit-fila").filter({ has: page.getByTestId("audit-evento").getByText(evento, { exact: true }) });
-  await expect(fila("Request received")).toHaveCount(1, { timeout: UN_MINUTO });
-  await expect(fila("Email received")).toHaveCount(1, { timeout: UN_MINUTO });
-  await expect(fila("Request received").getByTestId("audit-persona")).toHaveText("opsRUN");
-  await expect(fila("Email received").getByTestId("audit-persona")).toHaveText("opsRUN");
+  // La pestaña Audit existe desde Scheduled (OPR-35): una request en Requests no la tiene. Audit se lee de la base,
+  // como opsrun_app, la conexión del servidor.
+  await expect.poll(() => auditDe(requestId), { timeout: UN_MINUTO }).toEqual([
+    { event_type: "request_received", actor_kind: "system" },
+    { event_type: "email_received", actor_kind: "system" },
+  ]);
 
   await page.goto(`/job/${requestId}`);
   const respuesta = page.locator('[data-ranura="conversacion"]').getByTestId("entrada").filter({ hasText: "can you clean the unit this week" });
