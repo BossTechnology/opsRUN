@@ -177,32 +177,3 @@ export async function entregarPorClave(deps: DependenciasDeDespacho, idempotency
   if (!abierta || abierta.status !== "pending") return "no_abierta";
   return entregarInstruccion(deps, abierta);
 }
-
-export type Reconciliador = (opciones?: { forzar?: boolean }) => Promise<ResumenDeReconciliacion | null>;
-
-/**
- * La reconciliación a lo sumo una vez cada `minimoMs` por proceso (S-15), y de a
- * una: si ya hay una corriendo, quien llega espera la misma. Devuelve null si
- * todavía no toca.
- */
-export function crearReconciliador({
-  deps,
-  minimoMs = 5000,
-  ahora = () => Date.now(),
-}: {
-  deps: () => DependenciasDeDespacho;
-  minimoMs?: number;
-  ahora?: () => number;
-}): Reconciliador {
-  let ultima = Number.NEGATIVE_INFINITY;
-  let enCurso: Promise<ResumenDeReconciliacion> | null = null;
-  return async ({ forzar = false } = {}) => {
-    if (enCurso) return enCurso;
-    if (!forzar && ahora() - ultima < minimoMs) return null;
-    ultima = ahora();
-    enCurso = reconciliarInstrucciones(deps()).finally(() => {
-      enCurso = null;
-    });
-    return enCurso;
-  };
-}

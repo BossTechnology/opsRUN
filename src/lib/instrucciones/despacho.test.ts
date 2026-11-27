@@ -14,7 +14,6 @@ import type { Resultado } from "../bzzzbx/tipos";
 
 import {
   cierreDe,
-  crearReconciliador,
   entregarPorClave,
   reconciliarInstrucciones,
   type CierreDeInstruccion,
@@ -276,28 +275,5 @@ describe("guard 'nada sale solo' (b): el despacho no crea instrucciones", () => 
     expect(entregar).not.toHaveBeenCalled();
     // El contrato de datos del despacho no tiene ninguna operación de crear.
     expect(Object.keys(base.datos).sort()).toEqual(["abierta", "abiertas", "registrarEntrega", "resolver"]);
-  });
-});
-
-describe("crearReconciliador: a lo sumo una vez cada 5 s por proceso (S-15)", () => {
-  it("no corre dos veces dentro de la ventana, salvo que se fuerce, y comparte la que está en curso", async () => {
-    let t = 1_000_000;
-    const base = baseEnMemoria([]);
-    const instrucciones = { entregar: vi.fn(), estado: vi.fn(), resultadosDesde: vi.fn() } as unknown as InstruccionesBzzzbx;
-    const reconciliar = crearReconciliador({ deps: () => ({ instrucciones, datos: base.datos }), ahora: () => t });
-
-    expect(await reconciliar()).not.toBeNull();
-    t += 4_999;
-    expect(await reconciliar()).toBeNull();
-    expect(await reconciliar({ forzar: true })).not.toBeNull();
-    t += 5_000;
-    expect(await reconciliar()).not.toBeNull();
-    expect(base.datos.abiertas).toHaveBeenCalledTimes(3);
-
-    // En curso: quien llega espera la misma.
-    t += 10_000;
-    const [a, b] = await Promise.all([reconciliar(), reconciliar()]);
-    expect(a).toBe(b);
-    expect(base.datos.abiertas).toHaveBeenCalledTimes(4);
   });
 });

@@ -57,12 +57,11 @@ async function escribir(page: Page, texto: string) {
 /** La burbuja del hilo que contiene un texto. */
 const burbuja = (page: Page, texto: string) => entradas(page).filter({ hasText: texto });
 
-/** Deja que lo enviado cierre: el sondeo reconcilia y la ranura dice cuántos envíos siguen abiertos. */
+/** Deja que lo enviado cierre: la tarea del ciclo reconcilia (cada 5 s) y la ranura dice cuántos envíos siguen abiertos. */
 async function esperarCierre(page: Page) {
   await expect
     .poll(
       async () => {
-        await page.request.get("/api/tablero/cambios");
         await page.reload();
         return await conversacion(page).getAttribute("data-abiertas");
       },

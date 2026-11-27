@@ -176,7 +176,7 @@ OPR-23 está bloqueada por OPR-2 y sin spec. Para que un Send llegue al falso ha
 
 - **Entregar.** Después de confirmar la transacción del operador, `entregar` con la `idempotency_key`, el `tipo`, el `payload` y el actor operador. Si acusa, `opsrun.record_instruction_delivery(key, bzzzbx_reference)` como sistema (`sent`, `sent_at`, `attempts + 1`). Si lanza `BzzzbxNoDisponible`, la instrucción queda `pending` y se reintenta con la misma clave. Si lanza `InstruccionRechazada`, `opsrun.resolve_instruction(key, 'failed', …)`.
 - **Reconciliar.** `reconciliarInstrucciones()` toma las `send_*` abiertas (`pending` o `sent`) y, por cada una, pide `estado(key)` (o vuelve a `entregar` si sigue `pending`) y escribe el cierre con `opsrun.resolve_instruction` como sistema (`opsrun.system_actor = 'reconciliador'`). Traducción de OPR-22 §4.3: `confirmada` → `confirmed` (con `datos.bzzzbx_message_id`, la función crea el `request_message` saliente con su `instruction_id`), `fallida` → `failed`, `sin_confirmar` → `timed_out`, `en_curso` con paso `dispatched` o posterior → `sent`.
-- **Cuándo corre.** Al final del ejecutor de `send_*` y en cada llamada a `/api/tablero/cambios`, a lo sumo una vez cada 5 s por proceso [S-15]. Sin trabajos de fondo nuevos. Es sin estado: lee las abiertas de la base y pregunta por clave, así que un reinicio no pierde nada.
+- **Cuándo corre.** Al final del ejecutor de `send_*` (la entrega) y, para cerrar lo abierto, como la tarea `reconciliacion_envios` del ciclo de fondo único (ADR 0006), cada 5 s [S-15]. Una lectura nunca escribe: el sondeo del tablero ya no reconcilia. Es sin estado: lee las abiertas de la base y pregunta por clave, así que un reinicio no pierde nada.
 - No hay reintento automático de una `failed`: el operador usa Edit and resend.
 
 ## 8. Migración (sí hace falta)
@@ -283,7 +283,7 @@ Contra el build de producción, la seed (con P-3 y lo de OPR-26) y el falso, con
 | S-12 | La clave de idempotencia de un Send la genera el formulario y es la `idempotency_key` de la instrucción (OPR-22 S-7 pide que coincida con el id; se puede usar el mismo valor como `id`). |
 | S-13 | Las notas son append-only (OPR-20 §11.8 sigue abierta). |
 | S-14 | El valor de un borrador de IA es `{ "body": "…" }`. |
-| S-15 | La reconciliación corre al enviar y en el sondeo del tablero, a lo sumo cada 5 s por proceso. |
+| S-15 | La entrega corre al enviar; la reconciliación es una tarea del ciclo de fondo, cada 5 s (antes, colgaba del sondeo del tablero). |
 | S-16 | El Audit de un envío (`email_sent`, `text_sent`) se escribe cuando el operador envía, con su `instruction_id`; el resultado se ve en la instrucción y, si falla, en `instruction_failed`. |
 
 ### 12.2 Preguntas para Henry
