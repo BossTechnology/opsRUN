@@ -8,7 +8,7 @@
  */
 import { esNoDisponible, BzzzbxNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
-import type { AlertResult, Message } from "../bzzzbx/tipos";
+import type { AlertResult, Message, Photo } from "../bzzzbx/tipos";
 import { leerDeBzzzbx } from "../tablero/leer";
 
 import { LEIDOS_VENTANA_VACIOS, type FilaVentana, type LeidosVentana } from "./tipos";
@@ -33,10 +33,12 @@ export function conPresupuesto<T>(trabajo: Promise<T>, ms: number): Promise<T> {
 
 async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzzbx): Promise<LeidosVentana> {
   // Una sola fila: el original va por `bzzzbx_thread_id`, como en el tablero.
-  const [base, contacto, equipo] = await Promise.all([
+  const [base, contacto, equipo, fotos] = await Promise.all([
     leerDeBzzzbx([{ ...fila, bzzzbx_thread_id: hilos[0] ?? fila.bzzzbx_thread_id }], lectura),
     fila.bzzzbx_contact_id ? lectura.obtener("contact", fila.bzzzbx_contact_id) : null,
     fila.bzzzbx_team_id ? lectura.obtener("cleaner_team", fila.bzzzbx_team_id) : null,
+    // La galería del Job tracker (OPR-30): solo la lista; la imagen llega por /api/fotos.
+    fila.bzzzbx_job_id ? lectura.listarPor("photo", { bzzzbx_job_id: fila.bzzzbx_job_id }) : ([] as Photo[]),
   ]);
 
   // Los demás hilos de la request y las alertas de los mensajes de todos (S-8).
@@ -56,6 +58,7 @@ async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzz
     alertas: [...alertas.values()],
     contactos: contacto ? [contacto] : [],
     equipos: equipo ? [equipo] : [],
+    fotos,
   };
 }
 

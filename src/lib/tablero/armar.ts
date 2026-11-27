@@ -3,8 +3,9 @@
  * BzzzBX. Función pura: sin base, sin puerto, sin reloj propio.
  */
 import type { AlertResult, JobTrackerEvent } from "../bzzzbx/tipos";
+import { poVigente } from "../billing/po";
 
-import { fechaYVentana, horaOFecha, iniciales } from "./formato";
+import { diaCorto, fechaYVentana, horaOFecha, iniciales } from "./formato";
 import {
   ETAPAS,
   SIN_VALOR,
@@ -92,14 +93,16 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
     const spaceId = job ? job.bzzzbx_space_id : fila.bzzzbx_space_id;
     const serviceId = job?.bzzzbx_service_id ?? fila.bzzzbx_service_id;
     const customerId = job?.bzzzbx_customer_id ?? fila.bzzzbx_customer_id;
-    const po = job ? job.po_number : fila.po_number;
+    // El PO vigente (OPR-32, P-2): el capturado en opsRUN, el del job en PINCH o el del borrador.
+    const po = poVigente({ capturado: fila.entered_po_number, pinch: job?.po_number, borrador: fila.po_number });
 
     const property = propertyId ? properties.get(propertyId) : undefined;
     const service = serviceId ? services.get(serviceId) : undefined;
     const customer = customerId ? customers.get(customerId) : undefined;
     const pago = fila.bzzzbx_job_id ? pagos.get(fila.bzzzbx_job_id) : undefined;
     const evs = fila.bzzzbx_job_id ? (eventos.get(fila.bzzzbx_job_id) ?? []) : [];
-    const alertas = abiertas.get(fila.id) ?? [];
+    // Una alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando abierta (OPR-30, P-7).
+    const alertas = (abiertas.get(fila.id) ?? []).filter((a) => !fila.alertas_limpiadas.includes(a.bzzzbx_alert_id));
 
     const checkIn = primero(evs, "checked_in");
     const fin = primero(evs, "completed")?.occurred_at ?? fila.ended_manually_at;
@@ -139,9 +142,10 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
         case "complete":
           return { tipo: "terminada", texto: `Ended ${horaOFecha(fin!, ahora, zona)}` };
         case "validation":
-          return pagada && pago?.paid_at
-            ? { tipo: "paid", texto: `Paid ${diaCorto(pago.paid_at, zona)}` }
-            : { tipo: "aprobada", texto: `Approved ${diaCorto(fila.approved_at!, zona)}` };
+          if (pagada && pago?.paid_at) return { tipo: "paid", texto: `Paid ${diaCorto(pago.paid_at, zona)}` };
+          // Validada y sin pagar (OPR-32, S-10).
+          if (fila.validated_at) return { tipo: "validada", texto: `Validated ${diaCorto(fila.validated_at, zona)}` };
+          return { tipo: "aprobada", texto: `Approved ${diaCorto(fila.approved_at!, zona)}` };
       }
     })();
 
@@ -207,10 +211,6 @@ function primero(eventos: JobTrackerEvent[], kind: JobTrackerEvent["kind"]): Job
   return eventos
     .filter((e) => e.kind === kind)
     .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))[0];
-}
-
-function diaCorto(instante: string, zona: string): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zona }).format(new Date(instante));
 }
 
 /** Orden dentro de la columna (S-1): lo más antiguo o lo más próximo arriba. */

@@ -1,7 +1,7 @@
 # OPR-30, OPR-31 y OPR-32 — In Progress, Complete y Validation/Billing hasta Paid (Fase A)
 
 - **Tarjetas:** OPR-30 (P3 · In Progress: Job tracker, photos, Clear alert, End manually), OPR-31 (P3 · Complete: Approve & confirm, Mark as OSS / Not OSS) y OPR-32 (P3 · Validation and Billing: Validate (PO check), Paid). Leídas en Relevo el 2026-11-27, junto con el comentario oficial de OPR-42 (Fase A). Las tarjetas son información; este spec manda sobre la construcción solo cuando Henry lo apruebe.
-- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-15 según las recomendaciones y P-9 dentro del único ciclo de fondo de opsRUN (§13.1). **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§13).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-15 según las recomendaciones y P-9 dentro del único ciclo de fondo de opsRUN (§13.1). **Construido** en la rama `opr-30-31-32-etapas` (nota de implementación al final de §13.1). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§13).
 - **Meta:** que **E2E-1 llegue hasta Paid sobre el stand-in**: una request recorre Requests → Scheduled → In Progress → Complete → Validation → Paid en local, con cada paso en Audit.
 - **Construye sobre (todo en `main`):** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md` §3.2, §3.8, §3.11, §4 y §5; migración `20261124130000_modelo_de_datos.sql`), el puerto de BzzzBX y su falso (`docs/spec/opr-22-stand-ins.md`, `src/lib/bzzzbx/`), el tablero (OPR-25), la Job window con su registro de acciones y sus ranuras (`docs/spec/opr-26-job-window.md` §5 y §7, `src/lib/acciones/`, `src/lib/ventana/ranuras.ts`), la conversación (OPR-27, migración `20261130120000_conversacion.sql`, hasta `OP012`), el enlace de la Fase A (`docs/spec/fase-a-enlace.md`) y Audit (`docs/spec/opr-35-audit.md`).
 - **Depende además de un spec aprobado sin construir:** `docs/spec/opr-28-assign-confirm.md` (Assign y Confirm, con R8 y `bx-job-0108`, y los códigos `OP013` a `OP018`). E2E-1 empieza en Requests, así que su prueba de punta a punta (§11.3, E1) corre después de esa implementación.
@@ -366,7 +366,7 @@ Todo inventado (repo público). No cambian los crosswalk IDs que la seed y el fa
 **Falso (`src/lib/bzzzbx/falso/`):**
 
 - `leerFoto(ref)`: SVG generado, sin archivos ni fotos reales (P-8), y su prueba de contrato.
-- **R4 (`bx-job-0004`)**: una alerta **MEC-003 abierta** nueva (`bx-alert-0005`, amber, "Running 45 min over the window.") para Clear alert; sigue sin fotos ("No photos").
+- **R4 (`bx-job-0004`)**: una alerta **MEC-003 abierta** nueva (`bx-alert-0006`, porque el `0005` ya es la OPS-001 de R8; amber, "Running 45 min over the window.") para Clear alert; sigue sin fotos ("No photos").
 - **R6 (`bx-job-0006`)**: ya tiene Before/After y Paid; no cambia.
 - **R8 (`bx-job-0108`, de assign-confirm)**: su `payment` (`paid: false`) y su `job_health`, para que `/api/falso cambiar payment` lo lleve a Paid. Sin eventos ni fotos al empezar: E1 los pone con `/api/falso poner`.
 - `/api/falso` no cambia: `poner` y `cambiar` ya cubren eventos, fotos, alertas y pagos.
@@ -494,3 +494,12 @@ Henry aprobó el spec con las dieciséis recomendaciones ("con un solo ciclo de 
 - **P-13:** el PO no cambia después de validar (`OP025`).
 - **P-14:** R8 con `bx-cust-0003` y sin PO (coordinado con OPR-28), una MEC-003 abierta en R4, el pago de `bx-job-0108` y R6 validada (§9).
 - **P-15:** las columnas de hechos del job llevan la etiqueta `opsrun:job` y el guard G14 exige el candado con versión a toda función que las escribe.
+
+#### Nota de implementación
+Lo que la construcción resolvió por lo más conservador donde el spec no alcanzaba:
+- **`fase_b`:** se implementó como `fuera_de_release` con `fase: "b"` (mismo valor de disponibilidad, texto "Available when actions are switched on"), no como un valor nuevo.
+- **`bx-alert-0006`:** el `bx-alert-0005` del falso ya era la OPS-001 de R8.
+- **`job_validated.details.po_number`:** solo va con el PO de opsRUN o el del borrador; el de PINCH no se copia a Audit (`po_source = pinch`, `po_number = null`).
+- **Validate sin cliente en BzzzBX:** se rechaza (`cliente_no_encontrado`), porque no se sabe si exige PO.
+- **Observador (P-9):** `src/lib/observados/` y `record_observed_event` están; el cableado al ciclo de fondo de OPR-15 (`instrumentation`, ADR 0006) queda para esa tarjeta.
+- **E6, E7 y E8** de Playwright van dentro de E1 y E5 (cada una necesita un job en una etapa que solo R8 y R5 atraviesan una vez por base).

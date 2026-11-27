@@ -50,6 +50,15 @@ export type FilaRequest = {
   ended_manually_at: string | null;
   oss_mark: "oss" | "not_oss" | null;
   approved_at: string | null;
+  /** El PO que el operador capturó en opsRUN después de programar (OPR-32, P-1). */
+  entered_po_number: string | null;
+  /** Validate (OPR-32, P-3). */
+  validated_at: string | null;
+  /**
+   * `bzzzbx_alert_id` de las alertas ya resueltas en opsRUN (Clear alert, OPR-30):
+   * se descuentan aunque BzzzBX las siga dando abiertas (P-7).
+   */
+  alertas_limpiadas: string[];
   /** Hilo del correo original (`request_message.is_original`). */
   bzzzbx_thread_id: string | null;
 };
@@ -86,7 +95,7 @@ export type ResumenAlertas = { total: number; nivel: NivelAlerta | null };
 /** Prioridad de colores del spec §1.4. */
 export type Color = "pagada" | "sombreada" | "borde" | "sin_dueno" | "normal";
 
-export type TipoEstado = "recibida" | "programada" | "delayed" | "en_curso" | "terminada" | "aprobada" | "paid";
+export type TipoEstado = "recibida" | "programada" | "delayed" | "en_curso" | "terminada" | "aprobada" | "validada" | "paid";
 
 export type Tarjeta = {
   requestId: string;

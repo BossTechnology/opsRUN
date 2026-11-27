@@ -21,12 +21,21 @@ const EXTRAS: Record<number, Pick<FilaVentana, "bzzzbx_contact_id" | "bzzzbx_tea
 export function filaVentana(ahora: Date, n: number): FilaVentana {
   const fila = filasDeLaSeed(ahora)[n - 1];
   if (!fila) throw new Error(`no hay R${n} en la seed de prueba`);
-  return { ...fila, ...EXTRAS[n]!, change_seq: String(100 + n) };
+  return {
+    ...fila,
+    ...EXTRAS[n]!,
+    change_seq: String(100 + n),
+    entered_po_at: null,
+    // R5 se marcó OSS sola al terminar a mano (seed); R6 la marcó Finance Uno.
+    oss_source: fila.oss_mark === null ? null : n === 5 ? "auto" : "operator",
+    approved_by_nombre: fila.approved_at ? "Finance Uno" : null,
+    validated_by_nombre: fila.validated_at ? "Finance Uno" : null,
+  };
 }
 
 export function leidosVentanaDelFalso(ahora: Date): LeidosVentana {
   const d = datosIniciales(ahora);
-  return { ...leidosDelFalso(ahora), contactos: d.contact, equipos: d.cleaner_team };
+  return { ...leidosDelFalso(ahora), contactos: d.contact, equipos: d.cleaner_team, fotos: d.photo };
 }
 
 export const OPERADORES_DE_PRUEBA: OperadorConCarga[] = [

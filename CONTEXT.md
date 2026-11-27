@@ -111,10 +111,27 @@ Términos de la ventana de cada job. Detalle en `docs/spec/opr-26-job-window.md`
 | Action bar | `Action ▾` + `Go` de la Job window. Elegir una acción abre un panel con su nombre, Reason y `Cancel`/`Go`. | OPR-26, §5 |
 | Registro de acciones | Lista en `src/lib/acciones/` con cada acción de la action bar: etapas, motivo, si necesita BzzzBX, bloqueos y, cuando su tarjeta la construye, el ejecutor. | OPR-26 §5.4 |
 | `ejecutarAccion` | El único camino para correr una acción: recalcula la disponibilidad en el servidor y rechaza lo que no sea `disponible`. La interfaz no es la defensa. | OPR-26 §5.4 |
-| Disponibilidad | Estado de una acción para un job: `disponible`, `no_aplica` (no aparece), `bloqueada` (en gris con su motivo), `sin_construir` ("Not built yet") o `fuera_de_release` ("Not available in this release"). | OPR-26 §5.2 |
+| Disponibilidad | Estado de una acción para un job: `disponible`, `no_aplica` (no aparece), `bloqueada` (en gris con su motivo), `sin_construir` ("Not built yet") o `fuera_de_release` ("Not available in this release"; con `fase: "b"`, "Available when actions are switched on"). | OPR-26 §5.2, OPR-30 P-10 |
 | Ranura | Lugar de la Job window que otra tarjeta llena (conversación, enlace de la Fase A, Audit, Alerts, Job tracker, Billing), con su contrato de props y su marcador `data-ranura`. | OPR-26 §7 |
 | Acting as | Selector solo local con el que la demo elige qué operador de la seed actúa, sin login. Existe únicamente con `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`; si falta una, no hay selector y la cookie se ignora. | OPR-26, P-2 |
 | Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Provisional hasta que OPR-34 la separe de Waiting. | OPR-26 S-8, OPR-34 |
+
+## Etapas: In Progress, Complete y Validation (OPR-30, OPR-31 y OPR-32)
+
+Términos de las etapas hasta Paid. Detalle en `docs/spec/opr-30-31-32-etapas.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Job tracker | Pestaña de la Job window desde In Progress: estado y ventana en una fila, Arrival, Start, End y Duration (con la esperada, la de la ventana del job) y la galería de fotos Before / After. Todo se lee de BzzzBX al pintar; nada se guarda. | OPR-30 |
+| Running long | La alerta MEC-003 abierta de un job: chip en el Job tracker. Es la única que Clear alert limpia. | OPR-30 |
+| Hechos del job | Lo que opsRUN decide después de programar y guarda en columnas de `request` con la etiqueta `opsrun:job`: End manually, la marca OSS, la aprobación, el PO capturado y la validación. El guard G14 exige el candado con versión a toda función que los escribe. | OPR-30 a OPR-32 |
+| Approve & confirm | Acción de Complete: firma el job y lo pasa a Validation. En la Fase A solo se registra en opsRUN y no avisa al requester. | OPR-31 |
+| Mark as OSS / Not OSS | Acción de Complete: la marca del operador; cambia una marca `auto` y no se cambia después de aprobar. | OPR-31 |
+| Billing | Pestaña de la Job window en Validation: PO # (editable hasta Validate), OSS status, Approved, Validated y Paid (de QuickBooks, sin control). | OPR-32 |
+| PO vigente | El PO con el que se decide "Add PO": el capturado en opsRUN, si no el del job en PINCH (leído) y si no el del borrador. | OPR-32 |
+| Validate | Acción de Validation: registra la validación en opsRUN. Se bloquea con "Add PO" si el cliente exige PO y no hay uno vigente, y con "BzzzBX unavailable" porque la base no puede saber si el cliente lo exige. | OPR-32 |
+| Fase B (acción de) | Reschedule, Cancel job y End manually: en la Fase A se hacen en las herramientas de PINCH y opsRUN las observa. Se ven en gris con "Available when actions are switched on" y nunca corren. | OPR-30, OPR-42 |
+| Observador | Proceso mínimo que escribe en Audit los hechos observados de PINCH (Checked in, Started, Completed, Paid) con `record_observed_event`. Corre solo en el ciclo de fondo de opsRUN (OPR-15), nunca desde una lectura. | OPR-30, P-9 |
 
 ## Conversación (OPR-27)
 

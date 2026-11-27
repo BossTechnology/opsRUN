@@ -33,7 +33,7 @@ describe("leerTablero", () => {
     ]);
     const r2 = t.columnas[0]!.tarjetas[0]!;
     expect(r2.nombre).toBe("Sample Court Unit 12");
-    expect(t.alertasAbiertas.total).toBe(1);
+    expect(t.alertasAbiertas.total).toBe(2); // la OPS-001 de R1 y la Running long de R4
     expect(t.bzzzbx).toEqual({ disponible: true, actualizadoEn: AHORA.toISOString() });
   });
 

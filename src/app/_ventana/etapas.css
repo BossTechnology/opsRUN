@@ -1,0 +1,214 @@
+/* Job tracker, Billing y los paneles de las etapas (OPR-30 a OPR-32). Usa las variables de globals.css (claro y oscuro). */
+.ranura-tracker,
+.ranura-billing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tracker-filas,
+.billing-filas {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.tracker-fila,
+.billing-fila {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.tracker-fila dt,
+.billing-fila dt {
+  color: var(--tenue);
+  font-size: 0.75rem;
+}
+
+.tracker-fila dd,
+.billing-fila dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+}
+
+.tracker-ventana,
+.tracker-esperada,
+.po-en-pinch {
+  color: var(--tenue);
+  font-size: 0.8125rem;
+}
+
+.chip-running,
+.po-requerido,
+.chip-oss {
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.chip-running {
+  color: var(--ambar);
+}
+
+.po-requerido {
+  color: var(--tenue);
+}
+
+.chip-oss {
+  margin-left: 0.4rem;
+  color: var(--ok);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.billing-fila[data-pagada="true"] dd {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.formulario-po {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.formulario-po label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+/* Galería de fotos */
+.galeria {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.galeria-grupo h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+}
+
+.galeria-vacia {
+  margin: 0;
+  color: var(--tenue);
+}
+
+.galeria-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.galeria-lista li {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+}
+
+.miniatura {
+  display: grid;
+  place-items: center;
+  width: 7rem;
+  height: 5.25rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--borde);
+  border-radius: 0.375rem;
+  background: var(--fondo);
+  cursor: pointer;
+}
+
+.miniatura img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.miniatura-no-disponible {
+  padding: 0.25rem;
+  color: var(--tenue);
+  font-size: 0.75rem;
+  text-align: center;
+  cursor: default;
+}
+
+.miniatura-hora {
+  color: var(--tenue);
+  font-size: 0.7rem;
+}
+
+.foto-dialogo {
+  padding: 0;
+  max-width: min(90vw, 44rem);
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+}
+
+.foto-dialogo::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+.foto-dialogo-contenido {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.foto-dialogo-contenido img {
+  max-width: 100%;
+  max-height: 70vh;
+  justify-self: center;
+}
+
+.foto-pie {
+  margin: 0;
+  color: var(--tenue);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.foto-cerrar {
+  justify-self: end;
+}
+
+.foto-navegacion {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Paneles de la action bar */
+.panel-clear-alert,
+.panel-mark-oss,
+.panel-enter-po {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.panel-clear-alert ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel-enter-po label {
+  display: grid;
+  gap: 0.2rem;
+}

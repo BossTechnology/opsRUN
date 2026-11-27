@@ -24,6 +24,7 @@ const LECTURA_AUSENTE: LecturaBzzzbx = {
   listarPor: ausente,
   buscarJobs: ausente,
   buscarMensajes: ausente,
+  leerFoto: ausente,
   cambiosDesde: ausente,
 };
 
@@ -49,6 +50,7 @@ export function lecturaVigente(obtener: () => LecturaBzzzbx = () => obtenerBzzzb
     listarPor: (entidad, filtro) => actual().listarPor(entidad, filtro),
     buscarJobs: (filtro) => actual().buscarJobs(filtro),
     buscarMensajes: (filtro) => actual().buscarMensajes(filtro),
+    leerFoto: (ref) => actual().leerFoto(ref),
     cambiosDesde: (cursor) => actual().cambiosDesde(cursor),
   };
 }

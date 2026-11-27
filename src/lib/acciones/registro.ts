@@ -20,6 +20,7 @@ import { disponibilidadDelComposer } from "../conversacion/composer";
 import type { Etapa } from "../tablero/tipos";
 
 import { crearEjecutoresDeEnlace } from "./enlace";
+import { crearEjecutoresDeEtapas, TEXTO_ADD_PO, TEXTO_SIN_ALERTA, TEXTO_YA_VALIDADO } from "./etapas";
 import {
   crearEjecutoresDeRequests,
   TEXTO_SIN_CLIENTE,
@@ -39,6 +40,10 @@ const enlace = crearEjecutoresDeEnlace(async () => (await import("../ventana/ser
 // OPR-28: Assign / Reassign y Confirm details, sender y cleaner. Solo escriben en opsRUN (ninguna es una
 // instrucción a BzzzBX); el módulo de servidor se carga al correr.
 const requests = crearEjecutoresDeRequests(async () => (await import("../requests/servidor")).datosDeRequests());
+
+// OPR-30 a OPR-32: Clear alert, Mark as OSS, Approve & confirm, Enter PO y Validate. En la Fase A solo
+// escriben en opsRUN (ninguna es una instrucción a BzzzBX); el módulo de servidor se carga al correr.
+const etapas = crearEjecutoresDeEtapas(async () => (await import("../etapas/servidor")).dependenciasDeEtapas());
 
 export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   // Requests (OPR-28)
@@ -134,13 +139,15 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     interna: true,
     ejecutor: enlace.reject_job_link,
   },
-  // Scheduled (OPR-29)
+  // Scheduled (OPR-29). En la Fase A el job se reprograma o se cancela en las herramientas de PINCH
+  // y opsRUN lo observa: se ven en gris y nunca corren (OPR-30, P-10).
   {
     codigo: "reschedule_job",
     etiqueta: "Reschedule",
     descripcion: "Move the job to another date or window.",
     etapas: ["scheduled"],
     enRelease: true,
+    faseB: true,
     motivo: "obligatorio",
     necesitaBzzzbx: true,
   },
@@ -150,25 +157,31 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     descripcion: "Cancel the job.",
     etapas: ["scheduled"],
     enRelease: true,
+    faseB: true,
     motivo: "obligatorio",
     necesitaBzzzbx: true,
   },
   // In Progress (OPR-30)
   {
+    // P-5: lee de BzzzBX (vuelve a leer la alerta) aunque solo escriba en opsRUN: con BzzzBX caído, bloqueada.
     codigo: "clear_alert",
     etiqueta: "Clear alert",
     descripcion: "Clear an open alert of this job, with a reason.",
     etapas: ["in_progress"],
     enRelease: true,
     motivo: "obligatorio",
-    necesitaBzzzbx: false,
+    necesitaBzzzbx: true,
+    bloqueo: (v) => (v.datos.alertasLimpiables.length === 0 ? TEXTO_SIN_ALERTA : null),
+    ejecutor: etapas.clear_alert,
   },
   {
+    // Fase B (P-10): el fin a mano se hace en las herramientas de PINCH; llega como `completed` (S-5).
     codigo: "end_job_manually",
     etiqueta: "End manually",
     descripcion: "Mark the job as ended when the cleaner's app did not.",
     etapas: ["in_progress"],
     enRelease: true,
+    faseB: true,
     motivo: "obligatorio",
     necesitaBzzzbx: true,
   },
@@ -181,6 +194,7 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     enRelease: true,
     motivo: "no",
     necesitaBzzzbx: false,
+    ejecutor: etapas.approve_confirm,
   },
   {
     codigo: "mark_oss",
@@ -188,8 +202,10 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     descripcion: "Mark whether the job was done on-site service.",
     etapas: ["complete"],
     enRelease: true,
-    motivo: "no",
+    // Opcional: sirve para decir por qué se cambia la marca (OPR-31 §5.1).
+    motivo: "opcional",
     necesitaBzzzbx: false,
+    ejecutor: etapas.mark_oss,
   },
   {
     // No entra en V1.1 beta: se ve en gris y no corre (principio 6).
@@ -203,15 +219,19 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   },
   // Validation (OPR-32)
   {
+    // En la Fase A el PO se guarda en opsRUN y no sale a PINCH; no necesita BzzzBX (OPR-32, P-4).
     codigo: "write_po",
     etiqueta: "Enter PO",
     descripcion: "Write the PO number on the job.",
     etapas: ["validation"],
     enRelease: true,
     motivo: "no",
-    necesitaBzzzbx: true,
+    necesitaBzzzbx: false,
+    bloqueo: (v) => (v.datos.validada ? TEXTO_YA_VALIDADO : null),
+    ejecutor: etapas.write_po,
   },
   {
+    // Vuelve a leer el cliente y el job en BzzzBX (po_required): sin BzzzBX no se puede saber si exige PO.
     codigo: "record_validation",
     etiqueta: "Validate",
     descripcion: "Record that the job was validated.",
@@ -219,7 +239,11 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     enRelease: true,
     motivo: "no",
     necesitaBzzzbx: true,
-    bloqueo: (v) => (v.datos.poRequerido && !v.datos.tienePo ? "Add PO" : null),
+    bloqueo: (v) => {
+      if (v.datos.validada) return TEXTO_YA_VALIDADO;
+      return v.datos.poRequerido && !v.datos.tienePo ? TEXTO_ADD_PO : null;
+    },
+    ejecutor: etapas.record_validation,
   },
   // Conversación (OPR-27). Internas: las usa el Composer, no la action bar. No dependen
   // del estado de la request (P-6): una nota o un mensaje no se rechaza porque alguien

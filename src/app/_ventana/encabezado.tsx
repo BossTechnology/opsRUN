@@ -1,8 +1,10 @@
 import type { VentanaJob } from "@/lib/ventana/tipos";
 
+import "./etapas.css";
+
 /** Encabezado de la Job window (spec OPR-26 §3): solo lectura. */
 export function Encabezado({ ventana }: { ventana: VentanaJob }) {
-  const { stage, nombre, linea, precio, asignado, cargas } = ventana.encabezado;
+  const { stage, oss, nombre, linea, precio, asignado, cargas } = ventana.encabezado;
   return (
     <header className="ventana-encabezado" data-testid="encabezado">
       <div className="ventana-titulo">
@@ -14,6 +16,11 @@ export function Encabezado({ ventana }: { ventana: VentanaJob }) {
             </span>
           ) : null}
         </span>
+        {oss ? (
+          <span className="chip-oss" data-testid="chip-oss" title="OSS">
+            OSS
+          </span>
+        ) : null}
         <h1 data-testid="nombre-job">{nombre}</h1>
       </div>
 

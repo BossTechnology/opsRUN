@@ -13,6 +13,7 @@ import type {
   FiltroDeMensajes,
   Filtros,
   Instruccion,
+  ImagenDeFoto,
   Job,
   Leido,
   Message,
@@ -34,6 +35,12 @@ export interface LecturaBzzzbx {
   listarPor<E extends EntidadHija>(entidad: E, filtro: Filtros[E]): Promise<Leido<Entidades[E]>[]>;
   /** Jobs candidatos para enlazar una request en la Fase A (Runbook §6.1). */
   buscarJobs(filtro: FiltroDeJobs): Promise<Leido<Job>[]>;
+  /**
+   * La imagen de una foto por su `ref` (`Photo.ref`); null si BzzzBX no la conoce.
+   * PROVISIONAL hasta OPR-6 y OPR-9 (spec OPR-30 §4.2, P-8). opsRUN nunca la guarda
+   * ni la cachea: la sirve tal cual por `/api/fotos/[id]`.
+   */
+  leerFoto(ref: string): Promise<ImagenDeFoto | null>;
   /**
    * Correos entrantes desde una hora, por páginas (spec OPR-15 §4.3). Para
    * recuperar lo llegado mientras opsRUN estuvo parado o el cursor caducó.

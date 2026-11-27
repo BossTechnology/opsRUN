@@ -32,6 +32,10 @@ export type FilaDeAudit = {
   metodo: string | null;
   /** `details.mode`: `linked` en el enlace de la Fase A. */
   modo: string | null;
+  /** `details.mark` de oss_marked: `oss` o `not_oss` (un valor de opsRUN). */
+  marca_oss: string | null;
+  /** `details.po_number` de po_entered: el PO que escribió el operador (un valor de opsRUN, nunca de PINCH). */
+  po_numero: string | null;
   /** `details.job_number` (un valor de opsRUN). */
   job_number: string | null;
   /** `details.bzzzbx_job_id`: solo para pedir el nombre al puerto. */

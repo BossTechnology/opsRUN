@@ -62,6 +62,8 @@ conBase("leerAudit contra la seed", () => {
       // Y a los 3 días el PO y la resolución de la alerta que él arregla.
       "po_entered",
       "alert_resolved",
+      // OPR-32: Finance Uno la validó casi tres días atrás, antes de que se pagara.
+      "job_validated",
       "job_paid",
     ]);
     // Ya viene del más viejo al más nuevo.
