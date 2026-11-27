@@ -35,6 +35,7 @@ probarContratoDeLectura("falso en memoria", async () => {
       message: { bzzzbx_thread_id: "bx-thread-0002" },
       alert_result: { sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" } },
     },
+    correoEntrante: "bx-msg-0001",
     jobConPropiedad: { bzzzbx_job_id: "bx-job-0004", bzzzbx_property_id: "bx-prop-0004" },
     cambio: {
       entidad: "job_health",

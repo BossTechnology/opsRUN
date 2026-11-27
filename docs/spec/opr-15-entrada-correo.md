@@ -331,7 +331,7 @@ Henry aprobó el spec ("Apruebo los tres specs, con un solo ciclo de fondo") con
 - **P-5:** sin importar el buzón anterior: con la base sin requests, la entrada empieza en "ahora".
 - **P-6:** no se filtran auto-replies, rebotes ni spam; la pregunta va a OPR-6 y a OPR-20 §11.6.
 - **P-7:** la entrada no crea `ai_analysis` ni instrucciones `ai_*`; deja el enganche `alCrearRequest` y el barrido para OPR-36.
-- **P-8:** **abierta.** Se mantiene el orden actual de Requests (OPR-25 S-1, la más vieja arriba).
+- **P-8:** el más antiguo arriba, decidido por Henry 2026-11-27. Se mantiene el orden actual de Requests (OPR-25 S-1); OPR-15 no lo cambia.
 
 OPR-15 trae una migración (P-0), un método nuevo en el puerto con su prueba de contrato, un control del falso, la tarea `entrada_correo` del ciclo de fondo (P-1), el guard G15 y la ADR 0006.
 

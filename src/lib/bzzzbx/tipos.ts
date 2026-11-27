@@ -217,6 +217,24 @@ export type FiltroDeJobs = {
   hasta: string;
 };
 
+/**
+ * Búsqueda de correos entrantes para recuperar lo que `cambiosDesde` no vio
+ * (spec OPR-15 §4.3). PROVISIONAL hasta OPR-6, como `buscarJobs`. Ordena por
+ * `(sent_at, bzzzbx_message_id)`; `despuesDe` pagina: devuelve solo los
+ * posteriores a ese mensaje en ese orden.
+ */
+export type FiltroDeMensajes = {
+  channel: "email";
+  direction: "inbound";
+  /** ISO 8601 UTC, inclusive. */
+  desde: string;
+  /** bzzzbx_message_id del último mensaje de la página anterior. */
+  despuesDe?: string;
+};
+
+/** Mensajes que devuelve `buscarMensajes` como mucho por página (supuesto S-3 de OPR-15). */
+export const BUSCAR_MENSAJES_MAX = 200;
+
 /** Días que puede abarcar el rango de `buscarJobs`, contando los dos extremos (supuesto S-1). */
 export const BUSCAR_JOBS_MAX_DIAS = 62;
 /** Jobs que devuelve `buscarJobs` como mucho (supuesto S-2). */

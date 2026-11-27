@@ -137,6 +137,17 @@ Términos de la pestaña Audit. Detalle en `docs/spec/opr-35-audit.md`.
 | Observed | Marca de un evento que es un hecho de PINCH visto por la read layer (`source = 'bzzzbx_observed'`), para distinguirlo de una acción hecha en opsRUN. | OPR-35 |
 | Work App number | Se muestra con el mismo valor que el Job number hasta revisarlo contra el User Guide §10.3 (P-7). | OPR-35 |
 
+## Entrada de correo (OPR-15)
+
+Términos de la entrada de correo y del ciclo de fondo. Detalle en `docs/spec/opr-15-entrada-correo.md` y la ADR 0006.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Entrada de correo | El proceso de sistema `entrada_correo`: lee los correos entrantes nuevos del puerto de lectura de BzzzBX y le pide a la base (`opsrun.ingest_request_email`) que cree la request del hilo, vincule la respuesta o diga que ya estaba. Nunca lee Gmail ni guarda nada de PINCH: a la base solo viajan el ID del mensaje, el del hilo y la hora. | OPR-15, `src/lib/entrada/` |
+| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. La entrada de correo es la primera tarea; el registrador de alertas y el observador se suman. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
+| Marca de agua | Desde dónde recupera la entrada al arrancar o tras `CursorCaducado`: la última `request.received_at` menos 24 h. Sin ninguna request, no recupera nada (la entrada empieza en "ahora"). | OPR-15 §4.3 |
+| Email received | Evento de Audit (`email_received`) cuando la entrada vincula una respuesta del cliente a la request de su hilo. El primer correo deja Request received. | OPR-15 P-4, OPR-35 |
+
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
 - Reject · re-clean, las pestañas $ y People, editar To/Cc y el número temporal: se ven, no corren.

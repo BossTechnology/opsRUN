@@ -14,11 +14,13 @@ import type { LecturaBzzzbx } from "../puertos";
 import {
   BUSCAR_JOBS_MAX,
   BUSCAR_JOBS_MAX_DIAS,
+  BUSCAR_MENSAJES_MAX,
   CLAVE,
   ENTIDADES,
   type Cursor,
   type Entidad,
   type FiltroDeJobs,
+  type FiltroDeMensajes,
   type Filtros,
 } from "../tipos";
 
@@ -28,6 +30,8 @@ export type EntornoDeLectura = {
   conocidos: { [E in Entidad]: string };
   /** Un hijo conocido por entidad hija, con su filtro. */
   relaciones: { [E in keyof Filtros]: Filtros[E] };
+  /** El ID de un correo entrante conocido, para `buscarMensajes` (OPR-15). */
+  correoEntrante: string;
   /** Un job conocido, para `buscarJobs` (su cliente, propiedad y fecha se leen con `obtener`). */
   jobConPropiedad: { bzzzbx_job_id: string; bzzzbx_property_id: string };
   /** Provoca un cambio en el origen sobre una entidad conocida; ausente si no se puede. */
@@ -166,6 +170,70 @@ export function probarContratoDeLectura(nombre: string, crear: () => Promise<Ent
       ])("rechaza un filtro %s con FiltroInvalido", async (_caso, filtro) => {
         const { lectura } = await crear();
         await expect(lectura.buscarJobs(filtro as FiltroDeJobs)).rejects.toBeInstanceOf(FiltroInvalido);
+      });
+    });
+
+    describe("buscarMensajes (OPR-15, provisional hasta OPR-6)", () => {
+      const DESDE_SIEMPRE = "2000-01-01T00:00:00Z";
+      const todos = async (entorno: EntornoDeLectura) =>
+        entorno.lectura.buscarMensajes({ channel: "email", direction: "inbound", desde: DESDE_SIEMPRE });
+
+      it("trae el correo entrante conocido, y solo correos entrantes desde la hora pedida", async () => {
+        const entorno = await crear();
+        const conocido = await entorno.lectura.obtener("message", entorno.correoEntrante);
+        expect(conocido).not.toBeNull();
+        const { mensajes } = await todos(entorno);
+        expect(mensajes.map((m) => m.bzzzbx_message_id)).toContain(entorno.correoEntrante);
+        for (const m of mensajes) {
+          expect(m.channel).toBe("email");
+          expect(m.direction).toBe("inbound");
+          expect(typeof m.version).toBe("string");
+        }
+        const despues = await entorno.lectura.buscarMensajes({
+          channel: "email",
+          direction: "inbound",
+          desde: new Date(Date.parse(conocido!.sent_at) + 1).toISOString(),
+        });
+        expect(despues.mensajes.map((m) => m.bzzzbx_message_id)).not.toContain(entorno.correoEntrante);
+        for (const m of despues.mensajes) expect(Date.parse(m.sent_at)).toBeGreaterThan(Date.parse(conocido!.sent_at));
+      });
+
+      it("ordena por sent_at y luego por crosswalk ID, y trae a lo sumo el máximo", async () => {
+        const { mensajes, hay_mas } = await todos(await crear());
+        expect(mensajes.length).toBeLessThanOrEqual(BUSCAR_MENSAJES_MAX);
+        expect(typeof hay_mas).toBe("boolean");
+        const claves = mensajes.map((m) => `${new Date(m.sent_at).toISOString()} ${m.bzzzbx_message_id}`);
+        expect(claves).toEqual([...claves].sort());
+      });
+
+      it("despuesDe pagina: devuelve solo los posteriores a ese mensaje, sin repetirlo", async () => {
+        const entorno = await crear();
+        const { mensajes } = await todos(entorno);
+        if (mensajes.length < 2) return;
+        const primero = mensajes[0]!;
+        const siguiente = await entorno.lectura.buscarMensajes({
+          channel: "email",
+          direction: "inbound",
+          desde: DESDE_SIEMPRE,
+          despuesDe: primero.bzzzbx_message_id,
+        });
+        expect(siguiente.mensajes.map((m) => m.bzzzbx_message_id)).not.toContain(primero.bzzzbx_message_id);
+        expect(siguiente.mensajes.map((m) => m.bzzzbx_message_id)).toEqual(
+          mensajes.slice(1, 1 + BUSCAR_MENSAJES_MAX).map((m) => m.bzzzbx_message_id),
+        );
+      });
+
+      it.each([
+        ["con un canal que no es email", { channel: "text", direction: "inbound", desde: DESDE_SIEMPRE }],
+        ["con una dirección que no es inbound", { channel: "email", direction: "outbound", desde: DESDE_SIEMPRE }],
+        ["con una hora mal formada", { channel: "email", direction: "inbound", desde: "ayer" }],
+        [
+          "con un despuesDe desconocido",
+          { channel: "email", direction: "inbound", desde: DESDE_SIEMPRE, despuesDe: "bx-no-existe-0000" },
+        ],
+      ])("rechaza un filtro %s con FiltroInvalido", async (_caso, filtro) => {
+        const { lectura } = await crear();
+        await expect(lectura.buscarMensajes(filtro as unknown as FiltroDeMensajes)).rejects.toBeInstanceOf(FiltroInvalido);
       });
     });
 
