@@ -22,7 +22,7 @@ La opción 4:
 
 - **Una sola pieza** (`src/lib/ciclo/`), arrancada por `src/instrumentacion-node.ts` (runtime `nodejs`, nunca en `next build`), en local, CI, staging y producción. Una instancia por proceso, guardada en `globalThis` para que sobreviva a la recarga en caliente sin duplicarse.
 - **Un solo temporizador** (un tic de 1 s). Cada tarea declara su nombre, su cadencia y su vuelta; el tic corre las que tocan y no están en curso. Una vuelta a la vez por tarea: si la anterior sigue, se salta. Una tarea lenta o caída no frena a las otras.
-- **Las tareas se registran, no se abren.** `tareasDeOpsrun()` (`src/lib/ciclo/arranque.ts`) es la lista. La primera es `entrada_correo` (cada 15 s, `src/lib/entrada/`). El registrador de alertas de OPR-34 y el observador suman la suya ahí.
+- **Las tareas se registran, no se abren.** `tareasDeOpsrun()` (`src/lib/ciclo/arranque.ts`) es la lista. La primera es `entrada_correo` (cada 15 s, `src/lib/entrada/`); la segunda, `reconciliacion_envios` (cada 5 s, `src/lib/instrucciones/reconciliacion.ts`). El registrador de alertas de OPR-34 y el observador suman la suya ahí.
 - **Los errores no tumban el ciclo.** El error de una tarea se registra una vez (y de nuevo solo si cambia) y se reintenta en su turno; al volver a salir bien, un aviso. Una caída de BzzzBX no es un error de la tarea: la entrada la maneja y avisa una vez.
 - **Nunca bajo pruebas.** `iniciarCicloDeFondo` no arranca con `VITEST` (Vitest), durante `next build` ni con `OPSRUN_CICLO_DE_FONDO=0`. Una prueba que lo necesite arranca `crearCiclo()` explícitamente, con su reloj y su temporizador.
 - **Una lectura nunca escribe.** Una ruta de lectura (`/api/tablero/cambios` y las demás) no llama a la entrada ni arranca el ciclo.
@@ -30,7 +30,7 @@ La opción 4:
 - **Dos procesos a la vez** (el cruce de un deploy, `next dev` con recarga) no rompen nada: cada uno corre su ciclo y la base deduplica con su candado por hilo. No hace falta un candado global.
 - **Guard G16** (`src/lib/ciclo/un-solo-ciclo.test.ts`): descubre en `src/` cualquier `setInterval` fuera del ciclo y de los componentes de cliente, y cualquier ruta de lectura que importe la entrada o el ciclo. Se ve fallar en cada corrida.
 
-Las rutas de lectura que hoy escriben (el despacho de OPR-27 cuelga la reconciliación del sondeo del tablero) quedan como están en esta decisión; moverlas al ciclo como una tarea más es el siguiente paso natural y queda como pregunta abierta en el PR de OPR-15.
+Actualización (2026-11-27, aprobada por Henry: "una lectura nunca escribe"): la reconciliación de envíos de OPR-27, que colgaba del sondeo del tablero, pasó al ciclo como la tarea `reconciliacion_envios` (cada 5 s, la misma cadencia que tenía; el ciclo ya garantiza una vuelta a la vez, así que `crearReconciliador` y su límite propio se quitaron). `GET /api/tablero/cambios` ya no escribe. El guard G16 descubre las lecturas (un `route.ts` que exporta GET, los `page`/`layout` y los módulos de lectura del tablero y la ventana) y falla si alguna importa o llama a la reconciliación. Tareas del ciclo hoy: `entrada_correo` y `reconciliacion_envios`.
 
 ## Consecuencias
 - **Se gana:**

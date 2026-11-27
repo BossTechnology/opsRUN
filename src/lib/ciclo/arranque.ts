@@ -9,6 +9,7 @@
  * `OPSRUN_CICLO_DE_FONDO=0`.
  */
 import { tareaEntradaCorreo } from "../entrada/servidor";
+import { tareaReconciliacionEnvios } from "../instrucciones/reconciliacion";
 
 import { crearCiclo, type Ciclo, type Tarea } from "./ciclo";
 
@@ -16,7 +17,7 @@ type Entorno = Record<string, string | undefined>;
 
 /** Las tareas de opsRUN. Aquí se suman el registrador de alertas (OPR-34) y las que vengan. */
 export function tareasDeOpsrun(): Tarea[] {
-  return [tareaEntradaCorreo()];
+  return [tareaEntradaCorreo(), tareaReconciliacionEnvios()];
 }
 
 /** Por qué no debe correr, o null si puede. */
