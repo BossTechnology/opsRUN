@@ -12,6 +12,10 @@ const enCI = Boolean(process.env.CI);
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // Un solo trabajador: todos los archivos comparten el servidor, su base y el stand-in de
+  // BzzzBX (en memoria), y un archivo que lo reinicia o lo cambia pisaría a otro a medias
+  // (sobre todo los envíos de la conversación, que tardan hasta un minuto en cerrar).
+  workers: 1,
   forbidOnly: enCI,
   retries: enCI ? 2 : 0,
   reporter: enCI ? [["github"], ["html", { open: "never" }]] : "list",
