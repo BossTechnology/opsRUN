@@ -4,6 +4,7 @@
 
 ## Tarea actual
 - OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementada en la rama `opr-26-job-window-impl` (PR contra `main`, sin fusionar: lo fusiona Henry). El PR #13 (solo el spec) sigue sin fusionar.
+- OPR-27, conversación: spec `docs/spec/opr-27-conversacion.md` aprobado por Henry el 2026-11-27 (P-0 a P-7). Implementada en la rama `opr-27-conversacion` (PR contra `main`, sin fusionar).
 - OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
 - OPR-28, Fase A: enlace request ↔ job observado (PR #12): fusionado en `main`, sin pantalla todavía.
 - OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
@@ -78,6 +79,13 @@
   - Pruebas: Vitest nuevos (`armar`, disponibilidad, `ejecutar`, `leer`, consultas contra la seed, actor de demo, componentes) y Playwright A1 a A16 (`e2e/job-window.spec.ts`; A15 queda `fixme` hasta que OPR-28 ponga la ranura). Cada guard de P-2 y el de `ejecutarAccion` se vieron fallar quitando su condición.
   - En local: lint, typecheck y Vitest (sin `pool.test.ts`, que se deja a la CI) en verde; Playwright A1 a A16 y las del tablero contra el build de producción y una base temporal (alta, migraciones y seed nueva); pgTAP contra esa base, todos en verde salvo `roles.test.sql`, que pide el esquema `auth` que una base temporal no tiene.
 
+- 2026-11-27: OPR-27, conversación (rama `opr-27-conversacion`):
+  - Migración `20261130120000_conversacion.sql`, solo funciones: `add_note`, `send_email`, `send_text`, `discard_ai_draft` (del operador) y `record_instruction_delivery`, `resolve_instruction` (del sistema). Un envío guarda la instrucción `pending` con solo el crosswalk ID (hilo o equipo) y el cuerpo; el borrador de IA se decide `accepted` o `corrected` en la misma transacción. pgTAP `conversacion.test.sql` (103); los guards G5/G6/G7 las descubren solas y se vieron fallar quitando `require_operator()`/`require_system()`.
+  - Ranura de la conversación en `src/app/_conversacion/` (hilo, Composer, borradores de IA) y su lectura en `src/lib/conversacion/`; despacho mínimo en `src/lib/instrucciones/` (entregar y reconciliar `send_*`, a lo sumo cada 5 s por proceso, desde `/api/tablero/cambios`). El registro de acciones gana `concurrencia: "request" | "ninguna"` (P-6) y `ejecutarAccion` rechaza `to`, `cc` y `from_number`.
+  - El falso acepta `send_email` con `bzzzbx_thread_id` y `send_text` con `bzzzbx_team_id` y resuelve él los destinatarios (P-2); `/api/falso` gana `forzar_error`. La seed trae borradores de IA en R2 y R7 (P-3).
+  - Guard "nada sale solo": una prueba descubre en `src/**` quién puede enviar y falla si no es el Composer o su ejecutor.
+  - En local (base temporal propia): lint, typecheck, Vitest, pgTAP y Playwright C1 a C12 (C11 sin hilo, solo en Vitest: la seed no trae una request sin hilo de correo).
+
 ## Pendiente
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
 - Base local: `pnpm db:reset` para cargar la seed nueva, con R7 y los `auth_user_id` de demo (pide OK de Henry). Sin eso, la demo local no tiene R7 ni operadores que puedan actuar.
@@ -99,6 +107,7 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
+- Henry revisa y fusiona el PR de OPR-27. Encender el envío en la Fase A se decide cuando OPR-6 confirme `send_email` y `send_text` (P-5).
 - Henry revisa y fusiona el PR de OPR-26 (y el #13 del spec). Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35) se enchufan en las ranuras de `src/app/_ventana/ranuras.tsx`; cada tarjeta de etapa agrega su `ejecutor` a `src/lib/acciones/registro.ts`.
 - Demo del lunes: `pnpm db:reset` (con OK de Henry), `pnpm local` y en la Job window elegir "Acting as".
 - Henry comparte el prototipo R23 para ajustar el aspecto del tablero.

@@ -77,7 +77,7 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Operator filter | All operators / Only me. Only me espera al login (OPR-21). | OPR-25 |
 | PO missing | Flag de la tarjeta cuando el cliente exige PO y el job no lo tiene. | OPR-8, OPR-25 |
 | — — | Lo que se muestra en un valor sin definir. | OPR-25 |
-| Available in a later release | Texto de lo que se ve en gris en la barra y el riel del tablero. | OPR-25 |
+| Available in a later release | Texto de lo que se ve en gris: la barra y el riel del tablero y, en el Composer, Edit To, Cc y Temporary number. | OPR-25, OPR-27 |
 | Not available in this release | Texto de las funciones que se muestran en gris porque no entran en V1.1 beta. | OPR-25, OPR-26 |
 
 ## Modelo de datos
@@ -113,6 +113,18 @@ Términos de la ventana de cada job. Detalle en `docs/spec/opr-26-job-window.md`
 | Ranura | Lugar de la Job window que otra tarjeta llena (conversación, enlace de la Fase A, Audit, Alerts, Job tracker, Billing), con su contrato de props y su marcador `data-ranura`. | OPR-26 §7 |
 | Acting as | Selector solo local con el que la demo elige qué operador de la seed actúa, sin login. Existe únicamente con `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`; si falta una, no hay selector y la cookie se ignora. | OPR-26, P-2 |
 | Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Provisional hasta que OPR-34 la separe de Waiting. | OPR-26 S-8, OPR-34 |
+
+## Conversación (OPR-27)
+
+Términos de la conversación del job. Detalle en `docs/spec/opr-27-conversacion.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Hilo | La columna de la conversación: un solo hilo por job con la Original request, los correos (Email), los textos (Text) y las notas (Internal note), por hora y con el estado de entrega de cada uno. Se arma con `armarHilo` (`src/lib/conversacion/`). | OPR-27 §4 |
+| Estado de entrega | Received (entrante), Sending… (instrucción pending), Sent, Queued, Delivered, Not delivered (BzzzBX), Failed (instrucción fallida, con Edit and resend), Couldn't confirm (timed out) o Internal · not sent (nota). | OPR-27 §4.3 |
+| Edit and resend | Botón de un envío Failed: copia su cuerpo al Composer en el mismo modo. Enviar crea una instrucción nueva; no reintenta la fallida. | OPR-27 S-6 |
+| AI draft | Borrador de respuesta (al cliente o al cleaner) que escribió la IA, sin decidir. Aparece en el Composer marcado "AI draft" y solo sale si el operador pulsa Send: se decide accepted (igual) o corrected (editado). Discard lo rechaza. Si la IA no produce borradores, el Composer funciona igual. | OPR-27 §5.5 |
+| Despacho de instrucciones | Entrega a BzzzBX las instrucciones `send_email` y `send_text` que ya existen en la base y las reconcilia con su estado (confirmed, failed, timed out). No crea instrucciones. Mínimo y provisional hasta OPR-23. | OPR-27 §7, `src/lib/instrucciones/` |
 
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
