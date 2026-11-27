@@ -3,13 +3,9 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-35, pestaña Audit: spec `docs/spec/opr-35-audit.md` aprobado por Henry el 2026-11-27 (P-1 a P-7). Implementada en la rama `opr-35-audit` (PR contra `main`, sin fusionar: lo fusiona Henry).
-- OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementada en la rama `opr-26-job-window-impl` (PR contra `main`, sin fusionar: lo fusiona Henry). El PR #13 (solo el spec) sigue sin fusionar.
-- OPR-27, conversación: spec `docs/spec/opr-27-conversacion.md` aprobado por Henry el 2026-11-27 (P-0 a P-7). Implementada en la rama `opr-27-conversacion` (PR contra `main`, sin fusionar).
-- OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
-- OPR-28, Fase A: enlace request ↔ job observado (PR #12): fusionado en `main`, sin pantalla todavía.
-- OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
-- OPR-1, imagen y deploy (PR #8): fusionado en `main`. El primer deploy en el servidor de PINCH espera la red de OPR-6.
+- Demo local de la Fase A (lunes): todo en `main` (`082e577`). Ensayada el 2026-11-27 de punta a punta: tablero → R7 → "Acting as" → nota interna → confirmar EX-00107 → Scheduled → Audit. Guion en `docs/demo-fase-a.md`. La base local se reseteó después del ensayo (OK de Henry): R7 vuelve a estar en Requests.
+- En `main`: OPR-20 (modelo de datos), OPR-22 (stand-ins), OPR-25 (tablero, PR #11), OPR-26 (Job window, PR #13 y #16), OPR-27 (conversación, PR #14 y #19), OPR-28 Fase A (enlace, PR #12 y #17), OPR-35 (Audit, PR #15 y #18) y OPR-1 (imagen y deploy, sin desplegar).
+- Nada está en staging: el primer deploy espera la red de OPR-6.
 
 ## Hecho
 - 2026-11-24: base de documentos creada a partir de las 43 tarjetas del proyecto OPR en Relevo. Commit `e029ca1` en `main`.
@@ -99,13 +95,21 @@
   - Pruebas: Vitest (`armar`, `nombres`, componente, `horaConFecha`, y la lectura contra la seed con `OPSRUN_REQUIERE_BASE=1`, que se vio fallar pasando `escritura: true`), pgTAP `audit_catalogo.test.sql` (label no vacío y nada de Zendesk en el catálogo, visto fallar en cada corrida) y Playwright B1 a B8 en `e2e/audit.spec.ts`.
   - Playwright: `audit.spec.ts` corre en un proyecto aparte, después del resto, porque B1 y B7 enlazan R7 (una vez por base; en una base usada se saltan). Como los botones del enlace (OPR-28) no están en la ventana, hacen las mismas llamadas SQL que harán esos botones (`reject_job_link` y `link_observed_job`, como `opsrun_app` y con el actor de Ops Uno). `playwright.config.mts` fija `OPSRUN_ZONA_HORARIA=America/New_York` y le pasa `OPSRUN_DATABASE_URL` a los workers.
 
+- 2026-11-27: ensayo de la demo de la Fase A en local con `main` en `e51c33b` y la base recién reseteada. Funciona de punta a punta. Docker no levanta todos los servicios de Supabase: se levantan solo base, auth y API con `supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta,postgrest` (sin eso `pnpm local` falla por falta de `API_URL`).
+
 ## Pendiente
+- Vistos en el ensayo del 2026-11-27:
+  - las horas salen en UTC porque `pnpm local` no fija `OPSRUN_ZONA_HORARIA`; fijarla cuando OPR-4 confirme la zona (propuesta: America/New_York);
+  - `pg` avisa "Calling client.query() when the client is already executing a query": varias lecturas en `Promise.all` comparten el cliente de una transacción (`src/lib/ventana/consultas.ts`, `src/lib/conversacion/consultas.ts`, `src/lib/audit/consultas.ts`, `src/lib/fase-a/enlace.ts`). Hoy funciona; `pg` 9 lo quita;
+  - las pestañas $ y People se anuncian solo como "Not available in this release", sin su nombre;
+  - R7 tiene un solo candidato: para mostrar el rechazo hay que poner un job de prueba con `/api/falso` (guion, paso 4b);
+  - nueve detalles del guion siguen "(por verificar)".
+- `confirmarEnlace` no comprueba que el job sea del cliente o la propiedad de la request (relee el job y rechaza cancelado o ya enlazado). Cerrarlo antes de usarlo con datos reales.
 - OPR-35: confirmar el Work App number contra el User Guide §10.3 (hoy es el mismo valor que el Job number, P-7) y revisar la pestaña contra el prototipo R23 (S-1 y S-2 del spec). Cuando OPR-28 ponga los botones del enlace, B1 y B7 pueden pasar a la interfaz; los dos enlazan R7, así que ninguna otra prueba puede enlazarla en la misma base. En la demo se dice que un check-in forzado con `/api/falso` no entra a Audit todavía (P-6).
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
-- Base local: `pnpm db:reset` para cargar la seed nueva, con R7 y los `auth_user_id` de demo (pide OK de Henry). Sin eso, la demo local no tiene R7 ni operadores que puedan actuar.
 - OPR-26: revisar la Job window contra el prototipo R23 (S-1 del spec). Supuestos que tomó la implementación (ver el PR): 404 con estado HTTP 200 al ser streaming, A5 de R1 sigue el §4.1 (pestaña "4B"), `motivo: "no"` oculta el campo Reason, A7 entrega el clic al manejador de React porque React ignora los clics sobre un botón `disabled`.
 - Fase A (OPR-28): Assign y Confirm details/sender/cleaner sin spec ni función SQL (hoy no se puede dar dueño ni confirmar desde la UI; R7 de la seed ya lo trae); deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
-- `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` con una migración nueva: la base local queda con una migración que otras ramas no tienen en disco, y `migrar` las rechaza hasta fusionar o hacer `pnpm db:reset`. Pasó con `20261125120000_fase_a_enlace`; el 2026-11-25 se reseteó la base local y se preparó con las migraciones de `main`. Hasta fusionar el PR de OPR-28, correr `pnpm test` en esta rama la vuelve a aplicar.
+- `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` en una rama con una migración nueva: después hay que `pnpm db:reset` (pide OK de Henry).
 - OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
 - OPR-22, cuando toque: `acknowledge_alert` al construir Clear alert; quitar los `ai_*` del catálogo con una migración nueva (pide OK); cambiar la migración de estados solo si una pantalla necesita "Waiting for approval" o "Couldn't confirm" desde la base (P-2).
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
@@ -121,8 +125,8 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry revisa y fusiona el PR de OPR-27. Encender el envío en la Fase A se decide cuando OPR-6 confirme `send_email` y `send_text` (P-5).
-- Henry revisa y fusiona el PR de OPR-26 (y el #13 del spec). Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35) se enchufan en las ranuras de `src/app/_ventana/ranuras.tsx`; cada tarjeta de etapa agrega su `ejecutor` a `src/lib/acciones/registro.ts`.
-- Demo del lunes: `pnpm db:reset` (con OK de Henry), `pnpm local` y en la Job window elegir "Acting as".
-- Henry comparte el prototipo R23 para ajustar el aspecto del tablero.
+- Demo del lunes con `docs/demo-fase-a.md`. Si se ensaya otra vez, `pnpm db:reset` después (pide OK de Henry).
+- Decisiones P0 para seguir: OPR-2 (login y usuarios, bloquea OPR-21 → OPR-23), OPR-5 (Twilio, solo falta la firma), OPR-3 (límites de alertas), OPR-4 (Fernando: zona horaria de Delayed, nombres de acciones y de Clear alert).
+- Specs que se pueden adelantar sin esas decisiones: Assign y Confirm details/sender/cleaner (OPR-28, con su migración).
+- Henry comparte el prototipo R23 para revisar el aspecto del tablero, la Job window y Audit.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.
