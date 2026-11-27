@@ -11,6 +11,10 @@
  *   R4  In Progress: check-in e inicio                  bx-job-0004
  *   R5  Complete: End manually, sin fotos               bx-job-0005
  *   R6  Validation: terminado, PO escrito y Paid        bx-job-0006 (su cliente exige PO)
+ * Y jobs de la Fase A, creados en las herramientas de PINCH y sin request
+ * (spec Fase A §3): bx-job-0102 encaja con R2 (cliente, propiedad, fecha y
+ * ventana), bx-job-0103 es de la misma propiedad otro día, bx-job-0104 está
+ * cancelado y bx-job-0105 es de otro cliente.
  * Como la seed (que usa current_date y now()), las fechas salen del reloj.
  * `seed-y-falso.test.ts` comprueba que los IDs sigan coincidiendo.
  */
@@ -62,6 +66,11 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0004", job_number: "EX-00004", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0004", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(0), window_start: "08:00", window_end: "11:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null },
       { bzzzbx_job_id: "bx-job-0005", job_number: "EX-00005", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0005", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(-1), window_start: "13:00", window_end: "16:00", status: "scheduled", bzzzbx_team_id: "bx-team-0003", po_number: null },
       { bzzzbx_job_id: "bx-job-0006", job_number: "EX-00006", bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0003", service_date: dia(-5), window_start: "09:00", window_end: "15:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: "PO-EX-0006" },
+      // Fase A: jobs creados en las herramientas de PINCH, todavía sin request en opsRUN.
+      { bzzzbx_job_id: "bx-job-0102", job_number: "EX-00102", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: "bx-space-0002", bzzzbx_service_id: "bx-svc-0001", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null },
+      { bzzzbx_job_id: "bx-job-0103", job_number: "EX-00103", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(4), window_start: "13:00", window_end: "16:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null },
+      { bzzzbx_job_id: "bx-job-0104", job_number: "EX-00104", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0001", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "cancelled", bzzzbx_team_id: null, po_number: null },
+      { bzzzbx_job_id: "bx-job-0105", job_number: "EX-00105", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null },
     ],
     assignment: [
       { bzzzbx_assignment_id: "bx-asg-0003", bzzzbx_job_id: "bx-job-0003", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },

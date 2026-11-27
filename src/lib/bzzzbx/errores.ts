@@ -29,3 +29,11 @@ export class InstruccionRechazada extends Error {
     this.name = "InstruccionRechazada";
   }
 }
+
+/** El filtro de una búsqueda no es válido (por ejemplo, `buscarJobs` sin cliente ni propiedad). No se leyó nada. */
+export class FiltroInvalido extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = "FiltroInvalido";
+  }
+}

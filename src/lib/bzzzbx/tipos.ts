@@ -198,11 +198,24 @@ export type LoteDeCambios = {
   hay_mas: boolean;
 };
 
+/**
+ * Búsqueda de jobs para enlazar una request en la Fase A (spec Fase A §3).
+ * Exige cliente o propiedad; los criterios se combinan con Y. El rango de
+ * `service_date` es inclusivo y de a lo sumo `BUSCAR_JOBS_MAX_DIAS` días.
+ */
 export type FiltroDeJobs = {
   bzzzbx_customer_id?: string;
   bzzzbx_property_id?: string;
-  service_date?: string;
+  /** YYYY-MM-DD, inclusive. */
+  desde: string;
+  /** YYYY-MM-DD, inclusive. */
+  hasta: string;
 };
+
+/** Días que puede abarcar el rango de `buscarJobs`, contando los dos extremos (supuesto S-1). */
+export const BUSCAR_JOBS_MAX_DIAS = 62;
+/** Jobs que devuelve `buscarJobs` como mucho (supuesto S-2). */
+export const BUSCAR_JOBS_MAX = 50;
 
 // ---------------------------------------------------------------------------
 // Instrucciones (spec §4)

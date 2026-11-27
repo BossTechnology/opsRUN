@@ -9,8 +9,10 @@
 import { isDeepStrictEqual } from "node:util";
 
 import { BzzzbxNoDisponible, CursorCaducado } from "../errores";
+import { validarFiltroDeJobs } from "../filtro-de-jobs";
 import type { LecturaBzzzbx } from "../puertos";
 import {
+  BUSCAR_JOBS_MAX,
   CLAVE,
   ENTIDADES,
   type Cambio,
@@ -82,11 +84,20 @@ export class LecturaFalsa implements LecturaBzzzbx {
   }
 
   async buscarJobs(filtro: FiltroDeJobs): Promise<Leido<Job>[]> {
+    validarFiltroDeJobs(filtro);
     this.exigirDisponible();
-    const condiciones = Object.entries(filtro).filter(([, valor]) => valor !== undefined);
+    const { bzzzbx_customer_id: cliente, bzzzbx_property_id: propiedad, desde, hasta } = filtro;
     return [...this.tabla("job").values()]
-      .filter((fila) => condiciones.every(([campo, valor]) => fila[campo] === valor))
-      .map((fila) => this.leido<"job">(fila));
+      .map((fila) => this.leido<"job">(fila))
+      .filter(
+        (job) =>
+          (cliente === undefined || job.bzzzbx_customer_id === cliente) &&
+          (propiedad === undefined || job.bzzzbx_property_id === propiedad) &&
+          job.service_date >= desde &&
+          job.service_date <= hasta,
+      )
+      .sort((a, b) => (a.service_date + a.bzzzbx_job_id < b.service_date + b.bzzzbx_job_id ? -1 : 1))
+      .slice(0, BUSCAR_JOBS_MAX);
   }
 
   async cambiosDesde(cursor: Cursor | null): Promise<LoteDeCambios> {
@@ -188,3 +199,4 @@ export class LecturaFalsa implements LecturaBzzzbx {
     if (this.caido) throw new BzzzbxNoDisponible();
   }
 }
+
