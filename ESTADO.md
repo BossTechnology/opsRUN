@@ -100,11 +100,9 @@
 ## Pendiente
 - Vistos en el ensayo del 2026-11-27:
   - las horas salen en UTC porque `pnpm local` no fija `OPSRUN_ZONA_HORARIA`; fijarla cuando OPR-4 confirme la zona (propuesta: America/New_York);
-  - `pg` avisa "Calling client.query() when the client is already executing a query": varias lecturas en `Promise.all` comparten el cliente de una transacción (`src/lib/ventana/consultas.ts`, `src/lib/conversacion/consultas.ts`, `src/lib/audit/consultas.ts`, `src/lib/fase-a/enlace.ts`). Hoy funciona; `pg` 9 lo quita;
-  - las pestañas $ y People se anuncian solo como "Not available in this release", sin su nombre;
   - R7 tiene un solo candidato: para mostrar el rechazo hay que poner un job de prueba con `/api/falso` (guion, paso 4b);
   - nueve detalles del guion siguen "(por verificar)".
-- `confirmarEnlace` no comprueba que el job sea del cliente o la propiedad de la request (relee el job y rechaza cancelado o ya enlazado). Cerrarlo antes de usarlo con datos reales.
+- `confirmarEnlace` no comprueba que el job sea del cliente o la propiedad de la request (relee el job y rechaza cancelado o ya enlazado). El spec de la Fase A (§5) no lo pide y §3 y §4 proponen a propósito jobs de otro cliente (`bx-job-0105`), así que no se implementó: Henry decide primero (spec y, si es sí, qué rechaza: otro cliente, otra propiedad o ambos). Antes de usarlo con datos reales.
 - OPR-35: confirmar el Work App number contra el User Guide §10.3 (hoy es el mismo valor que el Job number, P-7) y revisar la pestaña contra el prototipo R23 (S-1 y S-2 del spec). Cuando OPR-28 ponga los botones del enlace, B1 y B7 pueden pasar a la interfaz; los dos enlazan R7, así que ninguna otra prueba puede enlazarla en la misma base. En la demo se dice que un check-in forzado con `/api/falso` no entra a Audit todavía (P-6).
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
 - OPR-26: revisar la Job window contra el prototipo R23 (S-1 del spec). Supuestos que tomó la implementación (ver el PR): 404 con estado HTTP 200 al ser streaming, A5 de R1 sigue el §4.1 (pestaña "4B"), `motivo: "no"` oculta el campo Reason, A7 entrega el clic al manejador de React porque React ignora los clics sobre un botón `disabled`.
