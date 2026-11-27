@@ -4,6 +4,7 @@
 
 ## Tarea actual
 - OPR-30, OPR-31 y OPR-32, In Progress, Complete y Validation hasta Paid (rama `opr-30-31-32-etapas`, PR contra `main`): ver "Hecho" del 2026-11-27 más abajo. Pendiente de fusión por Henry. Falta cablear el observador de hechos en el ciclo de fondo (OPR-15, ADR 0006): ver "Pendiente".
+- OPR-15, entrada de correo y ciclo de fondo único (rama `opr-15-entrada-correo`, PR contra `main`): ver "Hecho" del 2026-11-27 más abajo. Pendiente de fusión por Henry.
 - OPR-28, Assign / Reassign y Confirm details, sender y cleaner (rama `opr-28-assign-confirm`, PR contra `main`): ver "Hecho" del 2026-11-27 más abajo. Pendiente de fusión por Henry.
 - Demo local de la Fase A (lunes): todo en `main` (`082e577`). Ensayada el 2026-11-27 de punta a punta: tablero → R7 → "Acting as" → nota interna → confirmar EX-00107 → Scheduled → Audit. Guion en `docs/demo-fase-a.md`. La base local se reseteó después del ensayo (OK de Henry): R7 vuelve a estar en Requests.
 - En `main`: OPR-20 (modelo de datos), OPR-22 (stand-ins), OPR-25 (tablero, PR #11), OPR-26 (Job window, PR #13 y #16), OPR-27 (conversación, PR #14 y #19), OPR-28 Fase A (enlace, PR #12 y #17), OPR-35 (Audit, PR #15 y #18) y OPR-1 (imagen y deploy, sin desplegar).
@@ -113,8 +114,21 @@
   - Datos de prueba (P-14): R4 con una MEC-003 abierta (`bx-alert-0006`; el `0005` ya era la OPS-001 de R8), R8 con el cliente `bx-cust-0003` (exige PO) y sin PO, con su pago y su salud, y R6 validada. D1 de OPR-28 actualizado a ese cliente. Playwright E1 a E9 en `e2e/etapas.spec.ts` (E6, E7 y E8 dentro de E1 y E5 porque cada una necesita un job en una etapa que solo R8 y R5 atraviesan una vez por base), en un proyecto que corre después de `chromium-assign`.
 - 2026-11-27: ensayo de la demo de la Fase A en local con `main` en `e51c33b` y la base recién reseteada. Funciona de punta a punta. Docker no levanta todos los servicios de Supabase: se levantan solo base, auth y API con `supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta,postgrest` (sin eso `pnpm local` falla por falta de `API_URL`).
 
+- 2026-11-27: OPR-15, entrada de correo (rama `opr-15-entrada-correo`), según `docs/spec/opr-15-entrada-correo.md` con las decisiones de §12.1 (P-8: el más antiguo arriba):
+  - Migración `20261204120000_entrada_correo.sql` (P-0): `opsrun.ingest_request_email` (del sistema, bajo un candado del hilo: `created`, `linked` o `duplicate`, con Audit en la misma transacción), los índices `request_message_original_thread_key` (un original por hilo) y `request_message_thread_idx`, y el tipo de Audit `email_received`. Códigos `OP030` a `OP034` (solo `OP030`).
+  - pgTAP `entrada_correo.test.sql` (55) y guard G15 en `guard_escrituras.test.sql` (la única función que inserta en `opsrun.request` es `ingest_request_email`, descubierta en `pg_proc`). G6 y la prueba de actor se vieron en rojo quitando `require_system()`; G15 y el índice se vieron en rojo con una función y sin índice.
+  - `src/lib/entrada/`: `crearEntrada().vuelta()` (cursor en memoria, recuperación desde la marca de agua menos 24 h, `CursorCaducado`, BzzzBX caído con aviso una vez, saltar `22023` y `OP030`, enganche `alCrearRequest` vacío para OPR-36), `datos-sql.ts` (actor `entrada_correo`, lecturas en fila) y su prueba de carrera contra la base.
+  - `src/lib/ciclo/` y ADR 0006: el ciclo de fondo único (un tic, tareas registradas con su cadencia, una vuelta a la vez, errores registrados una vez), arrancado desde `src/instrumentacion-node.ts`; no corre bajo pruebas, ni en `next build`, ni con `OPSRUN_CICLO_DE_FONDO=0`. Guard G16: ningún `setInterval` fuera del ciclo y ninguna ruta de lectura importa la entrada.
+  - Puerto: `buscarMensajes` (provisional hasta OPR-6) con su prueba de contrato; `lecturaOAusente` pasó a `src/lib/bzzzbx/ausente.ts` (sin `server-only`) y se reexporta desde `tablero/servidor.ts`. Falso: control `correo_nuevo` en `/api/falso`.
+  - Requests sigue con la más antigua arriba (P-8, decidido); el orden es la constante `ORDEN_DE_REQUESTS` en `src/lib/tablero/armar.ts`.
+  - Playwright E1 a E6 en `e2e/entrada-correo.spec.ts`, en un proyecto aparte que corre al final (crea requests de verdad).
+
 ## Pendiente
 - OPR-30 a OPR-32: cablear `correrObservador()` (`src/lib/observados/servidor.ts`) en el único ciclo de fondo de opsRUN (OPR-15, P-1, ADR 0006) cuando exista; hasta entonces Audit no trae Checked in, Started, Completed ni Paid · Observed. Dudas del spec que se resolvieron por lo más conservador (ver el PR): `fase_b` como `fuera_de_release` con otro texto, `bx-alert-0006` en vez de `0005`, el PO de PINCH no se copia a `job_validated.details`, Validate se bloquea sin cliente en BzzzBX.
+- OPR-15, preguntas para Henry: ver el PR. Resumen: la reconciliación de envíos de OPR-27 sigue colgada de `GET /api/tablero/cambios` (escribe en una lectura); moverla al ciclo como tarea. Los E2E de la entrada dejan requests en una base reutilizada: `pnpm db:reset` entre corridas locales.
+- OPR-15, después del PR de las etapas: revisar `src/lib/acciones/registro.ts`, la seed y `src/app/_ventana/` por lo que el spec pudiera pedir (ver el PR).
+- OPR-15, con OPR-36: llenar `alCrearRequest` y el barrido de requests `open` sin `ai_analysis`.
+- OPR-15, con OPR-6: `buscarMensajes` real, retención de mensajes, qué es `bzzzbx_thread_id`, si el buzón es solo el compartido, y si BzzzBX marca auto-replies y rebotes.
 - Vistos en el ensayo del 2026-11-27:
   - las horas salen en UTC porque `pnpm local` no fija `OPSRUN_ZONA_HORARIA`; fijarla cuando OPR-4 confirme la zona (propuesta: America/New_York);
   - R7 tiene un solo candidato: para mostrar el rechazo hay que poner un job de prueba con `/api/falso` (guion, paso 4b);

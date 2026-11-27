@@ -8,11 +8,12 @@
  */
 import { isDeepStrictEqual } from "node:util";
 
-import { BzzzbxNoDisponible, CursorCaducado } from "../errores";
+import { BzzzbxNoDisponible, CursorCaducado, FiltroInvalido } from "../errores";
 import { validarFiltroDeJobs } from "../filtro-de-jobs";
 import type { LecturaBzzzbx } from "../puertos";
 import {
   BUSCAR_JOBS_MAX,
+  BUSCAR_MENSAJES_MAX,
   CLAVE,
   ENTIDADES,
   type Cambio,
@@ -21,11 +22,13 @@ import {
   type EntidadHija,
   type Entidades,
   type FiltroDeJobs,
+  type FiltroDeMensajes,
   type Filtros,
   type ImagenDeFoto,
   type Job,
   type Leido,
   type LoteDeCambios,
+  type Message,
 } from "../tipos";
 
 import type { DatosIniciales } from "./datos";
@@ -34,12 +37,27 @@ import type { Reloj } from "./reloj";
 type Fila = Record<string, unknown> & { version: string };
 type ConVersion<E extends Entidad> = Entidades[E] & { version: string };
 
+const ES_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/** El orden de `buscarMensajes`: la hora y, a igual hora, el crosswalk ID. */
+const clave = (m: Message) => `${new Date(m.sent_at).toISOString()} ${m.bzzzbx_message_id}`;
+
+/** Prefijo de los ids de los correos que deja caer `correoNuevo`; no chocan con los de la seed. */
+const PREFIJO_CORREO_NUEVO = "9";
+/** Por proceso y no por falso: un `reiniciar` no repite ids que la base ya vio. */
+const arranque = Date.now().toString(36);
+let correosNuevos = 0;
+
+/** Por proceso: dos falsos nunca comparten generación (spec OPR-15, E5). */
+let generacionesDadas = 0;
+
 const FORMA_CURSOR = /^lf1\.(\d+)\.(\d+)$/;
 
 export class LecturaFalsa implements LecturaBzzzbx {
   private tablas = new Map<Entidad, Map<string, Fila>>();
   private registro: Cambio[] = [];
-  private generacion = 1;
+  /** Única por falso y por reconstrucción: un cursor de otro falso (tras `reiniciar`) caduca siempre. */
+  private generacion = ++generacionesDadas;
   private ultimaVersion = 0;
   private caido = false;
 
@@ -119,6 +137,28 @@ export class LecturaFalsa implements LecturaBzzzbx {
     return { contentType: "image/svg+xml", bytes: new TextEncoder().encode(svg) };
   }
 
+  async buscarMensajes(filtro: FiltroDeMensajes): Promise<{ mensajes: Leido<Message>[]; hay_mas: boolean }> {
+    if (filtro.channel !== "email" || filtro.direction !== "inbound") {
+      throw new FiltroInvalido("buscarMensajes solo trae correos entrantes");
+    }
+    if (!ES_ISO.test(filtro.desde) || Number.isNaN(Date.parse(filtro.desde))) {
+      throw new FiltroInvalido("desde debe ser un instante ISO 8601 UTC");
+    }
+    this.exigirDisponible();
+    const ordenados = [...this.tabla("message").values()]
+      .map((fila) => this.leido<"message">(fila))
+      .filter((m) => m.channel === "email" && m.direction === "inbound")
+      .sort((a, b) => clave(a).localeCompare(clave(b)));
+    const desde = Date.parse(filtro.desde);
+    let candidatos = ordenados.filter((m) => Date.parse(m.sent_at) >= desde);
+    if (filtro.despuesDe !== undefined) {
+      const ancla = ordenados.find((m) => m.bzzzbx_message_id === filtro.despuesDe);
+      if (!ancla) throw new FiltroInvalido("despuesDe no es un mensaje conocido");
+      candidatos = candidatos.filter((m) => clave(m) > clave(ancla));
+    }
+    return { mensajes: candidatos.slice(0, BUSCAR_MENSAJES_MAX), hay_mas: candidatos.length > BUSCAR_MENSAJES_MAX };
+  }
+
   async cambiosDesde(cursor: Cursor | null): Promise<LoteDeCambios> {
     this.exigirDisponible();
     const desde = cursor === null ? this.registro.length : this.posicion(cursor);
@@ -151,6 +191,32 @@ export class LecturaFalsa implements LecturaBzzzbx {
     this.guardar(entidad, id, structuredClone(valor) as Record<string, unknown>);
   }
 
+  /**
+   * Deja caer un correo entrante de un remitente inventado, con su cambio. Sin
+   * `respuestaA` abre un hilo nuevo; con él, es una respuesta en ese hilo. Los
+   * ids empiezan con 9 y llevan la hora de arranque del proceso, para que ni
+   * un `reiniciar` del falso ni otra corrida sobre la misma base los repitan
+   * (spec OPR-15 §10.3).
+   */
+  correoNuevo(respuestaA?: string): { bzzzbx_message_id: string; bzzzbx_thread_id: string } {
+    correosNuevos += 1;
+    const sufijo = `${PREFIJO_CORREO_NUEVO}-${arranque}-${correosNuevos}`;
+    const mensaje: Message = {
+      bzzzbx_message_id: `bx-msg-${sufijo}`,
+      bzzzbx_thread_id: respuestaA ?? `bx-thread-${sufijo}`,
+      channel: "email",
+      direction: "inbound",
+      from: "new.requester@example.test",
+      to: ["requests@example.test"],
+      subject: respuestaA ? "Re: Cleaning request" : "Cleaning request",
+      body: "Hello, can you clean the unit this week?",
+      sent_at: this.reloj.ahora().toISOString(),
+      delivery: "delivered",
+    };
+    this.poner("message", mensaje);
+    return { bzzzbx_message_id: mensaje.bzzzbx_message_id, bzzzbx_thread_id: mensaje.bzzzbx_thread_id! };
+  }
+
   /** BzzzBX caído: toda llamada lanza `BzzzbxNoDisponible` hasta volver a false. */
   noDisponible(caido: boolean): void {
     this.caido = caido;
@@ -169,7 +235,7 @@ export class LecturaFalsa implements LecturaBzzzbx {
     this.tablas.clear();
     for (const [entidad, tabla] of copia) this.tablas.set(entidad, tabla);
     this.registro = [];
-    this.generacion += 1;
+    this.generacion = ++generacionesDadas;
   }
 
   /** Todas las filas de una entidad, con su versión: para pruebas y para el falso de instrucciones. */

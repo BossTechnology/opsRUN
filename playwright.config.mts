@@ -28,7 +28,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "chromium", testIgnore: /(audit|assign-confirm|etapas)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", testIgnore: /(audit|assign-confirm|entrada-correo|etapas)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     // La pestaña Audit enlaza R7 (una vez por base): corre después del resto, no a la vez (OPR-35).
     { name: "chromium-audit", testMatch: /audit\.spec\.ts/, dependencies: ["chromium"], use: { ...devices["Desktop Chrome"] } },
     // Assign y Confirm enlazan R8 (una vez por base) y mueven el dueño de R2: también después del resto (OPR-28).
@@ -38,11 +38,18 @@ export default defineConfig({
       dependencies: ["chromium-audit"],
       use: { ...devices["Desktop Chrome"] },
     },
-    // Las etapas llevan R8 de Scheduled a Paid y aprueban R5 (una vez por base): después de Assign y Confirm, que enlazan R8 (OPR-30 a OPR-32).
+    // La entrada de correo crea requests de verdad en la base (OPR-15): también después del resto.
+    {
+      name: "chromium-entrada",
+      testMatch: /entrada-correo\.spec\.ts/,
+      dependencies: ["chromium-assign"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // Las etapas llevan R8 de Scheduled a Paid y aprueban R5 (una vez por base): después de Assign y Confirm, que enlazan R8, y de la entrada de correo (OPR-30 a OPR-32).
     {
       name: "chromium-etapas",
       testMatch: /etapas\.spec\.ts/,
-      dependencies: ["chromium-assign"],
+      dependencies: ["chromium-entrada"],
       use: { ...devices["Desktop Chrome"] },
     },
   ],

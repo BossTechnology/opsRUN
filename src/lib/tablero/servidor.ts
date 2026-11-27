@@ -4,9 +4,7 @@ import "server-only";
  * El tablero en el servidor: opsRUN por el pool de `opsrun_app` y BzzzBX por
  * su puerto. Nada de esto se lee desde el navegador.
  */
-import { obtenerBzzzbx } from "../bzzzbx";
-import { BzzzbxNoDisponible } from "../bzzzbx/errores";
-import type { LecturaBzzzbx } from "../bzzzbx/puertos";
+import { lecturaOAusente } from "../bzzzbx/ausente";
 import { comoOpsrunApp } from "../db/servidor";
 
 import { revisarCambios, type Revision } from "./cambios";
@@ -30,20 +28,8 @@ export function zonaDeLaOperacion(env: Record<string, string | undefined> = proc
   }
 }
 
-/**
- * El puerto de lectura, o uno que siempre responde "no disponible" si BzzzBX
- * no se pudo crear (hoy, el real en el servidor hasta OPR-6). Así el tablero
- * muestra lo de opsRUN con el aviso en vez de caerse.
- */
-export function lecturaOAusente(crear: () => LecturaBzzzbx = () => obtenerBzzzbx().lectura): LecturaBzzzbx {
-  try {
-    return crear();
-  } catch (e) {
-    console.error("[opsRUN] tablero: BzzzBX no está disponible:", e instanceof Error ? e.message : e);
-    const ausente = () => Promise.reject(new BzzzbxNoDisponible());
-    return { obtener: ausente, obtenerVarios: ausente, listarPor: ausente, buscarJobs: ausente, leerFoto: ausente, cambiosDesde: ausente };
-  }
-}
+/** Vive en `../bzzzbx/ausente` para que el ciclo de fondo lo use sin `server-only`. */
+export { lecturaOAusente };
 
 const global = globalThis as typeof globalThis & { __opsrunMemoriaTablero?: MemoriaTablero };
 

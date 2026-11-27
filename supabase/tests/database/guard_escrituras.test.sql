@@ -14,10 +14,19 @@
 -- Se ve fallar en cada corrida: da INSERT sobre opsrun.request a opsrun_app y
 -- USAGE sobre la secuencia del R number a un rol ajeno de prueba, y comprueba
 -- que los detecta.
+--
+-- G15 (OPR-15, al final del archivo): la única función que inserta en
+-- opsrun.request es opsrun.ingest_request_email. Descubre en pg_proc las
+-- funciones de los esquemas de opsRUN cuyo prosrc contiene un
+-- `insert into opsrun.request` (sin contar request_message, request_confirmation,
+-- etc.) y compara con esa sola. Si una tarjeta futura necesita crear requests de
+-- otra forma, el guard falla a propósito y pide la decisión. Se ve fallar en
+-- cada corrida: crea una función de prueba que inserta una request, comprueba
+-- que el guard la detecta, y el rollback la deshace.
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(4);
+select plan(7);
 
 create function pg_temp.es_de_opsrun(nombre name)
 returns boolean
@@ -88,6 +97,52 @@ select ok(
 select ok(
   'opsrun.request_r_number_seq (guard_escrituras_ajeno USAGE)' in (select * from pg_temp.escrituras_abiertas()),
   'G2 se ve fallar: detecta USAGE de un rol ajeno sobre la secuencia del R number'
+);
+
+-- G15. Las funciones que insertan en opsrun.request, por su código. El nombre
+-- de la tabla termina ahí: `request_message` y las demás no cuentan.
+create function pg_temp.funciones_que_crean_requests()
+returns setof text
+language sql
+stable
+as $$
+  select n.nspname || '.' || p.proname
+  from pg_catalog.pg_proc as p
+  join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+  where pg_temp.es_de_opsrun(n.nspname)
+    and p.prosrc ~* 'insert\s+into\s+opsrun\.request([^a-z0-9_]|$)'
+    and not exists (
+      select 1 from pg_catalog.pg_depend as d
+      where d.classid = 'pg_catalog.pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e'
+    )
+  order by 1
+$$;
+
+-- 5. La comprobación real: una sola.
+select is(
+  array(select * from pg_temp.funciones_que_crean_requests()),
+  array['opsrun.ingest_request_email'],
+  'G15: la única función que inserta en opsrun.request es opsrun.ingest_request_email'
+);
+
+-- 6 y 7. G15 se ve fallar. Se rompe la regla como el dueño.
+set local role opsrun_migrador;
+create function opsrun.guard_prueba_crea_request()
+returns void language sql security definer set search_path = ''
+as $$ insert into opsrun.request (received_at) values (now()) $$;
+create function opsrun.guard_prueba_crea_vinculo()
+returns void language sql security definer set search_path = ''
+as $$ insert into opsrun.request_message (request_id, bzzzbx_message_id, channel, direction, actor_kind)
+      select id, 'x', 'email', 'inbound', 'system' from opsrun.request limit 1 $$;
+reset role;
+
+select ok(
+  'opsrun.guard_prueba_crea_request' in (select * from pg_temp.funciones_que_crean_requests()),
+  'G15 se ve fallar: detecta una función que inserta en opsrun.request'
+);
+select ok(
+  'opsrun.guard_prueba_crea_vinculo' not in (select * from pg_temp.funciones_que_crean_requests()),
+  'G15 no marca una función que inserta solo en opsrun.request_message'
 );
 
 select * from finish();

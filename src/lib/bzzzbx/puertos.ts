@@ -10,11 +10,13 @@ import type {
   EntidadHija,
   Entidades,
   FiltroDeJobs,
+  FiltroDeMensajes,
   Filtros,
   Instruccion,
   ImagenDeFoto,
   Job,
   Leido,
+  Message,
   LoteDeCambios,
   LoteDeResultados,
   Resultado,
@@ -39,6 +41,12 @@ export interface LecturaBzzzbx {
    * ni la cachea: la sirve tal cual por `/api/fotos/[id]`.
    */
   leerFoto(ref: string): Promise<ImagenDeFoto | null>;
+  /**
+   * Correos entrantes desde una hora, por páginas (spec OPR-15 §4.3). Para
+   * recuperar lo llegado mientras opsRUN estuvo parado o el cursor caducó.
+   * PROVISIONAL hasta OPR-6.
+   */
+  buscarMensajes(filtro: FiltroDeMensajes): Promise<{ mensajes: Leido<Message>[]; hay_mas: boolean }>;
   /**
    * Qué cambió desde el cursor. Con null, ningún cambio y el cursor de ahora.
    * Un cambio dice solo entidad, id y versión: el dato se relee con `obtener`.

@@ -20,6 +20,15 @@ import {
   type Tarjeta,
 } from "./tipos";
 
+export type OrdenDeRequests = "mas_antigua_arriba" | "mas_nueva_arriba";
+
+/**
+ * El orden de la columna Requests (OPR-15, P-8): la más antigua arriba, decidido
+ * por Henry el 2026-11-27 (OPR-25, S-1). Cambiarlo es cambiar esta constante;
+ * ningún otro lugar decide la posición de una request nueva.
+ */
+export const ORDEN_DE_REQUESTS: OrdenDeRequests = "mas_antigua_arriba" as OrdenDeRequests;
+
 export type EntradaTablero = {
   filas: FilaRequest[];
   leidos: Leidos;
@@ -183,7 +192,8 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
   }
 
   const columnas: Columna[] = ETAPAS.map((etapa) => {
-    const deEtapa = tarjetas.filter((t) => t.etapa === etapa).sort((a, b) => a.orden.localeCompare(b.orden));
+    const sentido = etapa === "requests" && ORDEN_DE_REQUESTS === "mas_nueva_arriba" ? -1 : 1;
+    const deEtapa = tarjetas.filter((t) => t.etapa === etapa).sort((a, b) => sentido * a.orden.localeCompare(b.orden));
     const pagadas = etapa === "validation" ? deEtapa.filter((t) => t.color === "pagada") : [];
     return {
       etapa,

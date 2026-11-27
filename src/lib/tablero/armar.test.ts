@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { armarTablero } from "./armar";
+import { armarTablero, ORDEN_DE_REQUESTS } from "./armar";
 import { filasDeLaSeed, leidosDelFalso } from "./prueba-datos";
 import { LEIDOS_VACIOS, SIN_VALOR, type Etapa, type Leidos, type Tablero } from "./tipos";
 
@@ -24,6 +24,13 @@ describe("armarTablero", () => {
       "Complete",
       "Validation",
     ]);
+  });
+
+  it("Requests: la más antigua arriba, por la constante ORDEN_DE_REQUESTS (OPR-15, P-8)", () => {
+    expect(ORDEN_DE_REQUESTS).toBe("mas_antigua_arriba");
+    const t = armar();
+    const horas = columna(t, "requests").tarjetas.map((x) => filasDeLaSeed(AHORA).find((f) => `R${f.r_number}` === x.numero)!.received_at);
+    expect(horas).toEqual([...horas].sort());
   });
 
   it("cada request en su etapa (OPR-20 §5)", () => {
