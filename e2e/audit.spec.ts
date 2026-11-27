@@ -142,7 +142,7 @@ test("B3: la historia completa de EX-00006, en orden de tiempo", async ({ page }
 
   // Cada hora es un <time datetime> y todas salen con fecha.
   const tiempos = audit(page).locator("time");
-  await expect(tiempos).toHaveCount(14);
+  await expect(tiempos).toHaveCount(15); // con el Validated de OPR-32
   const horas = await tiempos.evaluateAll((els) => els.map((e) => [e.getAttribute("datetime"), e.textContent]));
   const instantes = horas.map(([iso]) => Date.parse(iso!));
   expect(instantes).toEqual([...instantes].sort((a, b) => a - b));
