@@ -72,6 +72,8 @@ describe("ejecutarAccion: lo que no corre, no corre", () => {
   it.each([
     ["sin_construir", () => base({ ejecutor: undefined }), "Not built yet"],
     ["fuera_de_release", () => base({ enRelease: false, ejecutor: vi.fn() }), "Not available in this release"],
+    // Fase B (OPR-30, P-10): aunque tuviera ejecutor, nunca corre.
+    ["fase_b", () => base({ faseB: true, ejecutor: vi.fn() }), "Available when actions are switched on"],
     ["no_aplica", () => base({ etapas: ["complete"], ejecutor: vi.fn() }), "does not apply"],
     ["bloqueada", () => base({ bloqueo: () => "Add PO", ejecutor: vi.fn() }), "Add PO"],
   ])("rechaza una acción %s sin llamar al ejecutor, al actor ni al refresco", async (_valor, crear, texto) => {

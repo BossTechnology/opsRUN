@@ -5,7 +5,7 @@
 --
 -- - Toda columna de una tabla de los esquemas de opsRUN (`opsrun` y
 --   `opsrun_*`) tiene un COMMENT que empieza
---   con su dueño (opsrun, crosswalk o bzzzbx-snapshot), opcionalmente ":draft",
+--   con su dueño (opsrun, crosswalk o bzzzbx-snapshot), opcionalmente ":draft" o ":job",
 --   y " · " con la descripción.
 -- - Toda columna bzzzbx_*_id es text y está marcada crosswalk.
 --
@@ -45,7 +45,7 @@ stable
 as $$
   select format('%s.%I', tabla, columna)
   from pg_temp.columnas()
-  where coalesce(comentario, '') !~ '^(opsrun|crosswalk|bzzzbx-snapshot)(:draft)? · .+'
+  where coalesce(comentario, '') !~ '^(opsrun|crosswalk|bzzzbx-snapshot)(:draft|:job)? · .+'
 $$;
 
 create function pg_temp.crosswalk_mal_declarado()

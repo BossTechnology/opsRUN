@@ -22,6 +22,7 @@ export function lecturaOAusente(crear: () => LecturaBzzzbx = () => obtenerBzzzbx
       listarPor: ausente,
       buscarJobs: ausente,
       buscarMensajes: ausente,
+      leerFoto: ausente,
       cambiosDesde: ausente,
     };
   }

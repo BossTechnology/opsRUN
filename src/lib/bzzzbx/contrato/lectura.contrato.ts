@@ -104,6 +104,24 @@ export function probarContratoDeLectura(nombre: string, crear: () => Promise<Ent
       },
     );
 
+    describe("leerFoto", () => {
+      it("da la imagen de una foto conocida, con su tipo, y nunca vacía (OPR-30, P-8)", async () => {
+        const { lectura, conocidos } = await crear();
+        const foto = await lectura.obtener("photo", conocidos.photo);
+        expect(foto).not.toBeNull();
+        const imagen = await lectura.leerFoto(foto!.ref);
+        expect(imagen).not.toBeNull();
+        expect(imagen!.contentType).toMatch(/^image\//);
+        expect(imagen!.bytes).toBeInstanceOf(Uint8Array);
+        expect(imagen!.bytes.length).toBeGreaterThan(0);
+      });
+
+      it("da null para una referencia que BzzzBX no conoce", async () => {
+        const { lectura } = await crear();
+        expect(await lectura.leerFoto("stand-in:photo/bx-no-existe-0000")).toBeNull();
+      });
+    });
+
     describe("buscarJobs", () => {
       /** El job conocido, leído, y un rango de fechas que lo contiene. */
       async function conocido(entorno: EntornoDeLectura) {

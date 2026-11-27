@@ -254,8 +254,8 @@ test("D1: R8 nueva → asignar → 3 confirmaciones → enlazar", async ({ page 
 
     // Confirm sender.
     await elegirAccion(page, "confirm_sender");
-    await expect(page.getByTestId("confirmar-customer")).toContainText("Sample Rentals");
-    await expect(page.getByTestId("confirmar-contact")).toContainText("Contact Three");
+    await expect(page.getByTestId("confirmar-customer")).toContainText("Demo Housing Co");
+    await expect(page.getByTestId("confirmar-contact")).toContainText("Contact Four");
     await page.getByTestId("go").click();
     await expect(resultado(page)).toHaveText("Saved");
 
@@ -334,10 +334,10 @@ test("D1: R8 nueva → asignar → 3 confirmaciones → enlazar", async ({ page 
     ["sender", "operator"],
   ]);
   expect(confirmaciones.find((c) => c.kind === "sender")!.confirmed_value).toEqual({
-    bzzzbx_customer_id: "bx-cust-0002",
-    bzzzbx_contact_id: "bx-cont-0003",
+    bzzzbx_customer_id: "bx-cust-0003",
+    bzzzbx_contact_id: "bx-cont-0004",
   });
-  expect(JSON.stringify(confirmaciones)).not.toMatch(/Mock Gardens|Sample Rentals|Team Gamma|555/);
+  expect(JSON.stringify(confirmaciones)).not.toMatch(/Mock Gardens|Demo Housing|Team Gamma|555/);
   expect(await contar("select count(*)::text as n from opsrun.instruction where request_id = $1", [R(8)])).toBe(0);
   expect(await consultar("select decision::text from opsrun.ai_suggestion where request_id = $1", [R(8)])).toEqual([{ decision: "accepted" }]);
 });

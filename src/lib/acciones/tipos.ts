@@ -60,6 +60,12 @@ export type DefinicionAccion = {
   etapas: Etapa[];
   /** false → fuera_de_release. */
   enRelease: boolean;
+  /**
+   * La acción es de la Fase B (OPR-30, P-10): se hace en las herramientas de PINCH y opsRUN
+   * la observa. Se ve en gris con "Available when actions are switched on", sale
+   * `fuera_de_release` y nunca corre, aunque tuviera ejecutor.
+   */
+  faseB?: boolean;
   motivo: Motivo;
   /** Si necesita BzzzBX para correr (lectura o instrucción). Sin BzzzBX → bloqueada. */
   necesitaBzzzbx: boolean;
@@ -85,7 +91,8 @@ export type Disponibilidad =
   | { tipo: "no_aplica" }
   | { tipo: "bloqueada"; motivo: string }
   | { tipo: "sin_construir" }
-  | { tipo: "fuera_de_release" };
+  /** `fase: "b"` es lo que se hace en PINCH hasta que se enciendan las acciones (OPR-30, P-10). */
+  | { tipo: "fuera_de_release"; fase?: "b" };
 
 /** Lo que la action bar necesita de una acción: serializable, sin funciones. */
 export type AccionVista = {

@@ -3,7 +3,8 @@
  * opsRUN y lo leído de BzzzBX; los componentes solo lo pintan. Nada de esto se
  * guarda ni se escribe: la ventana solo lee.
  */
-import type { AlertResult, CleanerTeam, Contact } from "../bzzzbx/tipos";
+import type { AlertResult, CleanerTeam, Contact, Photo } from "../bzzzbx/tipos";
+import type { PoVigente } from "../billing/po";
 import type { Etapa, FilaRequest, Leidos } from "../tablero/tipos";
 
 export type EtapaVentana = Etapa | "cancelled";
@@ -15,10 +16,18 @@ export type FilaVentana = FilaRequest & {
   access_notes: string | null;
   /** `change_seq` de la request: lo que vio el operador (S-12). Texto: es un bigint. */
   change_seq: string;
+  /** Cuándo capturó el operador el PO en opsRUN (OPR-32). */
+  entered_po_at: string | null;
+  /** Quién marcó OSS: `auto` si salió de End manually sin fotos (OPR-31). */
+  oss_source: "operator" | "auto" | null;
+  /** Nombre de quien aprobó (Billing: "Approved Nov 27 by Ops Uno"). */
+  approved_by_nombre: string | null;
+  /** Nombre de quien validó. */
+  validated_by_nombre: string | null;
 };
 
 /** Lo leído de BzzzBX para la ventana: lo del tablero y los dos `obtener` de §8.2. */
-export type LeidosVentana = Leidos & { contactos: Contact[]; equipos: CleanerTeam[] };
+export type LeidosVentana = Leidos & { contactos: Contact[]; equipos: CleanerTeam[]; fotos: Photo[] };
 
 export const LEIDOS_VENTANA_VACIOS: LeidosVentana = {
   jobs: [],
@@ -32,6 +41,7 @@ export const LEIDOS_VENTANA_VACIOS: LeidosVentana = {
   salud: [],
   contactos: [],
   equipos: [],
+  fotos: [],
 };
 
 /** Un operador activo con su carga (S-5): requests suyas que aún no llegan a Validation. */
@@ -81,6 +91,8 @@ export type AlertaVista = { id: string; regla: string; nivel: "amber" | "red"; r
 
 export type Encabezado = {
   stage: { etapa: EtapaVentana; texto: string; pagada: boolean };
+  /** Chip OSS junto a Stage (OPR-31): solo con la marca OSS. */
+  oss: boolean;
   /** "Demo Lofts 7C": propiedad y espacio, como el nombre de la tarjeta. */
   nombre: string;
   linea: { numero: string; fecha: string; servicio: string; cleaner: string };
@@ -116,9 +128,25 @@ export type VentanaJob = {
    * cleaner que se puede aceptar y las sugerencias de IA abiertas.
    */
   datos: {
+    /** Crosswalk ID del job; null si todavía no hay (Requests). */
+    bzzzbxJobId: string | null;
     tienePropiedad: boolean;
     poRequerido: boolean;
     tienePo: boolean;
+    /** El PO vigente (OPR-32, P-2): el capturado en opsRUN, el de PINCH o el del borrador. */
+    poVigente: PoVigente | null;
+    /** Las alertas abiertas que Clear alert puede limpiar (OPR-30, P-6). */
+    alertasLimpiables: { id: string; regla: string; nivel: "amber" | "red"; razon: string; abierta: string }[];
+    /** La marca OSS del job. */
+    oss: "oss" | "not_oss" | null;
+    /** La marca salió sola (End manually sin fotos, R5): el operador puede cambiarla. */
+    ossAuto: boolean;
+    /** Approve & confirm ya se hizo. */
+    aprobada: boolean;
+    /** Validate ya se hizo. */
+    validada: boolean;
+    /** Cuándo terminó el job según el Job Tracker o End manually, en la zona de la operación; null si no ha terminado. */
+    fin: string | null;
     faltanDetalles: string[];
     tieneCliente: boolean;
     tieneEquipo: boolean;

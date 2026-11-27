@@ -12,6 +12,8 @@ export const BZZZBX_NO_DISPONIBLE = "BzzzBX unavailable";
 export const INSTRUCCION_EN_CURSO = "Instruction in progress";
 export const NO_CONSTRUIDA = "Not built yet";
 export const FUERA_DE_RELEASE = "Not available in this release";
+/** El texto de OPR-42 para lo que la Fase A hace en las herramientas de PINCH (OPR-30, P-10). */
+export const FASE_B = "Available when actions are switched on";
 
 /**
  * El orden importa: lo que no es de esta etapa no aparece, lo que no entra en
@@ -20,6 +22,7 @@ export const FUERA_DE_RELEASE = "Not available in this release";
  */
 export function disponibilidadDe(def: DefinicionAccion, v: VentanaJob): Disponibilidad {
   if (v.etapa === "cancelled" || !def.etapas.includes(v.etapa)) return { tipo: "no_aplica" };
+  if (def.faseB) return { tipo: "fuera_de_release", fase: "b" };
   if (!def.enRelease) return { tipo: "fuera_de_release" };
   if (def.necesitaBzzzbx) {
     if (!v.bzzzbx.disponible) return { tipo: "bloqueada", motivo: BZZZBX_NO_DISPONIBLE };
@@ -39,7 +42,7 @@ export function nota(d: Disponibilidad): string | null {
     case "sin_construir":
       return NO_CONSTRUIDA;
     case "fuera_de_release":
-      return FUERA_DE_RELEASE;
+      return d.fase === "b" ? FASE_B : FUERA_DE_RELEASE;
     default:
       return null;
   }

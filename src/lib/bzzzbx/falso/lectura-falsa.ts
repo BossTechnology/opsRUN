@@ -24,6 +24,7 @@ import {
   type FiltroDeJobs,
   type FiltroDeMensajes,
   type Filtros,
+  type ImagenDeFoto,
   type Job,
   type Leido,
   type LoteDeCambios,
@@ -116,6 +117,24 @@ export class LecturaFalsa implements LecturaBzzzbx {
       )
       .sort((a, b) => (a.service_date + a.bzzzbx_job_id < b.service_date + b.bzzzbx_job_id ? -1 : 1))
       .slice(0, BUSCAR_JOBS_MAX);
+  }
+
+  /**
+   * Un SVG inventado: un recuadro con "Before" o "After" y el id de la foto.
+   * Nunca una foto real ni un archivo (spec OPR-30 §4.2, P-8).
+   */
+  async leerFoto(ref: string): Promise<ImagenDeFoto | null> {
+    this.exigirDisponible();
+    const foto = [...this.tabla("photo").values()].find((f) => f.ref === ref);
+    if (!foto) return null;
+    const fase = foto.phase === "after" ? "After" : "Before";
+    const id = String(foto.bzzzbx_photo_id).replace(/[^A-Za-z0-9_-]/g, "");
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="${fase} photo ${id}">` +
+      `<rect width="320" height="240" fill="#d9e2ec"/><rect x="8" y="8" width="304" height="224" fill="none" stroke="#486581" stroke-width="2"/>` +
+      `<text x="160" y="120" font-family="sans-serif" font-size="32" text-anchor="middle" fill="#243b53">${fase}</text>` +
+      `<text x="160" y="152" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#486581">${id}</text></svg>`;
+    return { contentType: "image/svg+xml", bytes: new TextEncoder().encode(svg) };
   }
 
   async buscarMensajes(filtro: FiltroDeMensajes): Promise<{ mensajes: Leido<Message>[]; hay_mas: boolean }> {

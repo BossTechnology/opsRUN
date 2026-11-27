@@ -197,8 +197,8 @@ describe("armarVentana: alertas (S-8)", () => {
     expect(v.inicial).toEqual({ id: "alerts", porRegla: true });
   });
 
-  it("R4: la alerta ya resuelta no pide acción", () => {
-    expect(ventana(4).alertas).toEqual([]);
+  it("R4: la Delayed ya resuelta no pide acción; la Running long abierta sí", () => {
+    expect(ventana(4).alertas.map((a) => [a.id, a.regla])).toEqual([["bx-alert-0006", "MEC-003"]]);
   });
 });
 
@@ -316,5 +316,103 @@ describe("armarVentana: lo que piden Assign y Confirm (OPR-28, spec §7)", () =>
     const respuesta = { id: "5c000000-0000-4000-8000-000000000001", equipoId: "bx-team-0001", lectura: "The cleaner said yes." };
     const sugerencias = [{ campo: "property", razon: "Address matches." }];
     expect(ventana(2, { respuestaDelCleaner: respuesta, sugerencias }).datos).toMatchObject({ respuestaDelCleaner: respuesta, sugerencias });
+  });
+});
+
+describe("armarVentana: las etapas (OPR-30 a OPR-32, spec §7.2)", () => {
+  it("alertasLimpiables: solo MEC-003 abiertas del job o de la request (R4); con la limpiada en opsRUN, ninguna", () => {
+    expect(ventana(4).datos.alertasLimpiables).toEqual([
+      { id: "bx-alert-0006", regla: "MEC-003", nivel: "amber", razon: "Running 45 min over the window.", abierta: expect.stringMatching(/ago$|^just now$/) },
+    ]);
+    // Una abierta de otra regla (OPS-010) y una MEC-003 de un mensaje no se pueden limpiar aquí.
+    const e = entrada(4);
+    e.leidos = {
+      ...e.leidos,
+      alertas: [
+        ...e.leidos.alertas,
+        { bzzzbx_alert_id: "bx-alert-7001", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, rule_id: "OPS-010", rule_version: "1", level: "red", reason_text: "x", opened_at: "2026-11-24T17:00:00Z", cleared_at: null },
+        { bzzzbx_alert_id: "bx-alert-7002", sujeto: { tipo: "message", bzzzbx_message_id: "bx-msg-0004" }, rule_id: "MEC-003", rule_version: "1", level: "amber", reason_text: "x", opened_at: "2026-11-24T17:00:00Z", cleared_at: null },
+      ],
+    };
+    expect(armarVentana(e).datos.alertasLimpiables.map((a) => a.id)).toEqual(["bx-alert-0006"]);
+    expect(armarVentana(e).alertas.map((a) => a.id)).toContain("bx-alert-7001");
+  });
+
+  it("una alerta limpiada en opsRUN no cuenta aunque BzzzBX la siga dando abierta (P-7): ni en Alerts, ni limpiable, ni en el conteo", () => {
+    const base = ventana(4);
+    expect(base.alertas.map((a) => a.id)).toEqual(["bx-alert-0006"]);
+    const e = entrada(4);
+    e.fila = { ...e.fila, alertas_limpiadas: ["bx-alert-0006"] };
+    const v = armarVentana(e);
+    expect(v.alertas).toEqual([]);
+    expect(v.alertasLeidas).toEqual([]);
+    expect(v.datos.alertasLimpiables).toEqual([]);
+    expect(v.pestanas.at(-1)!.conteo).toBe(0);
+    expect(v.inicial).toEqual({ id: "property", porRegla: false });
+  });
+
+  it("la alerta limpiada de otra request no descuenta la de esta", () => {
+    const e = entrada(4);
+    e.fila = { ...e.fila, alertas_limpiadas: ["bx-alert-0001"] };
+    expect(armarVentana(e).datos.alertasLimpiables.map((a) => a.id)).toEqual(["bx-alert-0006"]);
+  });
+
+  it("tienePo sale del PO vigente: el capturado en opsRUN, el del job en PINCH o el del borrador (P-2)", () => {
+    // R6: el job de PINCH trae PO-EX-0006.
+    expect(ventana(6).datos.poVigente).toEqual({ valor: "PO-EX-0006", fuente: "pinch" });
+    expect(ventana(6).datos.tienePo).toBe(true);
+    // R4: sin PO en ninguna parte.
+    expect(ventana(4).datos.poVigente).toBeNull();
+    expect(ventana(4).datos.tienePo).toBe(false);
+    // Con el capturado en opsRUN manda ese.
+    const capturado = armarVentana({ ...entrada(6), fila: { ...entrada(6).fila, entered_po_number: "PO-OPSRUN" } });
+    expect(capturado.datos.poVigente).toEqual({ valor: "PO-OPSRUN", fuente: "opsrun" });
+    expect(capturado.propiedad.campos.find((c) => c.clave === "po")!.valor).toBe("PO-OPSRUN");
+    // El del borrador también desbloquea (R3 lo trae y el job de PINCH también: sin el del job, queda el del borrador).
+    const e = entrada(3);
+    e.leidos = { ...e.leidos, jobs: e.leidos.jobs.map((j) => (j.bzzzbx_job_id === "bx-job-0003" ? { ...j, po_number: null } : j)) };
+    expect(armarVentana(e).datos.poVigente).toEqual({ valor: "PO-EX-0003", fuente: "draft" });
+  });
+
+  it("poRequerido y tienePo: el bloqueo 'Add PO' cae con cualquiera de las fuentes", () => {
+    const e = entrada(6);
+    e.leidos = { ...e.leidos, jobs: e.leidos.jobs.map((j) => (j.bzzzbx_job_id === "bx-job-0006" ? { ...j, po_number: null } : j)) };
+    const sinPo = armarVentana(e);
+    expect(sinPo.datos).toMatchObject({ poRequerido: true, tienePo: false, poVigente: null });
+    const conCapturado = armarVentana({ ...e, fila: { ...e.fila, entered_po_number: "PO-X" } });
+    expect(conCapturado.datos).toMatchObject({ poRequerido: true, tienePo: true });
+  });
+
+  it("oss, aprobada y validada salen de la request; R5 trae la marca automática", () => {
+    expect(ventana(5).datos).toMatchObject({ oss: "oss", ossAuto: true, aprobada: false, validada: false });
+    expect(ventana(6).datos).toMatchObject({ oss: "not_oss", ossAuto: false, aprobada: true, validada: true });
+    expect(ventana(4).datos).toMatchObject({ oss: null, ossAuto: false, aprobada: false, validada: false });
+  });
+
+  it("el encabezado trae el chip OSS solo con la marca OSS", () => {
+    expect(ventana(5).encabezado.oss).toBe(true);
+    expect(ventana(6).encabezado.oss).toBe(false);
+    expect(ventana(3).encabezado.oss).toBe(false);
+  });
+
+  it("bzzzbxJobId: el crosswalk del job, o null en Requests", () => {
+    expect(ventana(4).datos.bzzzbxJobId).toBe("bx-job-0004");
+    expect(ventana(2).datos.bzzzbxJobId).toBeNull();
+  });
+
+  it("fin: cuándo terminó, en la zona de la operación; null si no ha terminado", () => {
+    expect(ventana(4).datos.fin).toBeNull();
+    // R5 terminó a mano hace 20 h; R6 tiene `completed` en el Job Tracker.
+    expect(ventana(5).datos.fin).toMatch(/^Nov 23, /);
+    expect(ventana(6).datos.fin).toMatch(/^Nov 1[78]|^Nov 19/);
+  });
+
+  it("una validada sigue en Validation y 'Validated' no cambia la etapa", () => {
+    expect(ventana(6).etapa).toBe("validation");
+    expect(ventana(6).pestanas.map((p) => p.id)).toContain("billing");
+  });
+
+  it("las fotos leídas entran a los leídos de la ventana (la galería las muestra)", () => {
+    expect(leidosVentanaDelFalso(AHORA).fotos.map((f) => f.bzzzbx_photo_id)).toEqual(["bx-photo-0001", "bx-photo-0002"]);
   });
 });

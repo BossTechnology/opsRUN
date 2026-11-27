@@ -3,7 +3,11 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import type { PropsPanelAccion } from "@/lib/acciones/tipos";
+import { reglaConNombre } from "@/lib/audit/reglas";
+import { PO_MAX } from "@/lib/etapas/reglas";
 import type { CampoPropiedad, VentanaJob } from "@/lib/ventana/tipos";
+
+import "./etapas.css";
 
 /**
  * Los paneles propios de Assign / Reassign y Confirm details, sender y cleaner
@@ -202,10 +206,133 @@ export function PanelConfirmCleaner({ ventana, onCambio }: PropsPanelAccion) {
   );
 }
 
+/**
+ * Clear alert (OPR-30 §4.3): la alerta limpiable del job, con su regla, nivel,
+ * texto y hace cuánto abrió. Si hay varias se elige una; con una sola ya viene
+ * elegida. El motivo es obligatorio y lo pide la barra.
+ */
+export function PanelClearAlert({ ventana, onCambio }: PropsPanelAccion) {
+  const lista = ventana.datos.alertasLimpiables;
+  const [elegida, setElegida] = useState<string | null>(null);
+  // Una sola alerta ya está elegida; si la elegida dejó de estar (se refrescó la ventana), se desmarca.
+  const valida = lista.length === 1 ? lista[0]!.id : lista.some((a) => a.id === elegida) ? elegida : null;
+
+  useEffect(() => {
+    onCambio(valida ? { bzzzbx_alert_id: valida } : {}, valida !== null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valida]);
+
+  return (
+    <fieldset className="panel-clear-alert" data-testid="panel-clear-alert">
+      <legend>{lista.length > 1 ? "Which alert?" : "Alert to clear"}</legend>
+      <ul aria-label="Alerts">
+        {lista.map((a) => (
+          <li key={a.id} data-testid="alerta-limpiable" data-alerta={a.id} data-regla={a.regla} data-nivel={a.nivel}>
+            <label>
+              {lista.length > 1 ? (
+                <input type="radio" name="alerta" checked={valida === a.id} onChange={() => setElegida(a.id)} />
+              ) : null}
+              <span className="alerta-mini" data-nivel={a.nivel}>
+                {reglaConNombre(a.regla)}
+              </span>{" "}
+              <span>{a.nivel}</span> · <span>{a.razon}</span> · <span data-testid="alerta-hace">opened {a.abierta}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
+  );
+}
+
+const TEXTO_MARCA = { oss: "OSS", not_oss: "Not OSS" } as const;
+
+/**
+ * Mark as OSS / Not OSS (OPR-31 §5.1): dos opciones con la actual marcada. Go
+ * queda deshabilitado si se elige la marca que ya tiene. El motivo es opcional.
+ */
+export function PanelMarkOss({ ventana, onCambio }: PropsPanelAccion) {
+  const actual = ventana.datos.oss;
+  const [elegida, setElegida] = useState<"oss" | "not_oss" | null>(actual);
+  const completo = elegida !== null && elegida !== actual;
+
+  useEffect(() => {
+    onCambio(elegida ? { mark: elegida } : {}, completo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elegida, completo]);
+
+  return (
+    <fieldset className="panel-mark-oss" data-testid="panel-mark-oss">
+      <legend data-testid="oss-actual">
+        {actual ? `Current: ${TEXTO_MARCA[actual]}${ventana.datos.ossAuto ? " (auto)" : ""}` : "No mark yet"}
+      </legend>
+      {(["oss", "not_oss"] as const).map((marca) => (
+        <label key={marca}>
+          <input type="radio" name="oss" checked={elegida === marca} onChange={() => setElegida(marca)} />
+          <span>{TEXTO_MARCA[marca]}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Approve & confirm (OPR-31 §5.2): un resumen de lo que se firma y Go. Sin motivo. */
+export function PanelApprove({ ventana, onCambio }: PropsPanelAccion) {
+  useCompletoAlMontar(onCambio);
+  const { fin, oss, ossAuto } = ventana.datos;
+  return (
+    <dl className="campos campos-confirmar" data-testid="panel-approve">
+      <div>
+        <dt>Ended</dt>
+        <dd data-testid="approve-fin">{fin ?? "— —"}</dd>
+      </div>
+      <div>
+        <dt>OSS status</dt>
+        <dd data-testid="approve-oss">{oss ? `${TEXTO_MARCA[oss]}${ossAuto ? " (auto)" : ""}` : "— —"}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/**
+ * Enter PO (OPR-32 §5.3): el PO que el operador escribe en opsRUN, hasta Validate.
+ * Completo si no está vacío, no pasa de 64 caracteres y es otro distinto del
+ * capturado.
+ */
+export function PanelEnterPo({ ventana, onCambio }: PropsPanelAccion) {
+  const vigente = ventana.datos.poVigente;
+  const capturado = vigente?.fuente === "opsrun" ? vigente.valor : "";
+  const [valor, setValor] = useState(capturado);
+  const recortado = valor.trim();
+  const completo = recortado !== "" && recortado.length <= PO_MAX && recortado !== capturado;
+
+  useEffect(() => {
+    onCambio(completo ? { po_number: recortado } : {}, completo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recortado, completo]);
+
+  return (
+    <div className="panel-enter-po" data-testid="panel-enter-po">
+      <label>
+        <span className="etiqueta-campo">PO #</span>
+        <input type="text" data-testid="panel-po-input" value={valor} maxLength={PO_MAX} autoComplete="off" onChange={(e) => setValor(e.target.value)} />
+      </label>
+      {vigente && vigente.fuente !== "opsrun" ? (
+        <p className="nota-gris" data-testid="po-otra-fuente">
+          {vigente.fuente === "pinch" ? "In PINCH" : "In the request"}: {vigente.valor}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** El panel de cada acción que lo tiene, por código. Las demás no piden nada más que el motivo. */
 export const PANELES_DE_ACCION: Record<string, ComponentType<PropsPanelAccion>> = {
   assign: PanelAssign,
   confirm_details: PanelConfirmDetails,
   confirm_sender: PanelConfirmSender,
   confirm_cleaner: PanelConfirmCleaner,
+  clear_alert: PanelClearAlert,
+  mark_oss: PanelMarkOss,
+  approve_confirm: PanelApprove,
+  write_po: PanelEnterPo,
 };

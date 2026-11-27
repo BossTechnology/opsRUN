@@ -18,6 +18,8 @@ function fila(p: Partial<FilaDeAudit> & Pick<FilaDeAudit, "id" | "event_type" | 
     de_operador: null,
     metodo: null,
     modo: null,
+    marca_oss: null,
+    po_numero: null,
     job_number: null,
     bzzzbx_job_id: null,
     sugerencias: null,

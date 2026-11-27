@@ -361,7 +361,9 @@ where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-
 -- sin confirmaciones, con el borrador completo (cliente, contacto, propiedad,
 -- servicio, fecha, ventana y equipo, todos inventados), su correo original y una
 -- sugerencia de IA abierta de la propiedad, igual al borrador. Su job, que se
--- crea en las herramientas de PINCH, es bx-job-0108 (EX-00108) en el falso.
+-- crea en las herramientas de PINCH, es bx-job-0108 (EX-00108) en el falso. Su
+-- cliente (bx-cust-0003) exige PO y el borrador no trae: el recorrido hasta Paid
+-- (OPR-30 a OPR-32) pasa por "Add PO" antes de Validate.
 -- Sus crosswalk IDs (bx-msg-0008, bx-thread-0008) salen del último dígito del
 -- id, como los de las demás.
 -- ---------------------------------------------------------------------------
@@ -372,7 +374,7 @@ insert into opsrun.request (
   access_notes, po_number, bzzzbx_team_id
 ) values
   ('b0000000-0000-4000-8000-0000000000a8', now() - interval '25 minutes', null,
-   'bx-cust-0002', 'bx-cont-0003', 'bx-prop-0005', null,
+   'bx-cust-0003', 'bx-cont-0004', 'bx-prop-0005', null,
    '5D', 2, 'bx-svc-0002', current_date + 4, '09:00', '12:00',
    'Lockbox on the gate.', null, 'bx-team-0003');
 
@@ -389,3 +391,17 @@ where id = 'b0000000-0000-4000-8000-0000000000a8';
 insert into opsrun.ai_suggestion (id, request_id, field, rank, value, reason) values
   ('5a000000-0000-4000-8000-0000000000e8', 'b0000000-0000-4000-8000-0000000000a8', 'property', 1,
    '"bx-prop-0005"', 'Address in the email matches the property.');
+
+-- ---------------------------------------------------------------------------
+-- R6 validada (OPR-32, P-14): Finance Uno la validó hace casi tres días, después
+-- de escribir el PO y antes de que se pagara. Así Billing y su criterio E9
+-- muestran un job validado y pagado. Va al final del archivo para no mover los
+-- `id` de los eventos que ya estaban.
+-- ---------------------------------------------------------------------------
+update opsrun.request
+set validated_at = now() - interval '2 days 22 hours', validated_by = '0a000000-0000-4000-8000-0000000000b1'
+where id = 'b0000000-0000-4000-8000-0000000000a6';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details) values
+  ('b0000000-0000-4000-8000-0000000000a6', 'job_validated', 'operator', '0a000000-0000-4000-8000-0000000000b1',
+   now() - interval '2 days 22 hours', '{"po_required": true, "po_source": "pinch", "po_number": null}');

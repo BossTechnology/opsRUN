@@ -9,17 +9,20 @@ import {
   OPERADORES_DE_PRUEBA,
   SIN_CONFIRMACIONES,
 } from "../ventana/prueba-datos";
-import type { VentanaJob } from "../ventana/tipos";
+import type { FilaVentana, VentanaJob } from "../ventana/tipos";
 
 import { accionesVisibles, disponibilidadDe, nota } from "./disponibilidad";
-import { BZZZBX_NO_DISPONIBLE, FUERA_DE_RELEASE, NO_CONSTRUIDA } from "./disponibilidad";
+import { BZZZBX_NO_DISPONIBLE, FASE_B, FUERA_DE_RELEASE, NO_CONSTRUIDA } from "./disponibilidad";
 import type { DefinicionAccion } from "./tipos";
 
 const AHORA = new Date("2026-11-24T18:00:00Z");
 
-function ventana(n: number, parche: { disponible?: boolean; instruccionAbierta?: boolean; sinConfirmar?: boolean } = {}): VentanaJob {
+function ventana(
+  n: number,
+  parche: { disponible?: boolean; instruccionAbierta?: boolean; sinConfirmar?: boolean; fila?: Partial<FilaVentana> } = {},
+): VentanaJob {
   return armarVentana({
-    fila: filaVentana(AHORA, n),
+    fila: { ...filaVentana(AHORA, n), ...parche.fila },
     leidos: leidosVentanaDelFalso(AHORA),
     hilos: [`bx-thread-000${n}`],
     operadores: OPERADORES_DE_PRUEBA,
@@ -131,10 +134,14 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(etiquetas(6)).toEqual(["Enter PO", "Validate"]);
   });
 
-  it("solo corren las que ya tienen ejecutor (las de Requests de OPR-28); las demás de V1.1 beta salen Not built yet y Reject · re-clean fuera del release", () => {
+  it("solo corren las que ya tienen ejecutor (Requests de OPR-28 y las etapas de OPR-30 a OPR-32); Reject · re-clean está fuera del release y Reschedule, Cancel job y End manually son de la Fase B", () => {
+    const conEjecutor = [
+      "schedule", "assign", "confirm_details", "confirm_sender", "confirm_cleaner",
+      "clear_alert", "mark_oss", "approve_confirm", "write_po", "record_validation",
+    ];
     for (const n of [2, 3, 4, 5, 6]) {
-      for (const accion of accionesVisibles(ventana(n))) {
-        if (["schedule", "assign", "confirm_details", "confirm_sender", "confirm_cleaner"].includes(accion.codigo)) continue;
+      for (const accion of accionesVisibles(ventana(n, { fila: { validated_at: null, validated_by_nombre: null } }))) {
+        if (conEjecutor.includes(accion.codigo)) continue;
         expect(accion.disponibilidad.tipo, `${accion.etiqueta} en R${n}`).not.toBe("disponible");
       }
     }
@@ -144,17 +151,26 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
       disponibilidad: { tipo: "fuera_de_release" },
       nota: "Not available in this release",
     });
-    expect(complete.find((a) => a.etiqueta === "Approve & confirm")).toMatchObject({
-      disponibilidad: { tipo: "sin_construir" },
-      nota: "Not built yet",
-    });
+    expect(complete.find((a) => a.etiqueta === "Approve & confirm")).toMatchObject({ disponibilidad: { tipo: "disponible" }, nota: null });
   });
 
-  it("BzzzBX caído: las que lo necesitan dicen BzzzBX unavailable; las que no, Not built yet", () => {
+  it("Fase B (OPR-30, P-10): Reschedule, Cancel job y End manually salen fuera_de_release con 'Available when actions are switched on', con o sin BzzzBX", () => {
+    for (const disponible of [true, false]) {
+      for (const [n, etiqueta] of [[3, "Reschedule"], [3, "Cancel job"], [4, "End manually"]] as const) {
+        const accion = accionesVisibles(ventana(n, { disponible })).find((a) => a.etiqueta === etiqueta)!;
+        expect(accion.disponibilidad, `${etiqueta} con BzzzBX ${disponible}`).toEqual({ tipo: "fuera_de_release", fase: "b" });
+        expect(accion.nota).toBe(FASE_B);
+      }
+    }
+    expect(FASE_B).toBe("Available when actions are switched on");
+  });
+
+  it("BzzzBX caído: las que lo necesitan dicen BzzzBX unavailable; las que no, siguen disponibles", () => {
     const acciones = accionesVisibles(ventana(3, { disponible: false }));
+    // Reschedule y Cancel job son de la Fase B: eso manda sobre BzzzBX caído.
     expect(acciones.map((a) => [a.etiqueta, a.nota])).toEqual([
-      ["Reschedule", "BzzzBX unavailable"],
-      ["Cancel job", "BzzzBX unavailable"],
+      ["Reschedule", "Available when actions are switched on"],
+      ["Cancel job", "Available when actions are switched on"],
     ]);
     const requests = accionesVisibles(ventana(2, { disponible: false }));
     // Assign y Confirm solo escriben una decisión en opsRUN: siguen disponibles sin BzzzBX (S-13).
@@ -173,15 +189,19 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     const sinPropiedad = { ...ventana(1), datos: { ...ventana(1).datos, tienePropiedad: false, poRequerido: false, tienePo: false } };
     expect(accionesVisibles(sinPropiedad).find((a) => a.codigo === "schedule")!.nota).toBe("Choose a property first");
     expect(accionesVisibles(sinPropiedad).find((a) => a.codigo === "ask_cleaner")!.nota).toBe("Choose a property first");
-    const sinPo = { ...ventana(6), datos: { ...ventana(6).datos, tienePropiedad: true, poRequerido: true, tienePo: false } };
+    const r6 = ventana(6, { fila: { validated_at: null, validated_by_nombre: null } });
+    const sinPo = { ...r6, datos: { ...r6.datos, tienePropiedad: true, poRequerido: true, tienePo: false, poVigente: null } };
     expect(accionesVisibles(sinPo).find((a) => a.codigo === "record_validation")!.nota).toBe("Add PO");
-    expect(accionesVisibles(ventana(6)).find((a) => a.codigo === "record_validation")!.nota).toBe("Not built yet");
+    expect(accionesVisibles(r6).find((a) => a.codigo === "record_validation")!.disponibilidad).toEqual({ tipo: "disponible" });
   });
 
   it("el motivo de cada acción sale del registro", () => {
     const porCodigo = (n: number) => Object.fromEntries(accionesVisibles(ventana(n)).map((a) => [a.codigo, a.motivo]));
     expect(porCodigo(3)).toEqual({ reschedule_job: "obligatorio", cancel_job: "obligatorio" });
     expect(porCodigo(4)).toEqual({ clear_alert: "obligatorio", end_job_manually: "obligatorio" });
+    // OPR-31: el motivo de Mark as OSS es opcional; Approve, Enter PO y Validate no lo piden.
+    expect(porCodigo(5)).toMatchObject({ approve_confirm: "no", mark_oss: "opcional" });
+    expect(porCodigo(6)).toEqual({ write_po: "no", record_validation: "no" });
     expect(porCodigo(2).schedule).toBe("no");
     // OPR-28, P-1 y P-6: el motivo de asignar y el del cleaner es opcional; details y sender no lo piden.
     expect(porCodigo(2)).toMatchObject({
@@ -190,6 +210,57 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
       confirm_sender: "no",
       confirm_cleaner: "opcional",
     });
+  });
+});
+
+describe("las etapas (OPR-30 a OPR-32, spec §7.1)", () => {
+  const codigo = (v: VentanaJob, c: string) => accionesVisibles(v).find((a) => a.codigo === c)!;
+  const sinValidar = { validated_at: null, validated_by_nombre: null } as const;
+  const sinPo = (v: VentanaJob): VentanaJob => ({ ...v, datos: { ...v.datos, poRequerido: true, tienePo: false, poVigente: null } });
+
+  it("Clear alert: disponible con una alerta limpiable abierta (R4); 'No alert to clear' sin ella", () => {
+    expect(codigo(ventana(4), "clear_alert").disponibilidad).toEqual({ tipo: "disponible" });
+    const sinAlerta = ventana(4, { fila: { alertas_limpiadas: ["bx-alert-0006"] } });
+    expect(codigo(sinAlerta, "clear_alert").disponibilidad).toEqual({ tipo: "bloqueada", motivo: "No alert to clear" });
+    // Una alerta abierta de otra regla no se puede limpiar con Clear alert.
+    const soloOtraRegla = { ...ventana(4), datos: { ...ventana(4).datos, alertasLimpiables: [] } };
+    expect(codigo(soloOtraRegla, "clear_alert").nota).toBe("No alert to clear");
+  });
+
+  it("Clear alert necesita BzzzBX (vuelve a leer la alerta): caído, BzzzBX unavailable (P-5)", () => {
+    expect(codigo(ventana(4, { disponible: false }), "clear_alert").disponibilidad).toEqual({ tipo: "bloqueada", motivo: BZZZBX_NO_DISPONIBLE });
+  });
+
+  it("Approve & confirm y Mark as OSS corren en Complete, también con BzzzBX caído o una instrucción abierta", () => {
+    for (const parche of [{}, { disponible: false }, { instruccionAbierta: true }]) {
+      const v = ventana(5, parche);
+      expect(codigo(v, "approve_confirm").disponibilidad, JSON.stringify(parche)).toEqual({ tipo: "disponible" });
+      expect(codigo(v, "mark_oss").disponibilidad, JSON.stringify(parche)).toEqual({ tipo: "disponible" });
+    }
+  });
+
+  it("Enter PO corre en Validation con BzzzBX caído; con el job validado, 'Already validated'", () => {
+    expect(codigo(ventana(6, { fila: sinValidar, disponible: false }), "write_po").disponibilidad).toEqual({ tipo: "disponible" });
+    expect(codigo(ventana(6), "write_po").disponibilidad).toEqual({ tipo: "bloqueada", motivo: "Already validated" });
+  });
+
+  it("Validate: 'Already validated' primero, después 'Add PO', y sin BzzzBX 'BzzzBX unavailable'", () => {
+    const r6 = ventana(6, { fila: sinValidar });
+    expect(codigo(r6, "record_validation").disponibilidad).toEqual({ tipo: "disponible" });
+    expect(codigo(ventana(6), "record_validation").nota).toBe("Already validated");
+    expect(codigo(sinPo(r6), "record_validation").nota).toBe("Add PO");
+    // Con las dos cosas a la vez manda "Already validated".
+    expect(codigo(sinPo(ventana(6)), "record_validation").nota).toBe("Already validated");
+    // Sin BzzzBX no se puede saber si el cliente exige PO: manda BzzzBX unavailable.
+    expect(codigo(ventana(6, { fila: sinValidar, disponible: false }), "record_validation").nota).toBe("BzzzBX unavailable");
+  });
+
+  it("cualquiera de las tres fuentes de PO desbloquea Validate (P-2)", () => {
+    const base = ventana(6, { fila: sinValidar });
+    for (const fuente of ["opsrun", "pinch", "draft"] as const) {
+      const v = { ...base, datos: { ...base.datos, poRequerido: true, tienePo: true, poVigente: { valor: "PO-1", fuente } } };
+      expect(codigo(v, "record_validation").disponibilidad, fuente).toEqual({ tipo: "disponible" });
+    }
   });
 });
 

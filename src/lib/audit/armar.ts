@@ -96,6 +96,13 @@ function complemento(f: FilaDeAudit, nombres: Nombres): string | null {
       const metodo = f.metodo ? METODO[f.metodo as keyof typeof METODO] : undefined;
       return metodo ? `· ${metodo}` : null;
     }
+    case "oss_marked": {
+      // OPR-31: el label dice "OSS / Not OSS"; el complemento dice cuál se marcó. La automática de la seed no lo trae.
+      if (f.marca_oss === "oss") return "· OSS";
+      return f.marca_oss === "not_oss" ? "· Not OSS" : null;
+    }
+    case "po_entered":
+      return f.po_numero ? `· PO ${f.po_numero}` : null;
     case "request_scheduled":
       if (!f.job_number) return null;
       return f.modo === "linked" ? `· linked to observed job ${f.job_number}` : `· job ${f.job_number}`;

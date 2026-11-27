@@ -95,6 +95,9 @@ export type Photo = {
   ref: string;
 };
 
+/** La imagen de una foto (spec OPR-30 §4.2). Provisional hasta OPR-6 y OPR-9. */
+export type ImagenDeFoto = { contentType: string; bytes: Uint8Array };
+
 export type Message = {
   bzzzbx_message_id: string;
   bzzzbx_thread_id: string | null;

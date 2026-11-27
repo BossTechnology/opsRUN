@@ -32,6 +32,9 @@ const base = (ahora: Date, n: number): FilaRequest => ({
   ended_manually_at: null,
   oss_mark: null,
   approved_at: null,
+  entered_po_number: null,
+  validated_at: null,
+  alertas_limpiadas: [],
   bzzzbx_thread_id: `bx-thread-000${n}`,
 });
 
@@ -75,6 +78,7 @@ export function filasDeLaSeed(ahora: Date): FilaRequest[] {
       bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0006", bzzzbx_service_id: "bx-svc-0003",
       service_date: dia(ahora, -5), window_start: "09:00", window_end: "15:00",
       oss_mark: "not_oss", approved_at: new Date(ahora.getTime() - 4 * DIA).toISOString(),
+      validated_at: new Date(ahora.getTime() - 2 * DIA - 22 * HORA).toISOString(),
     },
   ];
 }
