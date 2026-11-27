@@ -13,7 +13,6 @@ import {
   type PropsRanuraAudit,
   type PropsRanuraBase,
   type PropsRanuraBilling,
-  type PropsRanuraConversacion,
   type PropsRanuraEnlace,
   type PropsRanuraTracker,
 } from "@/lib/ventana/ranuras";
@@ -26,20 +25,8 @@ function Pendiente({ nombre, titulo, base }: { nombre: string; titulo: string; b
   );
 }
 
-/** OPR-27: columna izquierda, con su propio Suspense. */
-export function RanuraConversacion(props: PropsRanuraConversacion) {
-  return (
-    <section
-      className="ranura ranura-conversacion"
-      data-ranura="conversacion"
-      data-puede-enviar={props.puedeEnviar}
-      aria-label="Conversation"
-    >
-      <h2>Conversation</h2>
-      <p>{TEXTO_RANURA_PENDIENTE}</p>
-    </section>
-  );
-}
+/** OPR-27: columna izquierda, con su propio Suspense. Vive en `../_conversacion/`. */
+export { RanuraConversacion } from "../_conversacion/ranura";
 
 /** OPR-28: arriba de la pestaña de la propiedad, solo en Requests. */
 export function RanuraEnlace(props: PropsRanuraEnlace) {

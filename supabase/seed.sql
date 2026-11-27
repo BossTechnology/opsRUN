@@ -190,6 +190,18 @@ insert into opsrun.note (request_id, author_operator_id, body, created_at)
 values ('b0000000-0000-4000-8000-0000000000a2', '0a000000-0000-4000-8000-0000000000a1',
         'Requester prefers mornings.', now() - interval '100 minutes');
 
+-- OPR-27 (P-3): borradores de respuesta al cliente escritos por la IA, inventados
+-- y sin decidir, para que la demo muestre "las IAs proponen, las personas firman".
+-- Aparecen en el Composer (modo Customer) marcados "AI draft" y no salen sin que
+-- el operador pulse Send. El de R7 es un segundo borrador para probar Discard.
+insert into opsrun.ai_suggestion (id, request_id, field, rank, value, reason) values
+  ('5a000000-0000-4000-8000-0000000000d2', 'b0000000-0000-4000-8000-0000000000a2', 'draft_customer_reply', 1,
+   '{"body": "Hello, thanks for your request for Sample Court unit 12. We are confirming the cleaner and will write back shortly with the final window."}',
+   'Reply to the request while the cleaner is confirmed.'),
+  ('5a000000-0000-4000-8000-0000000000d7', 'b0000000-0000-4000-8000-0000000000a7', 'draft_customer_reply', 1,
+   '{"body": "Hello, thanks for your request for Placeholder House. How should the cleaner get in on the day?"}',
+   'The email does not say how to get in.');
+
 -- ---------------------------------------------------------------------------
 -- R3 a R6: confirmadas y programadas (el gate de Schedule se cumple).
 -- ---------------------------------------------------------------------------
