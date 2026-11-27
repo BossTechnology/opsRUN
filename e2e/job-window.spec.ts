@@ -506,25 +506,19 @@ test("OPR-28: sin actor elegido, confirmar se rechaza y no escribe nada", async 
 
 test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Audit", async ({ page }) => {
   test.skip((await estadoDeR7()).status !== "open", "R7 ya está enlazada: esta prueba pide una base nueva");
-  // Un job más que encaja con R7, con un id propio de esta corrida para no depender de rechazos anteriores.
-  const sufijo = String(Date.now()).slice(-6);
-  const jobId = `bx-job-9${sufijo}`;
+  // bx-job-0105 pasa a encajar con R7. Es el mismo rechazo (job, motivo y actor) que espera B5 de Audit
+  // (e2e/audit.spec.ts): R7 solo se enlaza una vez por base, y esta prueba y B1 dejan la misma historia.
+  const jobId = "bx-job-0105";
   await control(page, {
-    accion: "poner",
+    accion: "cambiar",
     entidad: "job",
-    valor: {
-      bzzzbx_job_id: jobId,
-      job_number: `EX-9${sufijo}`,
+    id: jobId,
+    parche: {
       bzzzbx_customer_id: "bx-cust-0002",
       bzzzbx_property_id: "bx-prop-0004",
-      bzzzbx_space_id: null,
-      bzzzbx_service_id: "bx-svc-0001",
       service_date: new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10),
       window_start: "13:00",
       window_end: "16:00",
-      status: "scheduled",
-      bzzzbx_team_id: "bx-team-0001",
-      po_number: null,
     },
   });
 
@@ -533,8 +527,8 @@ test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Au
   await expect(page.getByLabel("Acting as")).toHaveValue(OPERADOR_A1);
   const fila = page.locator(`${ENLACE} [data-testid="candidato-enlace"][data-job="${jobId}"]`);
   await expect(fila).toBeVisible();
-  await fila.getByRole("button", { name: `Reject EX-9${sufijo}` }).click();
-  await fila.getByTestId("motivo-rechazo").fill("Different building");
+  await fila.getByRole("button", { name: "Reject EX-00105" }).click();
+  await fila.getByTestId("motivo-rechazo").fill("Different customer.");
   await fila.getByTestId("enviar-rechazo").click();
   await expect(fila).toHaveCount(0);
   await expect(page.locator(`${ENLACE} [data-job="bx-job-0107"]`)).toBeVisible();
@@ -544,7 +538,7 @@ test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Au
       where a.request_id = $1 and a.event_type = 'job_link_rejected' and a.details ->> 'bzzzbx_job_id' = $2`,
     [R(7), jobId],
   );
-  expect(eventos).toEqual([{ reason: "Different building", actor: OPERADOR_A1 }]);
+  expect(eventos).toEqual([{ reason: "Different customer.", actor: OPERADOR_A1 }]);
   expect((await estadoDeR7()).status).toBe("open");
 
   // Ya no se vuelve a proponer, ni recargando la ventana.
