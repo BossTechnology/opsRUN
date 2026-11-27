@@ -1,7 +1,7 @@
 # OPR-27 — Conversation: hilo del job y Composer
 
 - **Tarjeta:** OPR-27 (P2 · Conversation screen). Depende de C · Email sending y C · Texting both ways (los dos sobre el contrato de OPR-6) y de OPR-26 (Job window, spec aprobado el 2026-11-27, en construcción y fuera de `main`).
-- **Estado:** borrador para revisión de Henry. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§12).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-7 según las recomendaciones, incluida la migración de P-0 (§12.3). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§12).
 - **Construye sobre:** el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`, ADR 0005, spec OPR-22), el modelo de datos (OPR-20: `request_message`, `note`, `instruction`, `ai_suggestion`, `audit_event`) y la ranura de la conversación de la Job window (spec OPR-26 §7.1).
 - **Referencias que no se pudieron leer:** prototipo R23, User Guide §3.3 y Release Definition §4.10 no están en el repo, que es público, ni se pudieron abrir desde esta cuenta [S-1]. Todo lo visual y los textos de pantalla salen de la tarjeta, del glosario y de los specs de OPR-25 y OPR-26, y se revisan contra esos documentos cuando se puedan ver.
 - **Fuera de alcance:** la intake de correos y su enhebrado (OPR-15), los avisos Scheduled y Done (OPR-16, OPR-18), la pregunta al cleaner y su lectura (OPR-17), la alerta Message not delivered (OPR-19, OPR-33, OPR-34), el análisis de IA que produce los borradores (OPR-36, OPR-37), la pestaña Audit (OPR-35) y la instruction layer completa (OPR-23). De OPR-23 este spec toma solo lo mínimo para enviar un correo o un texto en local (§7, P-1).
@@ -298,3 +298,18 @@ Contra el build de producción, la seed (con P-3 y lo de OPR-26) y el falso, con
 - **P-7. ¿Mostrar mensajes de los hilos que nadie vinculó?** Recomiendo **sí** (S-2): sin intake (OPR-15), es la única forma de ver una respuesta del cliente en la demo, y no guarda nada. Alternativa: solo lo vinculado en `request_message`, y las respuestas esperan a OPR-15.
 
 Con las recomendaciones, OPR-27 trae **una migración** (§8, solo funciones), cambia la seed (P-3), el falso y su prueba de contrato (P-2, §9), y agrega un campo al registro de acciones de OPR-26 (P-6).
+
+### 12.3 Decisiones (2026-11-27)
+
+Henry aprobó el spec con las ocho recomendaciones. Quedó así:
+
+- **P-0:** se aprueba la migración nueva de §8, solo con funciones (`add_note`, `send_email`, `send_text`, `discard_ai_draft`, `record_instruction_delivery` y `resolve_instruction`), sin cambios de tablas, tipos, triggers, catálogos ni vistas del write-back.
+- **P-1:** OPR-27 trae el despacho mínimo de §7 en `src/lib/instrucciones/`: genérico por tipo, sin estado y limitado a `send_email` y `send_text`. OPR-23 lo extiende.
+- **P-2:** el payload lleva crosswalk IDs (`bzzzbx_thread_id` o `bzzzbx_team_id`) y `body`, y BzzzBX resuelve el destinatario. Cambian el falso y su prueba de contrato, provisionales hasta OPR-6; se confirma con el equipo de BzzzBX en OPR-6.
+- **P-3:** la seed agrega a R2 un `draft_customer_reply` inventado y sin decidir. Es un cambio de seed, no de migración.
+- **P-4:** Edit To, Cc y Temporary number se ven en gris con "Available in a later release". El término se anota en `CONTEXT.md`.
+- **P-5:** el envío se construye ahora sobre el falso. Si se enciende en la Fase A se decide cuando OPR-6 confirme `send_email` y `send_text`; mientras, Note y la lectura del hilo valen para la Fase A.
+- **P-6:** `DefinicionAccion` gana `concurrencia: "request" | "ninguna"`, y `add_note`, `send_email`, `send_text` y `discard_ai_draft` usan `"ninguna"`.
+- **P-7:** el hilo muestra también los mensajes de los hilos de la request que nadie vinculó todavía (S-2).
+
+OPR-27 trae una migración (P-0), cambia la seed (P-3), el falso y su prueba de contrato (P-2) y el registro de acciones de OPR-26 (P-6).
