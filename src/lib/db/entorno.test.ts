@@ -145,6 +145,13 @@ describe("asegurarEntorno", () => {
     expect(problemas.join(" ")).not.toContain("valor-secreto");
   });
 
+  it("OPSRUN_ACTOR_DEMO es una variable prohibida y con ella el servidor no arranca (OPR-26, P-2)", () => {
+    expect(PROHIBIDAS_EN_SERVIDOR).toContain("OPSRUN_ACTOR_DEMO");
+    const env = { ...SERVIDOR_COMPLETO, OPSRUN_ACTOR_DEMO: "1" };
+    expect(problemasDeEntorno(env, lectorCon(SECRETOS))).toEqual(["OPSRUN_ACTOR_DEMO no debe estar en el servidor"]);
+    expect(() => asegurarEntorno(env, lectorCon(SECRETOS))).toThrow("OPSRUN_ACTOR_DEMO no debe estar en el servidor");
+  });
+
   it("no deja arrancar con el stand-in de BzzzBX (OPR-22)", () => {
     const problemas = problemasDeEntorno({ ...SERVIDOR_COMPLETO, BZZZBX_MODO: "falso" }, lectorCon(SECRETOS));
     expect(problemas).toEqual(["BZZZBX_MODO=falso no se permite en el servidor"]);

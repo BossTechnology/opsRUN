@@ -39,6 +39,9 @@ export const PROHIBIDAS_EN_SERVIDOR = [
   "OPSRUN_APP_CLAVE",
   // El dueño de los esquemas aplica migraciones; el servidor nunca lo es.
   "OPSRUN_MIGRADOR_URL",
+  // Selector "Acting as" de la demo local (OPR-26, P-2): declara un actor sin
+  // login. Solo existe en local; en el servidor ni siquiera puede estar definida.
+  "OPSRUN_ACTOR_DEMO",
 ] as const;
 
 /** Líneas CLAVE=VALOR; ignora vacías y comentarios; comillas opcionales. */
