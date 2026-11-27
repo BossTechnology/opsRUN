@@ -4,6 +4,9 @@ import { defineConfig, devices } from "@playwright/test";
 import { entornoSupabaseLocal } from "./scripts/supabase-local.mjs";
 
 const PUERTO = 3100;
+const entorno = entornoSupabaseLocal();
+// Los workers de las pruebas que miran la base (Audit y estado de una request) usan el mismo login que el servidor.
+process.env.OPSRUN_DATABASE_URL = entorno.OPSRUN_DATABASE_URL;
 const enCI = Boolean(process.env.CI);
 
 // E2E contra el build de producción (lo mismo que se despliega), conectado al
@@ -27,6 +30,6 @@ export default defineConfig({
     timeout: 180_000,
     // OPSRUN_ACTOR_DEMO y BZZZBX_MODO=falso: el selector "Acting as" de la Job
     // window existe solo con las dos (y sin OPSRUN_SERVIDOR). OPR-26, P-2.
-    env: { ...entornoSupabaseLocal(), BZZZBX_MODO: "falso", OPSRUN_ACTOR_DEMO: "1" },
+    env: { ...entorno, BZZZBX_MODO: "falso", OPSRUN_ACTOR_DEMO: "1" },
   },
 });
