@@ -1,7 +1,7 @@
 # OPR-35 — Pestaña Audit
 
 - **Tarjeta:** OPR-35 (P4 · Audit tab). Depende de OPR-20 (modelo de datos, en `main`) y de OPR-23 (instruction layer, sin construir). Encaja en la ranura de OPR-26 §7.3 (Job window, spec aprobado; la implementación va en paralelo y aún no está en `main`).
-- **Estado:** spec para revisión. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§11).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-1 a P-7 según las recomendaciones (§11.3). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§11).
 - **Construye sobre:** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md`, migración `20261124130000_modelo_de_datos.sql`), el enlace de la Fase A (`docs/spec/fase-a-enlace.md`, migración `20261125120000_fase_a_enlace.sql`), el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`), el formato de horas del tablero (`src/lib/tablero/formato.ts`, `zonaDeLaOperacion`) y la Job window (`docs/spec/opr-26-job-window.md`).
 - **Referencias de la tarjeta sin acceso [S-1]:** User Guide §10.3 y Release Definition §4.11 no están en este repo, que es público, y no se pudieron leer. La lista de eventos sale de la tarjeta, de `CONTEXT.md` y del catálogo `audit_event_type` de OPR-20. Se revisa contra esos documentos cuando se puedan leer.
 - **Fuera de alcance:** escribir eventos. Cada evento lo escribe la función SQL de la tarjeta dueña de la acción (§3). OPR-35 solo lee y muestra.
@@ -287,3 +287,17 @@ Contra el build de producción, la seed y el falso, con `OPSRUN_ZONA_HORARIA=Ame
 - **P-7. Work App number.** Recomiendo mostrar **Job number y Work App number con el mismo valor** (S-3) y revisarlo contra el User Guide §10.3 cuando se pueda leer. Si resultan ser números distintos, el segundo es un crosswalk que hoy no existe y pide su columna (con migración) y su dato en el puerto.
 
 Con las recomendaciones, OPR-35 **no trae migración**. P-5 cambia `supabase/seed.sql` (datos inventados) y P-2 solo lee del puerto que ya existe.
+
+### 11.3 Decisiones (2026-11-27)
+
+Henry aprobó el spec con las siete recomendaciones. Quedó así:
+
+- **P-1:** sin migración. La pestaña lee con una consulta parametrizada como `opsrun_app`, en `begin read only`, sin vista ni función nueva.
+- **P-2:** los nombres de PINCH (cleaner, job rechazado, valores de IA que son crosswalk IDs) se leen del puerto al pintar, nunca se guardan, y se ven `— —` si BzzzBX no responde.
+- **P-3:** quien no es operador se ve como "opsRUN" (`system`), "AI" (`ai`) y "BzzzBX" (`bzzzbx`).
+- **P-4:** orden del más viejo al más nuevo, por `occurred_at` y luego `id`.
+- **P-5:** se completa la seed, sin migración: los eventos de confirmación de R3 a R6 y la historia previa de R7 con su Audit. **Lo hace la implementación de OPR-35, después de que OPR-26 esté en `main`**, para no chocar con el R7 que agrega OPR-26 (P-3).
+- **P-6:** Audit lee solo `audit_event`; no mezcla eventos leídos del puerto. En la demo se dice que un check-in forzado todavía no entra a Audit.
+- **P-7:** Job number y Work App number se muestran con el mismo valor hasta revisarlo contra el User Guide §10.3.
+
+Ninguna decisión trae migración.
