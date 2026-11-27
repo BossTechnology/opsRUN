@@ -30,6 +30,14 @@ export class InstruccionRechazada extends Error {
   }
 }
 
+/** El filtro de una búsqueda no es válido (por ejemplo, `buscarJobs` sin cliente ni propiedad). No se leyó nada. */
+export class FiltroInvalido extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = "FiltroInvalido";
+  }
+}
+
 /**
  * Next empaqueta por separado rutas y páginas, y el falso es una sola
  * instancia por proceso: puede lanzar la clase de otra copia de este módulo y

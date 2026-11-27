@@ -4,6 +4,7 @@ Una línea por cambio entregado, en lenguaje de usuario.
 
 ## Sin publicar
 - OPR-25: el tablero de opsRUN con sus cinco columnas, conteos y alertas, las tarjetas con sus estados y colores, lo que no entra en V1.1 beta en gris, y actualización sola en menos de 1 minuto. Por ahora lee del stand-in de BzzzBX; el aspecto sigue supuestos hasta revisarlo contra el prototipo R23.
+- OPR-28 (Fase A): opsRUN propone qué job de PINCH es el de cada request, buscando por cliente o propiedad y fecha; el operador confirma el enlace, que deja la request Scheduled, o rechaza un candidato, y las dos cosas quedan en Audit. Todavía sin pantalla.
 - OPR-22: opsRUN lee de BzzzBX y le manda instrucciones por dos puertos con un stand-in en memoria y datos inventados, para construir las pantallas sin esperar el contrato real (provisional hasta OPR-6).
 - OPR-1: imagen de producción de opsRUN y un comando de deploy al servidor que aplica las migraciones, prueba la salud de la base y vuelve solo a la versión anterior si algo falla; otro comando para la vuelta atrás a mano. Probado en local y en CI, todavía sin desplegar en el servidor de PINCH.
 - OPR-20: el modelo de datos de opsRUN (requests, confirmaciones, instrucciones, alertas, IA, plantillas y Audit inmutable) con sus guards de seguridad y una seed inventada para local.

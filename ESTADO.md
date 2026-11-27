@@ -3,7 +3,9 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-25, tablero y tarjetas (rama `opr-25-tablero`): PR contra `main`, sin fusionar. Construido sobre el stand-in de BzzzBX, con el spec `docs/spec/opr-25-tablero.md` aprobado por Henry. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
+- OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementación por empezar.
+- OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
+- OPR-28, Fase A: enlace request ↔ job observado (PR #12): fusionado en `main`, sin pantalla todavía.
 - OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
 - OPR-1, imagen y deploy (PR #8): fusionado en `main`. El primer deploy en el servidor de PINCH espera la red de OPR-6.
 
@@ -60,9 +62,18 @@
   - `POST /api/falso` controla el stand-in desde los E2E (404 sin falso o en el servidor). La página de salud pasa a `/salud`. Variable nueva `OPSRUN_ZONA_HORARIA`.
   - En local pasan lint, typecheck, Vitest (194) y `next build`; el servidor de producción sirve el tablero contra el Postgres local. Playwright no corrió en local: el Supabase local solo tiene Postgres (Docker saturado) y su seed es anterior al arreglo de crosswalk IDs de OPR-22. E2E y la consulta contra la seed, en la CI.
 
+- 2026-11-25: OPR-28, Fase A, enlace request ↔ job observado:
+  - `buscarJobs` exige cliente o propiedad y un rango de fechas de hasta 62 días, y devuelve hasta 50 jobs ordenados (`FiltroInvalido` si no). Pruebas de contrato para el falso y el real. El falso trae cuatro jobs de la Fase A sin request (`bx-job-0102` a `0105`); la seed no cambia.
+  - `src/lib/fase-a/`: `proponerEnlaces` busca con el borrador (propiedad o, si no, cliente; fecha ± 3 días o, sin fecha, desde el día antes de la llegada hasta 30 días después), quita cancelados, jobs de otras requests y rechazados para esa request, ordena, marca Suggested y avisa con `truncado` si BzzzBX llegó al tope. No guarda propuestas. Una carrera entre dos operadores sobre el mismo job sale como `job_ya_enlazado`. `confirmarEnlace` relee el job en BzzzBX y llama a la base; `rechazarEnlace` deja el rechazo.
+  - Migración `20261125120000_fase_a_enlace.sql`: `opsrun.link_observed_job` (deja la request Scheduled con el gate de Schedule y `request_scheduled` con `mode: "linked"`) y `opsrun.reject_job_link` (`job_link_rejected`, motivo opcional). Sin instrucción a BzzzBX.
+  - pgTAP `fase_a_enlace.test.sql` (27). G6 y la prueba nueva se vieron en rojo quitando `require_operator()`. Prueba de punta a punta contra la seed (`OPSRUN_REQUIERE_BASE=1`) dentro de una transacción que se deshace.
+  - Validado en local en una base temporal del Supabase local (alta, migraciones y seed): los pgTAP en verde salvo `roles.test.sql`, que pide el esquema `auth` que una base vacía no tiene; Vitest de punta a punta en verde. lint, typecheck y `pnpm test` en verde. `supabase test db` completo, en la CI.
+
 ## Pendiente
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
 - Base local: `pnpm db:reset` para cargar la seed nueva (pide OK de Henry).
+- Fase A (OPR-28): botones de enlace en la Job window cuando exista OPR-26; deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
+- `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` con una migración nueva: la base local queda con una migración que otras ramas no tienen en disco, y `migrar` las rechaza hasta fusionar o hacer `pnpm db:reset`. Pasó con `20261125120000_fase_a_enlace`; el 2026-11-25 se reseteó la base local y se preparó con las migraciones de `main`. Hasta fusionar el PR de OPR-28, correr `pnpm test` en esta rama la vuelve a aplicar.
 - OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
 - OPR-22, cuando toque: `acknowledge_alert` al construir Clear alert; quitar los `ai_*` del catálogo con una migración nueva (pide OK); cambiar la migración de estados solo si una pantalla necesita "Waiting for approval" o "Couldn't confirm" desde la base (P-2).
 - `.env.example`: lo crea Henry. Los permisos del agente bloquean cualquier archivo `.env*`. Los nombres están en `PLAN.md` §3 (los `SUPABASE_*` ya no se usan).
@@ -78,6 +89,6 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry revisa el PR de OPR-25 y comparte el prototipo R23 para ajustar el aspecto. Después, OPR-26 (Job window), que espera también a OPR-4.
-- Fase A (OPR-42): `buscarJobs` primero.
+- OPR-26: implementar la Job window según su spec. Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35).
+- Henry comparte el prototipo R23 para ajustar el aspecto del tablero.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.
