@@ -245,7 +245,7 @@ Las entradas ya existen en `REGISTRO_DE_ACCIONES`. Se conservan los códigos [S-
 
 ### 7.5 Observador de hechos (si P-9)
 
-`src/lib/observados/`: corre en segundo plano **dentro del único ciclo de fondo de opsRUN** que define OPR-15 (su P-1, en `instrumentation`, ADR 0006), nunca desde una consulta de lectura como `/api/tablero/cambios`. En cada vuelta del ciclo, a lo sumo cada 15 s, lee los `JobTrackerEvent` y `Payment` de los jobs enlazados que estén en Scheduled a Validation y llama a `record_observed_event` como actor de sistema `observador`. Deduplica por `bzzzbx_event_id` (la base lo hace con `unique`). Provisional hasta la read layer de OPR-22.
+`src/lib/observados/`: corre en segundo plano **dentro del único ciclo de fondo de opsRUN** que define OPR-15 (su P-1, en `instrumentation`, ADR 0006), nunca desde una consulta de lectura como `/api/tablero/cambios`. Es la tarea `observador_etapas` del ciclo (`tareasDeOpsrun()`), cada 15 s; la cadencia y la vuelta única son del ciclo, el observador solo recuerda entre vueltas los ids que ya escribió. En cada vuelta lee los `JobTrackerEvent` y `Payment` de los jobs enlazados que estén en Scheduled a Validation y llama a `record_observed_event` como actor de sistema `observador`. Deduplica por `bzzzbx_event_id` (la base lo hace con `unique`). Provisional hasta la read layer de OPR-22.
 
 ## 8. Migración nueva (pide OK, P-0)
 
@@ -501,5 +501,10 @@ Lo que la construcción resolvió por lo más conservador donde el spec no alcan
 - **`bx-alert-0006`:** el `bx-alert-0005` del falso ya era la OPS-001 de R8.
 - **`job_validated.details.po_number`:** solo va con el PO de opsRUN o el del borrador; el de PINCH no se copia a Audit (`po_source = pinch`, `po_number = null`).
 - **Validate sin cliente en BzzzBX:** se rechaza (`cliente_no_encontrado`), porque no se sabe si exige PO.
-- **Observador (P-9):** `src/lib/observados/` y `record_observed_event` están; el cableado al ciclo de fondo de OPR-15 (`instrumentation`, ADR 0006) queda para esa tarjeta.
+- **Observador (P-9):** `src/lib/observados/` y `record_observed_event` están, y el observador corre como la tarea `observador_etapas` del ciclo de fondo (OPR-15, ADR 0006), cada 15 s.
+- **Aprobado por Henry el 2026-11-27**, sobre estas cuatro resoluciones conservadoras:
+  - **a.** La disponibilidad de las acciones de Fase B es `fuera_de_release` con `fase: "b"`, no un valor nuevo `fase_b` (P-10).
+  - **b.** El PO que viene de PINCH no se guarda en `job_validated.details`: solo `po_source` (P-2).
+  - **c.** Validate se rechaza si BzzzBX no conoce al cliente (`cliente_no_encontrado`), porque no se sabe si exige PO (P-2).
+  - **d.** Una alerta cuenta como limpiada si opsRUN la tiene resuelta de cualquier forma, no solo por Clear alert (P-7).
 - **E6, E7 y E8** de Playwright van dentro de E1 y E5 (cada una necesita un job en una etapa que solo R8 y R5 atraviesan una vez por base).

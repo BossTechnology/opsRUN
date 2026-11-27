@@ -5,9 +5,14 @@
  * 2026-11-27), nunca desde una consulta de lectura como `/api/tablero/cambios`.
  *
  * Descubre en vez de enumerar: recorre todo `src/` y falla si algún archivo que no
- * es del propio módulo, ni una prueba, ni el arranque (`instrumentation*`,
- * `instrumentacion*`) importa `observados`. Una ruta, una página, un server
- * component o una lectura que lo llame hace fallar este guard.
+ * es del propio módulo, ni una prueba, ni el arranque del ciclo
+ * (`lib/ciclo/arranque.ts`, que registra su tarea, o `instrumentation*`) importa
+ * `observados`. Una ruta, una página, un server component o una lectura que lo
+ * llame hace fallar este guard. Y lo contrario también se comprueba: el
+ * arranque sí lo registra (si alguien lo quita del ciclo, nadie observa).
+ *
+ * Complementa a G16 (`lib/ciclo/un-solo-ciclo.test.ts`), que vigila los
+ * temporizadores propios y las lecturas que reconcilian o abren la entrada.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -16,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 const RAIZ = join(__dirname, "..", "..");
 const IMPORTA_OBSERVADOS = /\b(?:from|import)\s*\(?\s*["'][^"']*observados[^"']*["']/;
-const ES_ARRANQUE = /(^|\/)(instrumentation|instrumentacion)[^/]*\.tsx?$/;
+const ES_ARRANQUE = /^lib\/ciclo\/arranque\.ts$|(^|\/)(instrumentation|instrumentacion)[^/]*\.tsx?$/;
 
 function archivos(dir: string): string[] {
   return readdirSync(dir).flatMap((nombre) => {
@@ -46,17 +51,26 @@ describe("el observador solo corre en segundo plano", () => {
     expect(importadoresIndebidos(fuentes)).toEqual([]);
   });
 
+  it("el arranque del ciclo sí registra su tarea", () => {
+    const arranque = fuentes.find((f) => f.ruta === "lib/ciclo/arranque.ts");
+    expect(arranque?.texto).toMatch(IMPORTA_OBSERVADOS);
+    expect(arranque?.texto).toContain("tareaObservadorEtapas()");
+  });
+
   it("se ve fallar: una ruta de lectura que lo importe se detecta; el arranque y su propio módulo no", () => {
-    const malo = { ruta: "app/api/tablero/cambios/route.ts", texto: `import { correrObservador } from "@/lib/observados/servidor";` };
+    const malo = { ruta: "app/api/tablero/cambios/route.ts", texto: `import { tareaObservadorEtapas } from "@/lib/observados/tarea";` };
     expect(importadoresIndebidos([malo])).toEqual(["app/api/tablero/cambios/route.ts"]);
     expect(importadoresIndebidos([{ ruta: "lib/tablero/servidor.ts", texto: `const m = await import("../observados/servidor");` }])).toEqual([
       "lib/tablero/servidor.ts",
     ]);
     const bien = [
-      { ruta: "instrumentation.ts", texto: `import { correrObservador } from "@/lib/observados/servidor";` },
-      { ruta: "lib/observados/servidor.ts", texto: `import { crearObservador } from "./observar";` },
+      { ruta: "lib/ciclo/arranque.ts", texto: `import { tareaObservadorEtapas } from "../observados/tarea";` },
+      { ruta: "instrumentation.ts", texto: `import { tareaObservadorEtapas } from "@/lib/observados/tarea";` },
+      { ruta: "lib/observados/tarea.ts", texto: `import { crearObservador } from "./observar";` },
       { ruta: "lib/observados/observar.test.ts", texto: `import { x } from "./observar";` },
     ];
     expect(importadoresIndebidos(bien)).toEqual([]);
+    // Otro módulo del ciclo (no el arranque) tampoco puede.
+    expect(importadoresIndebidos([{ ruta: "lib/ciclo/ciclo.ts", texto: `import { x } from "../observados/tarea";` }])).toEqual(["lib/ciclo/ciclo.ts"]);
   });
 });

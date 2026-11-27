@@ -1,8 +1,8 @@
 // @vitest-environment node
 /**
  * El observador de hechos de PINCH (OPR-30 a OPR-32 §7.5, P-9): un evento nuevo
- * llama a `record_observed_event` una vez; repetido no duplica; a lo sumo una
- * vuelta cada 15 s; BzzzBX caído no escribe nada.
+ * llama a `record_observed_event` una vez; repetido no duplica; BzzzBX caído no
+ * escribe nada. La cadencia y la vuelta única son del ciclo (`tarea.test.ts`).
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,7 +10,7 @@ import { crearFalso, RelojManual } from "../bzzzbx/falso";
 import type { Actor, Tx } from "../db/pool";
 
 import { ACTOR_OBSERVADOR, CONSULTA_JOBS_ENLAZADOS, crearDatosDelObservador, type Ejecutar } from "./datos-sql";
-import { crearObservador, INTERVALO_MINIMO_MS, type DatosDelObservador, type HechoObservado } from "./observar";
+import { crearObservador, type DatosDelObservador, type HechoObservado } from "./observar";
 
 function preparar(jobs: string[] = ["bx-job-0004", "bx-job-0006"]) {
   const reloj = new RelojManual(new Date("2026-11-27T15:00:00Z"));
@@ -23,7 +23,7 @@ function preparar(jobs: string[] = ["bx-job-0004", "bx-job-0006"]) {
     return String(escritos.size);
   });
   const datos: DatosDelObservador = { jobsEnlazados: vi.fn(async () => jobs), registrar };
-  const observador = crearObservador({ lectura: () => falso.lectura, datos, ahora: () => reloj.ahora() });
+  const observador = crearObservador(() => ({ lectura: falso.lectura, datos }));
   return { reloj, falso, datos, registrar, observador };
 }
 
@@ -52,16 +52,15 @@ describe("observador: hechos observados", () => {
   });
 
   it("un evento repetido en la vuelta siguiente no vuelve a llamar a la base", async () => {
-    const { observador, registrar, reloj } = preparar();
+    const { observador, registrar } = preparar();
     await observador.vuelta();
     const primeras = registrar.mock.calls.length;
-    reloj.adelantar(INTERVALO_MINIMO_MS + 1);
-    expect(await observador.vuelta()).toEqual({ tipo: "corrida", jobs: 2, escritos: 0, repetidos: 5, errores: 0 });
+        expect(await observador.vuelta()).toEqual({ tipo: "corrida", jobs: 2, escritos: 0, repetidos: 5, errores: 0 });
     expect(registrar).toHaveBeenCalledTimes(primeras);
   });
 
   it("un evento que aparece después se escribe en su vuelta, una sola vez", async () => {
-    const { observador, registrar, reloj, falso } = preparar(["bx-job-0004"]);
+    const { observador, registrar, falso } = preparar(["bx-job-0004"]);
     await observador.vuelta();
     falso.lectura.poner("jobtracker_event", {
       bzzzbx_event_id: "bx-evt-9001",
@@ -69,19 +68,16 @@ describe("observador: hechos observados", () => {
       kind: "completed",
       occurred_at: "2026-11-27T15:30:00.000Z",
     });
-    reloj.adelantar(INTERVALO_MINIMO_MS + 1);
-    expect(await observador.vuelta()).toMatchObject({ escritos: 1, repetidos: 2 });
-    reloj.adelantar(INTERVALO_MINIMO_MS + 1);
-    expect(await observador.vuelta()).toMatchObject({ escritos: 0, repetidos: 3 });
+        expect(await observador.vuelta()).toMatchObject({ escritos: 1, repetidos: 2 });
+        expect(await observador.vuelta()).toMatchObject({ escritos: 0, repetidos: 3 });
     expect(registrar.mock.calls.filter(([h]) => h.bzzzbxEventId === "bx-evt-9001")).toHaveLength(1);
   });
 
   it("la base que ya tenía el evento (null) cuenta como repetido y no se vuelve a pedir", async () => {
-    const { observador, registrar, datos, reloj } = preparar(["bx-job-0004"]);
+    const { observador, registrar, datos } = preparar(["bx-job-0004"]);
     vi.mocked(datos.registrar).mockResolvedValue(null);
     expect(await observador.vuelta()).toMatchObject({ escritos: 0, repetidos: 2 });
-    reloj.adelantar(INTERVALO_MINIMO_MS + 1);
-    await observador.vuelta();
+        await observador.vuelta();
     expect(registrar).toHaveBeenCalledTimes(2);
   });
 
@@ -93,28 +89,7 @@ describe("observador: hechos observados", () => {
   });
 });
 
-describe("observador: a lo sumo cada 15 s y con BzzzBX caído", () => {
-  it("dos vueltas seguidas: la segunda se omite sin leer nada; pasados los 15 s, corre", async () => {
-    const { observador, datos, reloj } = preparar();
-    expect((await observador.vuelta()).tipo).toBe("corrida");
-    reloj.adelantar(INTERVALO_MINIMO_MS - 1);
-    expect(await observador.vuelta()).toEqual({ tipo: "omitida" });
-    expect(datos.jobsEnlazados).toHaveBeenCalledTimes(1);
-    reloj.adelantar(1);
-    expect((await observador.vuelta()).tipo).toBe("corrida");
-    expect(datos.jobsEnlazados).toHaveBeenCalledTimes(2);
-  });
-
-  it("una vuelta en curso no deja empezar otra", async () => {
-    const { observador, datos } = preparar();
-    let soltar!: () => void;
-    vi.mocked(datos.jobsEnlazados).mockImplementation(() => new Promise((resolver) => (soltar = () => resolver([]))));
-    const primera = observador.vuelta();
-    expect(await observador.vuelta()).toEqual({ tipo: "omitida" });
-    soltar();
-    expect((await primera).tipo).toBe("corrida");
-  });
-
+describe("observador: BzzzBX caído y errores", () => {
   it("con BzzzBX caído no escribe nada y lo dice", async () => {
     const { observador, registrar, falso } = preparar();
     falso.lectura.noDisponible(true);

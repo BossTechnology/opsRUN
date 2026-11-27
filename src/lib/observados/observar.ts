@@ -8,10 +8,12 @@
  * la read layer de OPR-22.
  *
  * Corre en segundo plano, **dentro del único ciclo de fondo de opsRUN** que
- * define OPR-15 (P-1, ADR 0006), a lo sumo cada 15 s: nunca desde una consulta
- * de lectura como `/api/tablero/cambios` (hay una prueba que lo vigila:
- * `solo-en-segundo-plano.test.ts`). Quien arme el ciclo llama a
- * `correrObservador()` de `./servidor`; este módulo no arranca nada por su cuenta.
+ * define OPR-15 (P-1, ADR 0006), como la tarea `observador_etapas` cada 15 s
+ * (`./tarea`, registrada en `tareasDeOpsrun()`): nunca desde una consulta de
+ * lectura como `/api/tablero/cambios` (lo vigila `solo-en-segundo-plano.test.ts`).
+ * El ciclo garantiza una vuelta a la vez, así que aquí no hay límite propio de
+ * cadencia ni de concurrencia; sí hay memoria entre vueltas (los ids ya
+ * escritos), que vive en la tarea.
  *
  * Nada de lo leído de PINCH se copia a una columna de opsRUN: las duraciones, el
  * "running long" y el PO vigente se calculan al pintar.
@@ -19,9 +21,6 @@
 import { esNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
 import type { JobTrackerEvent } from "../bzzzbx/tipos";
-
-/** Cada cuánto, a lo sumo, vuelve a leer (spec §7.5). */
-export const INTERVALO_MINIMO_MS = 15_000;
 
 /** El tipo de Audit de cada evento del Job Tracker (catálogo `audit_event_type` con source = bzzzbx_observed). */
 export const TIPO_DE_AUDIT: Record<JobTrackerEvent["kind"], string> = {
@@ -46,34 +45,30 @@ export type DatosDelObservador = {
   registrar(hecho: HechoObservado): Promise<string | null>;
 };
 
+/** Lo que una vuelta usa. Se arma en cada vuelta: el stand-in de BzzzBX se reemplaza al reiniciarlo. */
 export type DependenciasDelObservador = {
-  /** El puerto de lectura, pedido en cada vuelta (si BzzzBX no se pudo crear una vez, la siguiente vuelta lo vuelve a intentar). */
-  lectura: () => LecturaBzzzbx;
+  lectura: LecturaBzzzbx;
   datos: DatosDelObservador;
-  /** El reloj; las pruebas pasan uno manual. */
-  ahora?: () => Date;
-  intervaloMinimoMs?: number;
+};
+
+export type OpcionesDelObservador = {
   /** Cuántos ids recuerda para no repetir la llamada. */
   maxRecordados?: number;
 };
 
 export type ResultadoDeVuelta =
-  | { tipo: "omitida" }
   | { tipo: "bzzzbx_no_disponible" }
   | { tipo: "corrida"; jobs: number; escritos: number; repetidos: number; errores: number };
 
-export function crearObservador({
-  lectura: lecturaDeLaVuelta,
-  datos,
-  ahora = () => new Date(),
-  intervaloMinimoMs = INTERVALO_MINIMO_MS,
-  maxRecordados = 5000,
-}: DependenciasDelObservador) {
+/**
+ * El observador, con su memoria entre vueltas (los ids ya escritos). Quien lo
+ * crea lo guarda todo el proceso (la tarea del ciclo); las dependencias se piden
+ * en cada vuelta.
+ */
+export function crearObservador(dependencias: () => DependenciasDelObservador, { maxRecordados = 5000 }: OpcionesDelObservador = {}) {
   const recordados = new Set<string>();
-  let ultima: number | null = null;
-  let enCurso = false;
 
-  async function registrar(hecho: HechoObservado, cuenta: { escritos: number; repetidos: number }) {
+  async function registrar(datos: DatosDelObservador, hecho: HechoObservado, cuenta: { escritos: number; repetidos: number }) {
     if (recordados.has(hecho.bzzzbxEventId)) {
       cuenta.repetidos += 1;
       return;
@@ -87,39 +82,31 @@ export function crearObservador({
   }
 
   return {
-    /** Una vuelta del ciclo: si pasaron menos de 15 s de la anterior, no hace nada. */
+    /** Una vuelta; el ciclo decide cuándo y garantiza que no haya dos a la vez. */
     async vuelta(): Promise<ResultadoDeVuelta> {
-      const inicio = ahora().getTime();
-      if (enCurso || (ultima !== null && inicio - ultima < intervaloMinimoMs)) return { tipo: "omitida" };
-      enCurso = true;
-      ultima = inicio;
-      const lectura = lecturaDeLaVuelta();
+      const { lectura, datos } = dependencias();
       const cuenta = { jobs: 0, escritos: 0, repetidos: 0, errores: 0 };
-      try {
-        const jobs = await datos.jobsEnlazados();
-        cuenta.jobs = jobs.length;
-        // Uno tras otro: las escrituras comparten el pool de la base.
-        for (const jobId of jobs) {
-          try {
-            const eventos = await lectura.listarPor("jobtracker_event", { bzzzbx_job_id: jobId });
-            for (const e of eventos) {
-              await registrar({ bzzzbxJobId: jobId, tipo: TIPO_DE_AUDIT[e.kind], bzzzbxEventId: e.bzzzbx_event_id, ocurridoEn: e.occurred_at }, cuenta);
-            }
-            const pago = await lectura.obtener("payment", jobId);
-            if (pago?.paid && pago.paid_at && pago.bzzzbx_event_id) {
-              await registrar({ bzzzbxJobId: jobId, tipo: "job_paid", bzzzbxEventId: pago.bzzzbx_event_id, ocurridoEn: pago.paid_at }, cuenta);
-            }
-          } catch (e) {
-            // BzzzBX caído: se deja la vuelta para la próxima, sin escribir nada más.
-            if (esNoDisponible(e)) return { tipo: "bzzzbx_no_disponible" };
-            cuenta.errores += 1;
-            console.error(`[opsRUN] observador: falló un job:`, e instanceof Error ? e.message : e);
+      const jobs = await datos.jobsEnlazados();
+      cuenta.jobs = jobs.length;
+      // Uno tras otro: las escrituras comparten el pool de la base.
+      for (const jobId of jobs) {
+        try {
+          const eventos = await lectura.listarPor("jobtracker_event", { bzzzbx_job_id: jobId });
+          for (const e of eventos) {
+            await registrar(datos, { bzzzbxJobId: jobId, tipo: TIPO_DE_AUDIT[e.kind], bzzzbxEventId: e.bzzzbx_event_id, ocurridoEn: e.occurred_at }, cuenta);
           }
+          const pago = await lectura.obtener("payment", jobId);
+          if (pago?.paid && pago.paid_at && pago.bzzzbx_event_id) {
+            await registrar(datos, { bzzzbxJobId: jobId, tipo: "job_paid", bzzzbxEventId: pago.bzzzbx_event_id, ocurridoEn: pago.paid_at }, cuenta);
+          }
+        } catch (e) {
+          // BzzzBX caído: se deja la vuelta para la próxima, sin escribir nada más.
+          if (esNoDisponible(e)) return { tipo: "bzzzbx_no_disponible" };
+          cuenta.errores += 1;
+          console.error(`[opsRUN] observador: falló un job:`, e instanceof Error ? e.message : e);
         }
-        return { tipo: "corrida", ...cuenta };
-      } finally {
-        enCurso = false;
       }
+      return { tipo: "corrida", ...cuenta };
     },
   };
 }
