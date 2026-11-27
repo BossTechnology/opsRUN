@@ -2,9 +2,8 @@
 
 - **Para qué:** la demo local del lunes. Recorrido: tablero → Job window → enlace con el job observado → conversación → Audit.
 - **Sobre qué:** el stand-in de BzzzBX (`src/lib/bzzzbx/falso/`) y la seed de `supabase/seed.sql`. Todo es inventado: `@example.test`, `bx-…`, `EX-000NN`.
-- **Qué está en `main`:** tablero (OPR-25), Job window (OPR-26) y Audit (OPR-35), más el enlace de la Fase A en el servidor (OPR-28, PR #12).
-- **Qué no está en `main`:** la UI del enlace (OPR-28, PR #17) y la conversación (OPR-27, PR #19). Los pasos que dependen de ellos llevan su marca **(PR #17)** o **(PR #19)**.
-- **Marcas:** lo que no se pudo verificar en el código de `main` ni en los specs citados va como **(por verificar)**.
+- **Estado:** en `main` están el tablero (OPR-25), la Job window (OPR-26), Audit (OPR-35), el enlace de la Fase A con su UI (OPR-28, PR #17) y la conversación (OPR-27, PR #19).
+- **Marcas:** lo que no está confirmado en la corrida de ensayo del 2026-11-27 (con `main` en e51c33b y la base recién reseteada) o en el código va como **(por verificar)**.
 
 ## 1. Preparación
 
@@ -34,8 +33,20 @@ No hay que crear ningún `.env`. El selector "Acting as" solo existe si se cumpl
 ### 1.3 Antes de empezar
 
 1. Abrir http://localhost:3000. Deben verse las cinco columnas con estas requests: **Requests** con R1, R2 y R7; **Scheduled** con R3; **In Progress** con R4; **Complete** con R5; y **Validation** con R6, dentro de la fila "Paid" (por verificar el conteo exacto de cada columna).
-2. Para los pasos marcados con PR #17 o PR #19, tener esas ramas sobre `main` (por verificar que se combinan sin conflicto).
-3. Si R7 ya está enlazada en esta base, ya aparece en Scheduled y el paso 5 no se puede repetir. Un enlace no se deshace hasta OPR-29 (`docs/spec/fase-a-enlace.md` §9, P-4). Para repetir la demo: `pnpm db:reset`, con el OK de Henry.
+2. Si la base ya se usó en un ensayo y R7 está enlazada, `pnpm db:reset` (con el OK de Henry) la devuelve a Requests. Un enlace no se deshace hasta OPR-29 (`docs/spec/fase-a-enlace.md` §9, P-4).
+
+### 1.4 Si Docker no levanta todos los servicios de Supabase
+
+Si `pnpm local` falla porque falta `API_URL`, Supabase no levantó todos sus servicios. Levantarlo sin los que la demo no usa y después correr `pnpm local`:
+
+```bash
+supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta,postgrest
+pnpm local
+```
+
+### 1.5 Ojo en vivo
+
+- **Esc** cierra la Job window, también si el selector está abierto. Para cerrar un desplegable, hacer clic fuera de él.
 
 ## 2. Requests de la seed
 
@@ -44,12 +55,12 @@ Las R son la secuencia de la base: tras `pnpm db:reset`, R1 a R7 salen en ese or
 | Request | Etapa inicial | Qué tiene | Para qué sirve en la demo |
 |---|---|---|---|
 | R1 | Requests | Sin dueño, sin cliente. Alerta OPS-001 abierta. Análisis de IA con sugerencias | Tarjeta oscura, Job window que abre en Alerts |
-| R2 | Requests | Dueño Ops Uno. Details y sender confirmados. Cleaner preguntado (Waiting) | Conversación: hilo, nota, borrador de IA **(PR #19)** |
+| R2 | Requests | Dueño Ops Uno. Details y sender confirmados. Cleaner preguntado (Waiting) | Conversación: hilo, nota, borrador de IA |
 | R3 | Scheduled | EX-00003, Demo Lofts. Creado en PINCH | Pestaña Audit |
 | R4 | In Progress | EX-00004. Check-in y inicio observados. Job en riesgo | Tarjeta con borde rojo |
 | R5 | Complete | EX-00005. Terminada a mano sin fotos (OSS automático). Alerta MEC-003 revisada con motivo | Audit con motivo visible |
 | R6 | Validation | EX-00006. Aprobada, PO escrito, Paid observado | Audit completo, con hechos "Observed" |
-| R7 | Requests | Dueño Ops Dos, las tres confirmaciones vigentes. Job de PINCH en el falso: **bx-job-0107** (EX-00107) | El enlace: se abre, se elige, se confirma **(PR #17)** |
+| R7 | Requests | Dueño Ops Dos, las tres confirmaciones vigentes. Job de PINCH en el falso: **bx-job-0107** (EX-00107) | El enlace: se abre, se elige, se confirma |
 
 ## 3. Recorrido
 
@@ -81,7 +92,7 @@ Las R son la secuencia de la base: tras `pnpm db:reset`, R1 a R7 salen en ese or
 
 El dueño de R7 es Ops Dos. Que el que enlaza sea Ops Uno no cambia nada: el dueño es un dato de la request, no un permiso.
 
-### Paso 4. Los candidatos y el Suggested **(PR #17)**
+### Paso 4. Los candidatos y el Suggested
 
 **Clic:** en **Action ▾**, elegir **Schedule**. Abre el panel con la lista "Job in PINCH tools" (la lista vive en la pestaña Propiedad).
 
@@ -92,7 +103,7 @@ El dueño de R7 es Ops Dos. Que el que enlaza sea Ops Uno no cambia nada: el due
 
 Con la seed, R7 solo tiene un candidato, y para rechazar hace falta un segundo. Ver el paso 4b.
 
-### Paso 4b. Rechazar un candidato **(PR #17)**
+### Paso 4b. Rechazar un candidato
 
 Con la seed sola no hay nada que rechazar en R7. Antes del paso, poner un job de prueba en la misma propiedad con `POST /api/falso` (`poner`, entidad `job`). El valor es una copia de bx-job-0107 (`src/lib/bzzzbx/falso/datos.ts`, línea 72), cambiando:
 - `bzzzbx_job_id` a `bx-job-0108`;
@@ -111,11 +122,11 @@ curl -X POST http://localhost:3000/api/falso \
 
 **Se ve:** EX-00108 deja de aparecer en la lista de R7. Ese rechazo vale solo para R7: el job puede proponerse para otra request. El evento `job_link_rejected` queda en el Audit de R7, que se verá en el paso 8.
 
-### Paso 5. Confirmar bx-job-0107 **(PR #17)**
+### Paso 5. Confirmar bx-job-0107
 
 **Clic:** **Confirm**, en la fila de EX-00107.
 
-**Se ve:** "Saved". Al actualizar (el panel se refresca solo con la acción), R7 pasa a Scheduled: la Job window muestra el job number **EX-00107** y aparece la pestaña **Audit**.
+**Se ve:** el mensaje de resultado (por verificar el texto exacto). R7 queda en **Scheduled**: la fila muestra "EX-00107 · Mon, Nov 30 · 1:00 PM–4:00 PM · Standard clean · Team Alpha" y **Price $175.00**. Aparece la pestaña **Audit**.
 
 El enlace no manda nada a BzzzBX: es una decisión registrada en opsRUN, y el job se lee del falso para confirmar que existe y no está cancelado (`docs/spec/fase-a-enlace.md` §2 y §5).
 
@@ -125,7 +136,7 @@ El enlace no manda nada a BzzzBX: es una decisión registrada en opsRUN, y el jo
 
 **Se ve:** R7 en la columna **Scheduled**, con el job number EX-00107 bajo el nombre (por verificar el formato de la tarjeta). Abrir R7 de nuevo: las pestañas son **Propiedad**, **Audit**, **$** y **People** (en gris, "Not available in this release") y **Alerts**. Job tracker y Billing aparecen más adelante, con sus etapas.
 
-### Paso 7. La conversación **(PR #19)**
+### Paso 7. La conversación
 
 La columna izquierda de la Job window es la conversación. Para ver todo, abrir R2 (tiene original, texto al cleaner y nota).
 
@@ -138,7 +149,7 @@ La columna izquierda de la Job window es la conversación. Para ver todo, abrir 
 
 **Clic:** escribir una nota y pulsar **Send**.
 
-**Se ve:** la nota aparece como **Internal · not sent**, con el operador de "Acting as". Nada sale a BzzzBX. Para verla luego en Audit (`note_added`), hacerla en R7 después del paso 5; R2 no tiene pestaña Audit.
+**Se ve:** la nota aparece como "Internal note · Ops Dos · Internal · not sent", con el operador elegido en "Acting as". Nada sale a BzzzBX. Para verla luego en Audit ("Note added"), hacerla en R7 después del paso 5; R2 no tiene pestaña Audit.
 
 **7.3. Correo al cliente.** Pasar al modo **Customer**.
 
@@ -164,18 +175,19 @@ curl -X POST http://localhost:3000/api/falso \
 
 **7.6. Respuesta del cliente (opcional).** Con `POST /api/falso` y `accion: "poner"`, `entidad: "message"` en `bx-thread-0002`, aparece un correo entrante con **Received** en menos de un minuto (por verificar la forma del valor).
 
-### Paso 8. El Audit de R7 **(PR #17 para el enlace)**
+### Paso 8. El Audit de R7
 
 **Clic:** la pestaña **Audit** en la Job window de R7.
 
 **Se ve:**
-- Arriba, en una línea: **Request** R7, **Job number** EX-00107 y **Work App number** EX-00107. Son el mismo valor hasta revisarlo contra el User Guide (`docs/spec/opr-35-audit.md` P-7). Debajo, "Times in UTC" (la zona por defecto; `pnpm local` no define `OPSRUN_ZONA_HORARIA`, por verificar).
+- Arriba, en una línea: **Request** R7, **Job number** EX-00107 y **Work App number** EX-00107. Son el mismo valor hasta revisarlo contra el User Guide (`docs/spec/opr-35-audit.md` P-7). Debajo, "Times in UTC".
 - Una fila por evento, del más viejo al más nuevo (`docs/spec/opr-35-audit.md` P-4):
-  1. **Request received**.
-  2. **Assigned**, marcado **Original**, a Ops Dos.
-  3. Las confirmaciones de details, sender y cleaner, con su hora. Sin complemento de método: la seed no lo trae para R7.
-  4. **Job link rejected**, de Ops Uno, con el job EX-00108 si el puerto lo devuelve, o "a proposed job" si no.
-  5. **Scheduled**, con "linked to observed job EX-00107", de Ops Uno (por verificar el texto exacto del label).
+  1. **Request received**, de opsRUN.
+  2. **Assigned to Ops Dos**, marcado **Original**.
+  3. **Details confirmed**, **Sender confirmed** y **Cleaner confirmed**.
+  4. **Note added**, si se hizo la nota del paso 7.2 en R7.
+  5. **Job link rejected**, de Ops Uno, solo si se hizo el rechazo del paso 4b.
+  6. **Scheduled · linked to observed job EX-00107**, de Ops Uno.
 - Cada fila tiene hora con fecha, la persona que lo hizo y, si lo hay, el motivo ("Reason:").
 
 Para mostrar más historia, en la misma base:
@@ -187,7 +199,7 @@ Para mostrar más historia, en la misma base:
 - **Gris o "Not built yet".** Las acciones de V1.1 beta que su tarjeta todavía no construye (Assign, Reschedule, Cancel job, Ask cleaner, Clear alert, End manually, Approve & confirm, Mark as OSS, Enter PO, Validate) se ven en gris con "Not built yet", y no corren (`src/lib/acciones/disponibilidad.ts`). "Reject · re-clean" aparece como "Not available in this release", porque no entra en V1.1 beta. Decir: "Esto se ve para que sepan que existe; corre cuando su tarjeta lo construya."
 - **Sin login real.** El operador lo elige el selector "Acting as". El login es OPR-21, bloqueado por OPR-2. Decir: "En la demo, la persona la elegimos nosotros; con login, la sesión la decide."
 - **Sin BzzzBX real.** Todo viene del stand-in en memoria, con datos inventados. El contrato real es OPR-6. Decir: "Lo que vemos es el falso del contrato; el real lo confirma el equipo de BzzzBX."
-- **Sin envío real de correo ni SMS.** Enviar deja la instrucción en el falso, y nada sale a un correo ni a un proveedor de SMS. El envío real es OPR-6 (C · Email sending y C · Texting both ways) **(PR #19)**.
+- **Sin envío real de correo ni SMS.** Enviar deja la instrucción en el falso, y nada sale a un correo ni a un proveedor de SMS. El envío real es OPR-6 (C · Email sending y C · Texting both ways).
 - **Check-in forzado sin Audit.** Un check-in puesto con `/api/falso` cambia la etapa (OPR-26 A16), pero no aparece en Audit: nadie escribe `job_checked_in` en vivo todavía (OPR-35 P-6). Decir: "Lo observado en vivo entra a Audit cuando su tarjeta lo escriba (OPR-30 a OPR-32)."
 - **Deshacer un enlace.** No existe hasta OPR-29 (`docs/spec/fase-a-enlace.md` P-4). Por eso la demo se repite con `pnpm db:reset`.
 - **Aspecto sin revisar.** Nadie ha comparado la pantalla con el prototipo R23: no se pudo abrir desde la cuenta de trabajo (OPR-25 P-0, OPR-26 S-1, OPR-27 S-1, OPR-35 S-2). Decir: "La distribución sale de la tarjeta y del glosario; el aspecto fino se revisa con R23."
@@ -226,15 +238,19 @@ El servidor no tiene el falso. Se arrancó con `pnpm dev` o `pnpm start` en luga
 
 Faltan las mismas condiciones del punto 1.2: `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`. Solo `pnpm local` las pone todas.
 
-### 5.4 La base no responde
+### 5.4 `pnpm local` falla por `API_URL`
+
+Supabase no levantó todos sus servicios. Ver el punto 1.4.
+
+### 5.5 La base no responde
 
 Ver http://localhost:3000/salud o `GET /api/salud` (503 si la base no responde). Si pasa, `pnpm db:start`. Si la base sigue mal, `pnpm db:reset`, con el OK de Henry.
 
-### 5.5 Repetir la demo desde cero
+### 5.6 Repetir la demo desde cero
 
 `pnpm db:reset`, con el OK de Henry, y después volver a correr `pnpm local`. Vuelven R1 a R7 con su seed, sin los enlaces. El stand-in vive en la memoria del servidor: al arrancarlo de nuevo, vuelve a su estado inicial y se van los jobs puestos con `/api/falso`.
 
-### 5.6 El tablero no se actualiza
+### 5.7 El tablero no se actualiza
 
 Esperar hasta un minuto (sondeo cada 15 s). Si no, recargar la página.
 
