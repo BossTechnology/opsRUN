@@ -59,6 +59,16 @@ export function probarContratoDeLectura(nombre: string, crear: () => Promise<Ent
       expect(leido!.leido_en).toMatch(ES_ISO);
     });
 
+    it("un job puede traer price ({ amount_cents entero, currency de 3 letras }) o null; nunca otra forma (OPR-26, P-6)", async () => {
+      const { lectura, conocidos } = await crear();
+      const job = await lectura.obtener("job", conocidos.job);
+      const price = job!.price;
+      if (price === undefined || price === null) return;
+      expect(Number.isInteger(price.amount_cents)).toBe(true);
+      expect(price.amount_cents).toBeGreaterThanOrEqual(0);
+      expect(price.currency).toMatch(/^[A-Z]{3}$/);
+    });
+
     it("da null para un ID desconocido", async () => {
       const { lectura } = await crear();
       expect(await lectura.obtener("job", DESCONOCIDO)).toBeNull();

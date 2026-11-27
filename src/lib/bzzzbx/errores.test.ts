@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { BzzzbxNoDisponible, CursorCaducado, esCursorCaducado, esNoDisponible } from "./errores";
+import { BzzzbxNoDisponible, CursorCaducado, esCursorCaducado, esFiltroInvalido, esNoDisponible, FiltroInvalido } from "./errores";
 
 /** Lo que lanza otra copia del módulo: misma forma, otra clase. */
 function deOtraCopia(nombre: string): Error {
@@ -29,5 +29,11 @@ describe("reconocer errores del puerto", () => {
     expect(esCursorCaducado(new CursorCaducado())).toBe(true);
     expect(esCursorCaducado(deOtraCopia("CursorCaducado"))).toBe(true);
     expect(esCursorCaducado(new BzzzbxNoDisponible())).toBe(false);
+  });
+
+  it("FiltroInvalido, de esta copia o de otra", () => {
+    expect(esFiltroInvalido(new FiltroInvalido("sin cliente"))).toBe(true);
+    expect(esFiltroInvalido(deOtraCopia("FiltroInvalido"))).toBe(true);
+    expect(esFiltroInvalido(new BzzzbxNoDisponible())).toBe(false);
   });
 });

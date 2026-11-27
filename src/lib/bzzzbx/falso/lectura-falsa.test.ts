@@ -25,6 +25,14 @@ describe("lectura falsa: datos", () => {
     expect((await lectura.obtener("customer", job!.bzzzbx_customer_id))?.po_required).toBe(true);
   });
 
+  it("los jobs de la seed traen un price inventado (OPR-26, P-6)", async () => {
+    const { lectura } = crearFalso();
+    expect((await lectura.obtener("job", "bx-job-0003"))?.price).toEqual({ amount_cents: 18_500, currency: "USD" });
+    for (const job of lectura.todos("job")) {
+      expect(job.price, job.bzzzbx_job_id).toBeDefined();
+    }
+  });
+
   it("la alerta OPS-001 abierta es de la request R1 de opsRUN", async () => {
     const { lectura } = crearFalso();
     const alertas = await lectura.listarPor("alert_result", {

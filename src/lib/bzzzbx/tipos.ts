@@ -27,6 +27,11 @@ export type Job = {
   /** El cleaner del job. */
   bzzzbx_team_id: string | null;
   po_number: string | null;
+  /**
+   * Precio del job, solo para mostrar (OPR-26, P-6). PROVISIONAL hasta OPR-6:
+   * el Runbook no lo trae. opsRUN nunca lo guarda. Ausente o null: no viene.
+   */
+  price?: { amount_cents: number; currency: string } | null;
 };
 
 export type Assignment = {
