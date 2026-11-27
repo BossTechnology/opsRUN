@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fechaYVentana, hora, iniciales, horaOFecha } from "./formato";
+import { fechaYVentana, hora, horaConFecha, iniciales, horaOFecha } from "./formato";
 
 const UTC = "UTC";
 
@@ -14,6 +14,13 @@ describe("formato del tablero", () => {
     const ahora = new Date("2026-11-24T18:00:00Z");
     expect(horaOFecha("2026-11-24T09:30:00Z", ahora, UTC)).toBe("9:30 AM");
     expect(horaOFecha("2026-11-21T09:30:00Z", ahora, UTC)).toBe("Nov 21, 9:30 AM");
+  });
+
+  it("horaConFecha: siempre con fecha, y con el año si no es el en curso (OPR-35)", () => {
+    const ahora = new Date("2026-11-27T18:00:00Z");
+    expect(horaConFecha("2026-11-27T09:30:00Z", ahora, UTC)).toBe("Nov 27, 9:30 AM");
+    expect(horaConFecha("2026-11-25T14:30:00Z", ahora, "America/New_York")).toBe("Nov 25, 9:30 AM");
+    expect(horaConFecha("2025-11-25T14:30:00Z", ahora, UTC)).toBe("Nov 25, 2025, 2:30 PM");
   });
 
   it("fecha de servicio con su ventana", () => {

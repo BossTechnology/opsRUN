@@ -114,6 +114,16 @@ Términos de la ventana de cada job. Detalle en `docs/spec/opr-26-job-window.md`
 | Acting as | Selector solo local con el que la demo elige qué operador de la seed actúa, sin login. Existe únicamente con `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`; si falta una, no hay selector y la cookie se ignora. | OPR-26, P-2 |
 | Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Provisional hasta que OPR-34 la separe de Waiting. | OPR-26 S-8, OPR-34 |
 
+## Audit (OPR-35)
+
+Términos de la pestaña Audit. Detalle en `docs/spec/opr-35-audit.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Original | Marca del primer `request_assigned` de la request: el operador original. | OPR-35 |
+| Observed | Marca de un evento que es un hecho de PINCH visto por la read layer (`source = 'bzzzbx_observed'`), para distinguirlo de una acción hecha en opsRUN. | OPR-35 |
+| Work App number | Se muestra con el mismo valor que el Job number hasta revisarlo contra el User Guide §10.3 (P-7). | OPR-35 |
+
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).
 - Reject · re-clean, las pestañas $ y People, editar To/Cc y el número temporal: se ven, no corren.
