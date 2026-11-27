@@ -1,13 +1,13 @@
 # OPR-34 — Pestaña Alerts de la Job window y Alerts de la barra superior
 
-- **Tarjeta:** OPR-34 (P4 · Alerts tab and top-bar Alerts). Depende de OPR-33 (las 9 reglas en BzzzBX, pendiente externo) y de OPR-26 (Job window, en `main`). Leída en Relevo el 2026-11-27 junto con OPR-33 (contrato de lectura de alertas y su respuesta oficial del 24 de noviembre) y OPR-3 (límites). Las tarjetas son información; este spec manda sobre la construcción solo cuando Henry lo apruebe.
-- **Estado:** spec para revisión de Henry. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación (§13).
-- **Hecho cuando (tarjeta):** las alertas de E2E-2 a E2E-7 aparecen, se arreglan y pasan a Resolved. En local se prueba sobre el stand-in (§11.3); E2E-2 a E2E-7 completos se aceptan en staging (OPR-40), con las reglas reales de OPR-33.
+- **Tarjeta:** OPR-34 (P4 · Alerts tab and top-bar Alerts). Depende de OPR-33 (las 9 reglas en BzzzBX, pendiente externo) y de OPR-26 (Job window, en `main`). Leída en Relevo el 2026-11-27 junto con OPR-33 (contrato de lectura de alertas y su respuesta oficial del 24 de noviembre) y OPR-3 (límites). Las tarjetas son información; este spec manda sobre la construcción.
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-13 según las recomendaciones salvo P-2, que cambia: el registrador de alertas corre en el único ciclo de fondo de opsRUN (§13.1). P-10 queda como supuesto hasta que Henry pase los casos. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con su decisión (§13.1).
+- **Hecho cuando (tarjeta):** las alertas de E2E-2 a E2E-7 aparecen, se arreglan y pasan a Resolved. En local se prueba sobre el stand-in (§10.3); E2E-2 a E2E-7 completos se aceptan en staging (OPR-40), con las reglas reales de OPR-33.
 - **Construye sobre (todo en `main`):** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md` §3.4, §3.8, §3.11 y §4; tabla `opsrun.alert_occurrence` en `20261124130000_modelo_de_datos.sql`), el puerto de BzzzBX y su falso (`docs/spec/opr-22-stand-ins.md` §3.1 y §3.1.1, `AlertResult` y `SujetoAlerta` en `src/lib/bzzzbx/tipos.ts`), el tablero con el conteo de Alerts en la barra (`docs/spec/opr-25-tablero.md` §1.1 y P-6), la Job window con la ranura de Alerts y la regla de la pestaña inicial (`docs/spec/opr-26-job-window.md` §4.2, §4.3 y §7.4), la conversación (OPR-27, hasta `OP012`) y Audit (`docs/spec/opr-35-audit.md`, con los nombres de las reglas en `src/lib/audit/reglas.ts`).
 - **Depende además de specs en revisión, sin redefinirlos:**
   - `docs/spec/opr-30-31-32-etapas.md` (PR #24): **`clear_alert`** de MEC-003 Running long (§4.3, §8.2, P-5 a P-7), `alertasLimpiadas`, `clearable_rules()`, los códigos `OP019` a `OP027` y el guard G14. Este spec usa `clear_alert` **tal cual**.
   - `docs/spec/opr-28-assign-confirm.md` (aprobado, sin construir): Assign / Reassign, R8 y `bx-job-0108`, `OP013` a `OP018` y G13.
-  - `docs/spec/opr-15-entrada-correo.md` (PR #23): `OP030` a `OP034` y G15.
+  - `docs/spec/opr-15-entrada-correo.md` (PR #23): `OP030` a `OP034`, G15 y **el único ciclo de fondo de opsRUN** (§8.1 y P-1 de ese spec, ADR 0006), donde corre el registrador de alertas (§4).
 - **Referencias sin acceso [S-1]:** el prototipo R23, el User Guide cap. 10 y Apéndice C, y el Release Definition §4.11 y §5 (donde están E2E-2 a E2E-7) no están en este repo, que es público, y no se pudieron leer. Lo que sigue sale de las tarjetas, de `CONTEXT.md`, de los specs y del código en `main`.
 
 ## 1. Para qué
@@ -56,7 +56,7 @@ Una función pura y única, `alertasDeLaRequest`, en `src/lib/alertas/` (nueva),
 
 Una alerta cuyo sujeto no lleva a ninguna request no se muestra en ninguna parte y queda en el log del registrador (§4) [S-3].
 
-**Cómo se leen las de sujeto `message` sin cambiar el puerto (P-3).** El tablero ya lee por sujeto request y job. Para los mensajes, además, relee **por id** (`obtenerVarios("alert_result", ids)`) las alertas que opsRUN tiene abiertas en `alert_occurrence` con `bzzzbx_message_id`. Su estado sigue siendo el vivo de BzzzBX; `alert_occurrence` solo dice cuáles mirar. Una alerta de mensaje nueva aparece cuando el registrador la ve (≤ 15 s, §4), dentro del minuto de OPR-22.
+**Cómo se leen las de sujeto `message` sin cambiar el puerto (P-3).** El tablero ya lee por sujeto request y job. Para los mensajes, además, relee **por id** (`obtenerVarios("alert_result", ids)`) las alertas que opsRUN tiene abiertas en `alert_occurrence` con `bzzzbx_message_id`. Su estado sigue siendo el vivo de BzzzBX; `alert_occurrence` solo dice cuáles mirar. Una alerta de mensaje nueva aparece cuando el registrador la ve (una vuelta del ciclo, ≤ 15 s, §4), dentro del minuto de OPR-22.
 
 ### 3.3 Needs action, Waiting y Resolved
 
@@ -82,18 +82,22 @@ No hay columnas nuevas: `alert_occurrence` ya tiene todo (P-0). En la pestaña, 
 
 ## 4. Registrador de alertas (sistema)
 
-Hoy nadie llama a `upsert_alert_occurrence` (OPR-20 §4): no existe. Sin él no hay Resolved, ni repeticiones, ni "Alert opened" en Audit. OPR-34 lo construye, **provisional hasta la read layer de OPR-22**, con el mismo patrón que el despacho de OPR-27 y el observador de PR #24 (P-9 de ese spec) (P-2).
+Hoy nadie llama a `upsert_alert_occurrence` (OPR-20 §4): no existe. Sin él no hay Resolved, ni repeticiones, ni "Alert opened" en Audit. OPR-34 lo construye, **provisional hasta la read layer de OPR-22**, como **una tarea más del único ciclo de fondo de opsRUN**, el que define OPR-15 (PR #23 §8.1, P-1, ADR 0006) (P-2).
+
+No cuelga de `/api/tablero/cambios`: esa ruta es una consulta de lectura y no escribe, y con el tablero cerrado no se registraría nada (ni las alertas de la noche ni su Audit).
 
 | Tema | Regla |
 |---|---|
-| Dónde | `src/lib/alertas/registrador.ts`, llamado desde `/api/tablero/cambios`, a lo sumo una vez cada 15 s por proceso. |
+| Dónde | `src/lib/alertas/registrador.ts`: `crearRegistrador({ lectura, datos, reloj })` → `{ vuelta() }`, pura respecto a sus dependencias (lo que prueban los unitarios), y `src/lib/alertas/datos-sql.ts` con las llamadas a la base. |
+| Quién lo corre | El ciclo de fondo de OPR-15: el servidor de Next lo arranca en `src/instrumentation-node.ts` (solo runtime `nodejs`, nunca en `next build`), en local, CI, staging y producción. El registrador es una tarea registrada en ese ciclo, con su vuelta cada 15 s; no abre otro `setInterval`, otro proceso ni otro contenedor. Una instancia por proceso y una vuelta a la vez, como dice el ciclo. |
+| Dos procesos | En el cruce de un deploy o con `next dev`, dos registradores leen lo mismo y la base deduplica (`bzzzbx_alert_id` único y la función idempotente, §8.2). No hace falta candado global. |
 | Qué lee | `cambiosDesde(cursor)` con un cursor propio en memoria, filtrado a `entidad = "alert_result"`, y después `obtenerVarios("alert_result", ids)`. Con cursor nulo (arranque) o `CursorCaducado`, una **pasada completa**: por sujeto para las requests que no están en Paid ni canceladas, y por id para las ocurrencias abiertas en opsRUN. |
 | Sujeto → request | §3.2. Sin request, se salta con log y no se escribe [S-3]. |
 | Escribe | `opsrun.upsert_alert_occurrence(…)` (§8.2) por alerta, como actor de sistema `registrador_alertas` (`opsrun.system_actor`), por `opsrun_app`, una transacción por alerta. |
 | Idempotente | Llamar dos veces con lo mismo no escribe nada la segunda (la base lo garantiza). |
-| BzzzBX caído | No escribe; reintenta en el siguiente sondeo con el mismo cursor. |
+| BzzzBX caído | No escribe; reintenta en la siguiente vuelta con el mismo cursor. Un fallo del registrador no frena las otras tareas del ciclo (la entrada de correo) ni al revés. |
 | Errores | `22023`, `OP035` y `OP036` se registran en el log con el `bzzzbx_alert_id` y se saltan para no frenar el resto [S-5]; cualquier otro error corta la pasada y se reintenta. |
-| Refresco | Cada `audit_event` nuevo mueve el cursor de `/api/tablero/cambios`, así que el tablero y la ventana se refrescan solos. |
+| Refresco | `/api/tablero/cambios` no cambia: solo lee. Cada `audit_event` que escribe el registrador mueve su cursor, así que el tablero y la ventana abiertos se refrescan solos en el siguiente sondeo (≤ 15 s). |
 
 ### 4.1 Cómo decide la resolución
 
@@ -264,7 +268,7 @@ Una fila de Waiting abre la misma URL; como Waiting no cuenta como "pide acción
 | Modelo puro | `src/lib/alertas/armar.ts` | `alertasDeLaRequest`, `armarAlertas` (las tres secciones, orden, tiempos, quién y cómo, repeticiones, insignia), `armarPanelAlertas` (filas, conteos por filtro) |
 | Reglas | `src/lib/alertas/reglas.ts` | `NOMBRES_DE_REGLAS` (se mueve desde `src/lib/audit/reglas.ts`), `ARREGLO_DE_REGLA`, `REGLA_MENSAJE_NO_ENTREGADO` (P-12) |
 | Lectura de opsRUN | `src/lib/alertas/consultas.ts` | Ocurrencias de una request (o de todas las abiertas, para el tablero), con el operador y el `audit_event` de su resolución; `cleaner_confirmation` abiertas. Una consulta parametrizada cada una, como `opsrun_app`, en `begin read only` |
-| Registrador | `src/lib/alertas/registrador.ts` | §4 |
+| Registrador | `src/lib/alertas/registrador.ts`, `datos-sql.ts` | §4; se registra como tarea del ciclo de fondo de OPR-15 (`src/instrumentation-node.ts`) |
 | Pulso | `src/app/_alertas/usar-pulso.ts` | Hook de cliente: compara los ids rojos con los del pintado anterior |
 | Pestaña | `src/app/_ventana/ranura-alertas.tsx`, `vista-alertas.tsx`, `alertas.css` | §5 |
 | Panel | `src/app/_tablero/panel-alertas.tsx` | §6 |
@@ -404,7 +408,9 @@ Archivo nuevo `alertas.test.sql`, con fixtures propios dentro de la transacción
 - `armarVentana`: la regla 2 con Needs action, no con Waiting ni con una alerta resuelta en opsRUN; la vuelta a la propiedad cuando Needs action queda vacía y Waiting no.
 - `armarTablero`: conteos de la barra, de cada columna y de cada tarjeta iguales a los de `alertasDeLaRequest`, con una alerta de mensaje.
 - `ARREGLO_DE_REGLA`: cada regla de `NOMBRES_DE_REGLAS` tiene entrada; cada código de acción existe en el registro (se ve fallar con un código inventado).
-- Registrador: alerta nueva → una llamada a `upsert_alert_occurrence`; la misma otra vez → la llama y la base no escribe (con la base real, `OPSRUN_REQUIERE_BASE=1`); sujeto sin request → no llama; `CursorCaducado` y arranque → pasada completa; BzzzBX caído → no llama y no avanza el cursor; `OP035` se salta y sigue; a lo sumo una vez cada 15 s. Nunca usa un actor de operador (se ve fallar declarándolo).
+- Registrador (`crearRegistrador`, con lectura, datos y reloj falsos): alerta nueva → una llamada a `upsert_alert_occurrence`; la misma otra vez → la llama y la base no escribe (con la base real, `OPSRUN_REQUIERE_BASE=1`); sujeto sin request → no llama; `CursorCaducado` y arranque → pasada completa; BzzzBX caído → no llama y no avanza el cursor; `OP035` se salta y sigue. Nunca usa un actor de operador (se ve fallar declarándolo).
+- Ciclo de fondo: el registrador está registrado como tarea del ciclo de OPR-15; una vuelta que falla no impide la de la entrada de correo ni al revés; una vuelta en curso no se solapa con la siguiente.
+- **Guard "leer no escribe":** una prueba descubre en `src/app/api/**` las rutas `GET` y falla si alguna importa el registrador o `upsert_alert_occurrence`; se ve fallar una vez importándolo desde `/api/tablero/cambios`.
 - `usarPulso`: late con un id rojo nuevo, no en el primer pintado, no con uno ámbar, no con uno que ya estaba.
 - Componentes (Testing Library): pestaña con sus secciones y botones; botón en gris con el motivo de la acción; el panel abre y cierra con Esc y devuelve el foco; filtros; filas como enlaces sin `?tab`.
 - `seed-y-falso.test.ts`: mismo estado de cada alerta en la seed y en el falso.
@@ -428,6 +434,7 @@ Contra el build de producción, la seed y el falso, con `OPSRUN_ACTOR_DEMO=1` y 
 | L10 | **Mensaje no entregado y alertas sin acción construida.** | `poner` un mensaje de texto `failed` en un hilo de R2 y su alerta (sujeto `message`): cuenta en la tarjeta de R2, en su columna y en la barra; en la pestaña, Edit and resend lleva el foco al mensaje. `poner` OPS-020 en R2: Confirm cleaner en gris con su motivo del registro. |
 | L11 | **El botón no corre lo que no está disponible.** | En R1 se quita el `disabled` de un botón de alerta cuya acción está `sin_construir` y se pulsa: el panel dice "Not built yet" y el cursor de `/api/tablero/cambios` no cambia. |
 | L12 | **BzzzBX caído.** | Con R1 abierta, `/api/falso no_disponible`: Needs action con lo último leído y la franja; Waiting y Resolved completos; Clear alert en gris con "BzzzBX unavailable" en R4. El panel de la barra muestra lo último conocido con su aviso. Al volver, todo se va. |
+| L13 | **Registra con el tablero cerrado.** | Sin ninguna página abierta, `/api/falso poner` una alerta en R3 y se espera una vuelta del ciclo (consultando la base, no la interfaz): está su `alert_occurrence` y su `alert_opened`. Después se abre la ventana de R3 y la alerta ya está en Needs action y en Audit. |
 
 Las 9 reglas reales, sus límites y "aparece en menos de 1 minuto" con datos de staging son de OPR-33 y OPR-40.
 
@@ -449,7 +456,7 @@ Las 9 reglas reales, sus límites y "aparece en menos de 1 minuto" con datos de 
 | S-1 | El prototipo R23, el User Guide cap. 10 y Ap. C y el Release Definition §4.11 y §5 no se pudieron leer: textos, distribución y el reparto de §9.1 se revisan contra ellos. |
 | S-2 | Una alerta es de una request si su sujeto es la request, su job o un mensaje de sus hilos (el criterio de la ventana, OPR-26 S-8). |
 | S-3 | Una alerta cuyo sujeto no lleva a ninguna request no se muestra y queda en el log. |
-| S-4 | Entre que Signal Maker cierra una alerta y el registrador la anota (≤ 15 s), no se ve ni en Needs action ni en Resolved. |
+| S-4 | Entre que Signal Maker cierra una alerta y el registrador la anota (una vuelta del ciclo, ≤ 15 s), no se ve ni en Needs action ni en Resolved. |
 | S-5 | Los errores de datos del registrador (`22023`, `OP035`, `OP036`) se saltan con log; no hay alerta para eso en V1.1 beta. |
 | S-6 | Una alerta se considera arreglada por una acción si hubo un evento de un operador del tipo de §4.1 entre su apertura y su cierre. |
 | S-7 | Los códigos de acción de Assign y Confirm cleaner son los que fije la implementación de OPR-28. |
@@ -464,7 +471,7 @@ Las 9 reglas reales, sus límites y "aparece en menos de 1 minuto" con datos de 
 
 - **P-0. Migración.** §8: una función del sistema (`upsert_alert_occurrence`), dos helpers y un trigger, sin tablas ni columnas nuevas, con `OP035`, `OP036` y G16. **Recomiendo sí**: sin ella no hay Resolved, ni repeticiones, ni alertas en Audit, que el principio 5 pide. Alternativa: sin migración, Resolved leído en vivo de las `AlertResult` cerradas de BzzzBX, sin quién ni cómo (salvo las de `clear_alert`), y con historial solo si BzzzBX lo guarda.
 - **P-1. "Fixed by action": cómo se decide.** **Recomiendo** el reparto regla → eventos de Audit en `alert_fixing_events()` y el último evento de un operador entre la apertura y el cierre. Alternativa: todo lo que cierra Signal Maker es "Cleared automatically" y solo `clear_alert` dice quién, que pierde el "who and how" de la tarjeta.
-- **P-2. Registrador provisional.** **Recomiendo** construirlo aquí, desde `/api/tablero/cambios` cada 15 s con `cambiosDesde`, como el despacho de OPR-27, y moverlo a la read layer cuando llegue OPR-22. Alternativa: esperar a OPR-22, y OPR-34 no cumple su Hecho cuando en local.
+- **P-2. Registrador provisional.** Recomendé construirlo aquí, desde `/api/tablero/cambios` cada 15 s con `cambiosDesde`, como el despacho de OPR-27, y moverlo a la read layer cuando llegue OPR-22. Alternativa: esperar a OPR-22, y OPR-34 no cumple su Hecho cuando en local. **Henry lo cambió** (§13.1).
 - **P-3. Alertas de mensaje sin cambiar el puerto.** **Recomiendo** releer por id las ocurrencias abiertas con `bzzzbx_message_id` (respeta tu decisión de OPR-25 P-6). Alternativa: agregar al puerto `listarPor("alert_result", { abiertas: true })`, una sola ida para toda la operación, que hay que pedirle a BzzzBX en OPR-6.
 - **P-4. Insignia gris.** **Recomiendo** gris con el conteo de Waiting cuando Needs action está vacía. Alternativa: gris sin número, o sin insignia, y Waiting solo dentro de la pestaña.
 - **P-5. Qué es Waiting.** **Recomiendo** `cleaner_confirmation` `asked` y `replied` (el índice de OPR-20 §3.4), que no abren la ventana en Alerts, con "Reply received" para `replied`. Alternativa: `replied` pasa a Needs action porque espera una decisión del operador.
@@ -476,3 +483,24 @@ Las 9 reglas reales, sus límites y "aparece en menos de 1 minuto" con datos de 
 - **P-11. Actor de "Alert resolved" arreglada por una acción.** **Recomiendo** el operador que la arregló, como ya hacen la seed y la prueba B3 de OPR-35. Alternativa: siempre `bzzzbx` (quien la cerró), con el operador solo en `resolved_by`, y cambiar la seed y B3.
 - **P-12. Id de la regla Message not delivered.** CONTEXT.md no le da código. **Recomiendo** una constante `REGLA_MENSAJE_NO_ENTREGADO` en `src/lib/alertas/reglas.ts`, provisional hasta OPR-33, con un valor inventado en el falso. Alternativa: esperar a OPR-33 para mostrarla.
 - **P-13. Cuándo late.** **Recomiendo** que el primer pintado fije la base y solo late una roja que aparece después. Alternativa: latir también al abrir si la roja abrió hace menos de 1 minuto.
+
+### 13.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con P-0 a P-13 según las recomendaciones, con un cambio en P-2. Quedó así:
+
+- **P-0:** la migración de §8 va: `upsert_alert_occurrence`, `alert_fixing_events()`, `alert_fix_for()`, el trigger `alert_occurrence_resolved_frozen`, `OP035` y `OP036` (reservados `OP035` a `OP039`) y G16. Sin tablas ni columnas nuevas.
+- **P-1:** "Fixed by action" sale de `alert_fixing_events()` y del último evento de un operador entre la apertura y el cierre.
+- **P-2 (cambia):** el registrador de alertas **no** corre desde `/api/tablero/cambios`: una consulta de lectura no escribe, y con el tablero cerrado no se registraría nada. Corre como **una tarea más del único ciclo de fondo de opsRUN**, el que define OPR-15 (PR #23 §8.1, P-1: un ciclo en el servidor iniciado por `instrumentation`, con la ADR 0006). Sigue siendo provisional hasta la read layer de OPR-22. Cambian §4, §7, §10.2 (pruebas del ciclo y el guard "leer no escribe") y §10.3 (L13).
+- **P-3:** las alertas de mensaje se releen por id desde las ocurrencias abiertas; el puerto no cambia.
+- **P-4:** insignia gris con el conteo de Waiting cuando Needs action está vacía.
+- **P-5:** Waiting es `cleaner_confirmation` `asked` y `replied`, no abre la ventana en Alerts, y `replied` se ve "Reply received".
+- **P-6:** el botón de la alerta abre la acción en la action bar, prellenada, y corre solo por `ejecutarAccion`.
+- **P-7:** el panel trae Needs action abierta y Waiting cerrada, con los filtros Level, Rule, Stage y Assigned to.
+- **P-8:** las filas del panel abren `/job/[requestId]` sin `?tab`.
+- **P-9:** `bx-alert-0006`, la ocurrencia abierta de `bx-alert-0005` (coordinada con PR #24) y R9 en Validation sin PO con TRN-005 (`bx-job-0109`, `bx-alert-0007`).
+- **P-10:** el reparto de §9.1 **queda como supuesto** hasta que Henry pase los casos de E2E-2 a E2E-7.
+- **P-11:** "Alert resolved" arreglada por una acción lleva como actor al operador que la arregló.
+- **P-12:** `REGLA_MENSAJE_NO_ENTREGADO` es una constante provisional hasta OPR-33.
+- **P-13:** el primer pintado fija la base; solo late una roja que aparece después.
+
+Construir OPR-34 pide antes el ciclo de fondo de OPR-15 (o construirlo con él), además de `clear_alert` (PR #24) y Assign (OPR-28) para L5 y L7.
