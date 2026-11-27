@@ -143,12 +143,15 @@ insert into opsrun.ai_suggestion (id, request_id, ai_analysis_id, field, rank, v
    'cleaner_team', 2, '"bx-team-0003"', 'Available that day.',
    null, null, null, null);
 
-insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, ai_suggestion_id) values
-  ('b0000000-0000-4000-8000-0000000000a1', 'ai_analysis_completed', 'ai', null, now() - interval '18 minutes', null),
+-- El análisis lleva su `ai_analysis_id` en el `details` (OPR-35 §3): sin él, la
+-- pestaña Audit no sabe cuántas sugerencias trajo.
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, ai_suggestion_id, details) values
+  ('b0000000-0000-4000-8000-0000000000a1', 'ai_analysis_completed', 'ai', null, now() - interval '18 minutes', null,
+   '{"ai_analysis_id": "e0000000-0000-4000-8000-0000000000a1"}'),
   ('b0000000-0000-4000-8000-0000000000a1', 'ai_suggestion_accepted', 'operator', '0a000000-0000-4000-8000-0000000000a2',
-   now() - interval '10 minutes', '5a000000-0000-4000-8000-0000000000a1'),
+   now() - interval '10 minutes', '5a000000-0000-4000-8000-0000000000a1', '{}'),
   ('b0000000-0000-4000-8000-0000000000a1', 'ai_suggestion_corrected', 'operator', '0a000000-0000-4000-8000-0000000000a2',
-   now() - interval '9 minutes', '5a000000-0000-4000-8000-0000000000a2');
+   now() - interval '9 minutes', '5a000000-0000-4000-8000-0000000000a2', '{}');
 
 -- ---------------------------------------------------------------------------
 -- R2: details y sender confirmados; se le preguntó al cleaner (Waiting).
@@ -333,3 +336,17 @@ insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operat
    now() - interval '3 days', null, 'a1000000-0000-4000-8000-0000000000a3'),
   ('b0000000-0000-4000-8000-0000000000a5', 'alert_cleared', 'operator', '0a000000-0000-4000-8000-0000000000a2',
    now() - interval '21 hours', 'Large unit, cleaner called ahead.', 'a1000000-0000-4000-8000-0000000000a4');
+
+-- ---------------------------------------------------------------------------
+-- Audit de las confirmaciones de R3 a R6 (OPR-35, P-5). Van al final para no
+-- correr el `id` de los eventos de arriba. Cada una a la misma hora que su
+-- confirmación (+1 h), para que la pestaña Audit cuente la historia completa.
+-- `method` es lo que OPR-28 dejará en el `details` de cada confirmación.
+-- ---------------------------------------------------------------------------
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select r.id, k::text || '_confirmed', 'operator', r.owner_operator_id, r.received_at + interval '1 hour',
+       jsonb_build_object('method', case when k = 'cleaner' then 'phone' else 'operator' end)
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-0000000000a4',
+               'b0000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-0000000000a6');

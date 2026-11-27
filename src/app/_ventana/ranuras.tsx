@@ -10,7 +10,6 @@
  */
 import {
   TEXTO_RANURA_PENDIENTE,
-  type PropsRanuraAudit,
   type PropsRanuraBase,
   type PropsRanuraBilling,
   type PropsRanuraEnlace,
@@ -42,10 +41,8 @@ export function RanuraEnlace(props: PropsRanuraEnlace) {
   );
 }
 
-/** OPR-35: pestaña Audit, desde Scheduled. */
-export function RanuraAudit(props: PropsRanuraAudit) {
-  return <Pendiente nombre="audit" titulo="Audit" base={props} />;
-}
+/** OPR-35: pestaña Audit, desde Scheduled. Ya está construida en `./ranura-audit`. */
+export { RanuraAudit } from "./ranura-audit";
 
 /** OPR-30: pestaña Job tracker, desde In Progress. */
 export function RanuraTracker(props: PropsRanuraTracker) {

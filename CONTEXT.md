@@ -125,6 +125,15 @@ Términos de la conversación del job. Detalle en `docs/spec/opr-27-conversacion
 | Edit and resend | Botón de un envío Failed: copia su cuerpo al Composer en el mismo modo. Enviar crea una instrucción nueva; no reintenta la fallida. | OPR-27 S-6 |
 | AI draft | Borrador de respuesta (al cliente o al cleaner) que escribió la IA, sin decidir. Aparece en el Composer marcado "AI draft" y solo sale si el operador pulsa Send: se decide accepted (igual) o corrected (editado). Discard lo rechaza. Si la IA no produce borradores, el Composer funciona igual. | OPR-27 §5.5 |
 | Despacho de instrucciones | Entrega a BzzzBX las instrucciones `send_email` y `send_text` que ya existen en la base y las reconcilia con su estado (confirmed, failed, timed out). No crea instrucciones. Mínimo y provisional hasta OPR-23. | OPR-27 §7, `src/lib/instrucciones/` |
+## Audit (OPR-35)
+
+Términos de la pestaña Audit. Detalle en `docs/spec/opr-35-audit.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Original | Marca del primer `request_assigned` de la request: el operador original. | OPR-35 |
+| Observed | Marca de un evento que es un hecho de PINCH visto por la read layer (`source = 'bzzzbx_observed'`), para distinguirlo de una acción hecha en opsRUN. | OPR-35 |
+| Work App number | Se muestra con el mismo valor que el Job number hasta revisarlo contra el User Guide §10.3 (P-7). | OPR-35 |
 
 ## Fuera de alcance de V1.1 beta
 - Escribir en QuickBooks: facturas y pagos siguen como los hace Finance hoy (OPR-10).

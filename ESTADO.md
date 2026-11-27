@@ -3,6 +3,7 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
+- OPR-35, pestaña Audit: spec `docs/spec/opr-35-audit.md` aprobado por Henry el 2026-11-27 (P-1 a P-7). Implementada en la rama `opr-35-audit` (PR contra `main`, sin fusionar: lo fusiona Henry).
 - OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementada en la rama `opr-26-job-window-impl` (PR contra `main`, sin fusionar: lo fusiona Henry). El PR #13 (solo el spec) sigue sin fusionar.
 - OPR-27, conversación: spec `docs/spec/opr-27-conversacion.md` aprobado por Henry el 2026-11-27 (P-0 a P-7). Implementada en la rama `opr-27-conversacion` (PR contra `main`, sin fusionar).
 - OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
@@ -85,8 +86,15 @@
   - El falso acepta `send_email` con `bzzzbx_thread_id` y `send_text` con `bzzzbx_team_id` y resuelve él los destinatarios (P-2); `/api/falso` gana `forzar_error`. La seed trae borradores de IA en R2 y R7 (P-3).
   - Guard "nada sale solo": una prueba descubre en `src/**` quién puede enviar y falla si no es el Composer o su ejecutor.
   - En local (base temporal propia): lint, typecheck, Vitest, pgTAP y Playwright C1 a C12 (C11 sin hilo, solo en Vitest: la seed no trae una request sin hilo de correo).
+- 2026-11-27: OPR-35, pestaña Audit (rama `opr-35-audit`), sin migración:
+  - `src/lib/audit/`: `leerAudit` (una consulta parametrizada como `opsrun_app`, por `comoOpsrunApp` sin `escritura` ni `actor`, es decir en `begin read only`; sin vista ni función nueva, P-1), `leerNombres` (los nombres de PINCH, con `obtenerVarios` por entidad dentro del presupuesto de la ventana, nunca guardados, P-2) y `armarAudit` (pura: orden por `occurred_at` e `id`, persona por `actor_kind`, complemento por tipo y hora con `horaConFecha`, que se agregó a `src/lib/tablero/formato.ts`). Los tipos nuevos del catálogo salen solos con su label. Los errores de BzzzBX se reconocen por nombre.
+  - UI en `src/app/_ventana/`: `RanuraAudit` (server component con su `Suspense`, en `ranura-audit.tsx`, reexportado desde `ranuras.tsx` sin cambiar el contrato) y `VistaAuditPestana` (`<ol aria-label="Audit">`, un `<time datetime>` por fila, "Reason:", "Original" y "Observed"), con su CSS en `audit.css`.
+  - Seed (P-5): los eventos de confirmación de R3 a R6 (con `details.method`), al final del archivo para no mover el `id` de los eventos que ya estaban, y el `ai_analysis_id` en el análisis de R1. R7 ya traía recibido, asignado y sus tres confirmaciones desde OPR-26.
+  - Pruebas: Vitest (`armar`, `nombres`, componente, `horaConFecha`, y la lectura contra la seed con `OPSRUN_REQUIERE_BASE=1`, que se vio fallar pasando `escritura: true`), pgTAP `audit_catalogo.test.sql` (label no vacío y nada de Zendesk en el catálogo, visto fallar en cada corrida) y Playwright B1 a B8 en `e2e/audit.spec.ts`.
+  - Playwright: `audit.spec.ts` corre en un proyecto aparte, después del resto, porque B1 y B7 enlazan R7 (una vez por base; en una base usada se saltan). Como los botones del enlace (OPR-28) no están en la ventana, hacen las mismas llamadas SQL que harán esos botones (`reject_job_link` y `link_observed_job`, como `opsrun_app` y con el actor de Ops Uno). `playwright.config.mts` fija `OPSRUN_ZONA_HORARIA=America/New_York` y le pasa `OPSRUN_DATABASE_URL` a los workers.
 
 ## Pendiente
+- OPR-35: confirmar el Work App number contra el User Guide §10.3 (hoy es el mismo valor que el Job number, P-7) y revisar la pestaña contra el prototipo R23 (S-1 y S-2 del spec). Cuando OPR-28 ponga los botones del enlace, B1 y B7 pueden pasar a la interfaz; los dos enlazan R7, así que ninguna otra prueba puede enlazarla en la misma base. En la demo se dice que un check-in forzado con `/api/falso` no entra a Audit todavía (P-6).
 - OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
 - Base local: `pnpm db:reset` para cargar la seed nueva, con R7 y los `auth_user_id` de demo (pide OK de Henry). Sin eso, la demo local no tiene R7 ni operadores que puedan actuar.
 - OPR-26: revisar la Job window contra el prototipo R23 (S-1 del spec). Supuestos que tomó la implementación (ver el PR): 404 con estado HTTP 200 al ser streaming, A5 de R1 sigue el §4.1 (pestaña "4B"), `motivo: "no"` oculta el campo Reason, A7 entrega el clic al manejador de React porque React ignora los clics sobre un botón `disabled`.
