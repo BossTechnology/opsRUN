@@ -54,6 +54,14 @@ describe("VistaTablero", () => {
     expect(tarjeta("EX-00006").dataset.color).toBe("pagada");
   });
 
+  it("cada tarjeta es un enlace a la Job window de su request (OPR-26)", () => {
+    render(<VistaTablero tablero={tablero()} zona="UTC" sondeoMs={15_000} cursor="c0" />);
+    const r3 = tarjeta("EX-00003");
+    expect(r3.tagName).toBe("A");
+    expect(r3.getAttribute("href")).toBe("/job/b0000000-0000-4000-8000-0000000000a3");
+    expect(screen.getAllByTestId("tarjeta").every((t) => t.getAttribute("href")?.startsWith("/job/"))).toBe(true);
+  });
+
   it("— — en lo no definido", () => {
     render(<VistaTablero tablero={tablero()} zona="UTC" sondeoMs={15_000} cursor="c0" />);
     expect(within(tarjeta("R1")).getByTestId("servicio").textContent).toBe("— — | — —");

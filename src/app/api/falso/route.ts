@@ -2,6 +2,7 @@ import { connection } from "next/server";
 
 import { obtenerFalso, reiniciarFalso } from "@/lib/bzzzbx";
 import { aplicarControl } from "@/lib/bzzzbx/falso/control";
+import { olvidarVentanas } from "@/lib/ventana/servidor";
 
 /**
  * POST /api/falso: controles del stand-in de BzzzBX para los E2E (spec OPR-25,
@@ -16,6 +17,8 @@ export async function POST(pedido: Request) {
   const cuerpo: unknown = await pedido.json().catch(() => null);
   if (typeof cuerpo === "object" && cuerpo !== null && (cuerpo as { accion?: unknown }).accion === "reiniciar") {
     reiniciarFalso();
+    // Lo último leído de BzzzBX por la Job window es del falso anterior.
+    olvidarVentanas();
     return Response.json({ ok: true });
   }
   const resultado = aplicarControl(falso, cuerpo);

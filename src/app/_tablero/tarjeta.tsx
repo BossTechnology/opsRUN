@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Tarjeta as ModeloTarjeta } from "@/lib/tablero/tipos";
 
 import { IconoChat, IconoServicio } from "./iconos";
@@ -13,7 +15,9 @@ const DESCRIPCION_COLOR: Record<ModeloTarjeta["color"], string | null> = {
 export function Tarjeta({ tarjeta }: { tarjeta: ModeloTarjeta }) {
   const color = DESCRIPCION_COLOR[tarjeta.color];
   return (
-    <article
+    // Un enlace (OPR-26): clic, Enter y abrir en otra pestaña abren la Job window encima del tablero.
+    <Link
+      href={`/job/${tarjeta.requestId}`}
       className="tarjeta"
       data-testid="tarjeta"
       data-numero={tarjeta.numero}
@@ -63,6 +67,6 @@ export function Tarjeta({ tarjeta }: { tarjeta: ModeloTarjeta }) {
           </span>
         ) : null}
       </footer>
-    </article>
+    </Link>
   );
 }
