@@ -3,8 +3,10 @@
 > Actualizar al cerrar cada sesión. Es lo primero que lee la siguiente.
 
 ## Tarea actual
-- OPR-28, Fase A: enlace request ↔ job observado (rama `opr-28-enlace-fase-a`): PR contra `main`, sin fusionar. Spec `docs/spec/fase-a-enlace.md`, aprobado por Henry el 2026-11-25 con las recomendaciones P-0 a P-4. Henry autorizó adelantarlo en local sin OPR-6 ni las dependencias de OPR-28.
-- OPR-22, stand-ins de BzzzBX (rama `opr-22-stand-ins-bzzzbx`): PR contra `main`, sin fusionar. Henry autorizó adelantar la parte local de OPR-22 y la forma del puerto de OPR-23 sin OPR-6.
+- OPR-26, Job window: spec `docs/spec/opr-26-job-window.md` aprobado por Henry el 2026-11-27 (P-1 a P-6, con P-2 endurecida). Implementación por empezar.
+- OPR-25, tablero y tarjetas (PR #11): fusionado en `main`. El prototipo R23 no se pudo abrir: el aspecto sigue supuestos.
+- OPR-28, Fase A: enlace request ↔ job observado (PR #12): fusionado en `main`, sin pantalla todavía.
+- OPR-22, stand-ins de BzzzBX (PR #9): fusionado en `main`.
 - OPR-1, imagen y deploy (PR #8): fusionado en `main`. El primer deploy en el servidor de PINCH espera la red de OPR-6.
 
 ## Hecho
@@ -51,6 +53,14 @@
   - Pruebas de contrato que reciben la implementación: corren contra el falso y, con `BZZZBX_CONTRATO_REAL=1`, contra el real (hoy fallan a propósito).
   - La seed ya no arma `bx-job-`, `bx-msg-`, `bx-thread-` ni el job number con el R number, que en una base usada no empieza en 1: salen del id fijo de cada request. Verificado en una base temporal local.
   - En local: lint, typecheck, Vitest y `pnpm test:db` (11 archivos, 148 pruebas) en verde.
+- 2026-11-24: OPR-25, tablero y tarjetas:
+  - `/` es el tablero. Barra superior con un marcador de logo, Live, Alerts con el conteo de toda la operación, Alarms, Anomalies y Actions en gris, y el filtro de operador (Only me espera a OPR-21). En el riel, Rosie activa y Observe, Geo, Incidents, Activity y Map en gris con "Available in a later release".
+  - Cinco columnas con conteo y alertas abiertas. La etapa sale de OPR-20 §5; los jobs cancelados no aparecen; las Paid van en una fila colapsada de Validation.
+  - Las tarjetas muestran nombre y número, estado bajo el número (Delayed parpadea), ciudad, type | service con ícono, chat, flags PO, PO missing y OSS, y los colores: verde, sombreado rojo, borde rojo y oscura. Lo que falta se ve "— —".
+  - Server components: opsRUN por `opsrun_app` y BzzzBX por su puerto. Con BzzzBX caído se muestra lo último conocido, en memoria, con aviso.
+  - El navegador pregunta cada 15 s a `/api/tablero/cambios`, que junta `cambiosDesde` con el último Audit, y refresca si hubo cambio.
+  - `POST /api/falso` controla el stand-in desde los E2E (404 sin falso o en el servidor). La página de salud pasa a `/salud`. Variable nueva `OPSRUN_ZONA_HORARIA`.
+  - En local pasan lint, typecheck, Vitest (194) y `next build`; el servidor de producción sirve el tablero contra el Postgres local. Playwright no corrió en local: el Supabase local solo tiene Postgres (Docker saturado) y su seed es anterior al arreglo de crosswalk IDs de OPR-22. E2E y la consulta contra la seed, en la CI.
 
 - 2026-11-25: OPR-28, Fase A, enlace request ↔ job observado:
   - `buscarJobs` exige cliente o propiedad y un rango de fechas de hasta 62 días, y devuelve hasta 50 jobs ordenados (`FiltroInvalido` si no). Pruebas de contrato para el falso y el real. El falso trae cuatro jobs de la Fase A sin request (`bx-job-0102` a `0105`); la seed no cambia.
@@ -60,6 +70,8 @@
   - Validado en local en una base temporal del Supabase local (alta, migraciones y seed): los pgTAP en verde salvo `roles.test.sql`, que pide el esquema `auth` que una base vacía no tiene; Vitest de punta a punta en verde. lint, typecheck y `pnpm test` en verde. `supabase test db` completo, en la CI.
 
 ## Pendiente
+- OPR-25: revisar el tablero contra el prototipo R23 (P-0 del spec) y ajustar los supuestos S-1 a S-6.
+- Base local: `pnpm db:reset` para cargar la seed nueva (pide OK de Henry).
 - Fase A (OPR-28): botones de enlace en la Job window cuando exista OPR-26; deshacer un enlace queda para OPR-29 (P-4). Los supuestos S-1 a S-5 del spec se revisan con OPR-6 y el User Guide.
 - `pool.test.ts` aplica las migraciones pendientes al Supabase local compartido cuando corre `pnpm test` con una migración nueva: la base local queda con una migración que otras ramas no tienen en disco, y `migrar` las rechaza hasta fusionar o hacer `pnpm db:reset`. Pasó con `20261125120000_fase_a_enlace`; el 2026-11-25 se reseteó la base local y se preparó con las migraciones de `main`. Hasta fusionar el PR de OPR-28, correr `pnpm test` en esta rama la vuelve a aplicar.
 - OPR-22, con el equipo de BzzzBX (Henry ya decidió P-0 a P-4, spec §9): que confirme por escrito en OPR-6 el transporte de lectura (vistas por HTTP, P-1) y de dónde sale el aviso de cambios, y si soporta `end_job_manually` (P-3).
@@ -77,6 +89,6 @@
 - OPR-2 (método de login): bloquea OPR-21 y, por ella, OPR-23.
 
 ## Siguiente paso
-- Henry revisa el PR de OPR-28 (Fase A, enlace). Después, los botones del enlace van con la Job window (OPR-26).
-- Henry revisa y fusiona el PR de OPR-22 (P-0 a P-4 ya contestadas). Con eso, OPR-25 (tablero) se construye contra `obtenerBzzzbx()`. Fase A (OPR-42): `buscarJobs` y el enlace, en el PR de OPR-28.
+- OPR-26: implementar la Job window según su spec. Después, los botones del enlace (OPR-28), la conversación (OPR-27) y Audit (OPR-35).
+- Henry comparte el prototipo R23 para ajustar el aspecto del tablero.
 - OPR-1: cuando llegue la red de OPR-6, el primer deploy a staging con `docs/runbook-servidor.md`.

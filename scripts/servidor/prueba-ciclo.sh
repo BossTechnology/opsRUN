@@ -62,7 +62,11 @@ comprobar_sirve() {
   [[ "$(campo status <<<"$cuerpo")" == ok ]] || falla "/api/salud no da ok: $cuerpo"
   [[ "$(campo schema_version <<<"$cuerpo")" == "$(ultima_migracion)" ]] ||
     falla "la base no va en la última migración del repo: $cuerpo"
-  curl -fsS --max-time 5 "$URL/" | grep -q "opsRUN" || falla "la página de inicio no sirve"
+  # Primero el cuerpo entero y después grep: con `curl | grep -q`, grep corta
+  # al primer acierto y curl falla al escribir el resto (pipefail).
+  local inicio
+  inicio="$(curl -fsS --max-time 10 "$URL/")" || falla "la página de inicio no responde"
+  grep -q "opsRUN" <<<"$inicio" || falla "la página de inicio no sirve"
 }
 
 paso "Alta local (sin migraciones: las aplica el deploy)"

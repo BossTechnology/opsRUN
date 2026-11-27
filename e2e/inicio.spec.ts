@@ -15,10 +15,10 @@ function ultimaMigracion(dirTests: string): string {
   return ultima;
 }
 
-test("la página de inicio lee la salud de su Supabase", async ({ page }) => {
+test("la página de salud lee la salud de su Supabase", async ({ page }) => {
   const esperada = ultimaMigracion(test.info().project.testDir);
 
-  await page.goto("/");
+  await page.goto("/salud");
 
   await expect(page.getByRole("heading", { level: 1, name: "opsRUN" })).toBeVisible();
   await expect(page.getByTestId("estado-base")).toHaveText("Connected");

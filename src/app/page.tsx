@@ -1,15 +1,24 @@
+import { connection } from "next/server";
 import { Suspense } from "react";
 
-import { EstadoBase } from "./estado-base";
+import { obtenerTablero, revisarCambiosDelTablero, SONDEO_MS, zonaDeLaOperacion } from "@/lib/tablero/servidor";
 
-export default function Home() {
+import { VistaTablero } from "./_tablero/vista-tablero";
+
+/** Se lee en cada visita y en cada refresco, nunca en el build. */
+async function TableroEnVivo() {
+  await connection();
+  // El cursor va antes que la lectura: lo que cambie en medio se ve en el siguiente sondeo.
+  const { cursor } = await revisarCambiosDelTablero(null);
+  const tablero = await obtenerTablero();
+  return <VistaTablero tablero={tablero} zona={zonaDeLaOperacion()} sondeoMs={SONDEO_MS} cursor={cursor} />;
+}
+
+/** El tablero (OPR-25). */
+export default function Inicio() {
   return (
-    <main>
-      <h1>opsRUN</h1>
-      <p className="subtitulo">Operations console · V1.1 beta</p>
-      <Suspense fallback={<p aria-busy="true">Checking database…</p>}>
-        <EstadoBase />
-      </Suspense>
-    </main>
+    <Suspense fallback={<p aria-busy="true">Loading board…</p>}>
+      <TableroEnVivo />
+    </Suspense>
   );
 }

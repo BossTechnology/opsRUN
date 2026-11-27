@@ -37,3 +37,14 @@ export class FiltroInvalido extends Error {
     this.name = "FiltroInvalido";
   }
 }
+
+/**
+ * Next empaqueta por separado rutas y páginas, y el falso es una sola
+ * instancia por proceso: puede lanzar la clase de otra copia de este módulo y
+ * `instanceof` falla. Por eso se reconocen por el nombre.
+ */
+const conNombre = (e: unknown, nombre: string) => e instanceof Error && e.name === nombre;
+
+export const esNoDisponible = (e: unknown): boolean => conNombre(e, "BzzzbxNoDisponible");
+export const esCursorCaducado = (e: unknown): boolean => conNombre(e, "CursorCaducado");
+export const esInstruccionRechazada = (e: unknown): boolean => conNombre(e, "InstruccionRechazada");

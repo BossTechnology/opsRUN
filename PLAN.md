@@ -60,6 +60,7 @@ OPSRUN_SECRETS_FILE=          # opcional; archivo montado con OPSRUN_APP_USUARIO
 OPSRUN_GOTRUE_URL=            # raíz del GoTrue de la caja; se valida, el login es de OPR-2
 NEXT_PUBLIC_SITE_URL=
 BZZZBX_MODO=                  # falso | real. Fuera del servidor, falso; en el servidor, real, y falso no deja arrancar (OPR-22)
+OPSRUN_ZONA_HORARIA=          # opcional; zona IANA de las horas del tablero (UTC si falta o no es válida). Provisional hasta OPR-4 (OPR-25)
 BZZZBX_…                      # el resto, por definir en OPR-6
 
 # Fuera del servidor de la app
