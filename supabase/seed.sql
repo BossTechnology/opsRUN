@@ -62,6 +62,11 @@ insert into opsrun.message_template (key, version, channel, subject, body, activ
 --   R7 Requests, lista para enlazar (OPR-26, P-3): dueño, las tres
 --      confirmaciones vigentes y un job inventado en el falso que encaja
 --      (bx-job-0107, EX-00107): cliente, propiedad, fecha, ventana y equipo.
+--   R8 Requests, nueva (OPR-28, P-7): sin dueño y sin confirmaciones, con el
+--      borrador completo y un job inventado en el falso que encaja
+--      (bx-job-0108, EX-00108). Recorre Requests entera: asignar, tres
+--      confirmaciones, enlazar. Va al final del archivo para no mover los `id`
+--      de los eventos que ya estaban.
 -- ---------------------------------------------------------------------------
 insert into opsrun.request (
   id, received_at, owner_operator_id,
@@ -350,3 +355,37 @@ from opsrun.request as r
 cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
 where r.id in ('b0000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-0000000000a4',
                'b0000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-0000000000a6');
+
+-- ---------------------------------------------------------------------------
+-- R8 (OPR-28, P-7): una request nueva para recorrer Requests entera. Sin dueño y
+-- sin confirmaciones, con el borrador completo (cliente, contacto, propiedad,
+-- servicio, fecha, ventana y equipo, todos inventados), su correo original y una
+-- sugerencia de IA abierta de la propiedad, igual al borrador. Su job, que se
+-- crea en las herramientas de PINCH, es bx-job-0108 (EX-00108) en el falso.
+-- Sus crosswalk IDs (bx-msg-0008, bx-thread-0008) salen del último dígito del
+-- id, como los de las demás.
+-- ---------------------------------------------------------------------------
+insert into opsrun.request (
+  id, received_at, owner_operator_id,
+  bzzzbx_customer_id, bzzzbx_contact_id, bzzzbx_property_id, bzzzbx_space_id,
+  unit, beds, bzzzbx_service_id, service_date, window_start, window_end,
+  access_notes, po_number, bzzzbx_team_id
+) values
+  ('b0000000-0000-4000-8000-0000000000a8', now() - interval '25 minutes', null,
+   'bx-cust-0002', 'bx-cont-0003', 'bx-prop-0005', null,
+   '5D', 2, 'bx-svc-0002', current_date + 4, '09:00', '12:00',
+   'Lockbox on the gate.', null, 'bx-team-0003');
+
+insert into opsrun.request_message (request_id, bzzzbx_message_id, bzzzbx_thread_id, channel, direction, is_original, actor_kind, linked_at)
+select r.id, 'bx-msg-000' || right(r.id::text, 1), 'bx-thread-000' || right(r.id::text, 1),
+       'email', 'inbound', true, 'system', r.received_at
+from opsrun.request as r
+where r.id = 'b0000000-0000-4000-8000-0000000000a8';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, occurred_at)
+select id, 'request_received', 'system', received_at from opsrun.request
+where id = 'b0000000-0000-4000-8000-0000000000a8';
+
+insert into opsrun.ai_suggestion (id, request_id, field, rank, value, reason) values
+  ('5a000000-0000-4000-8000-0000000000e8', 'b0000000-0000-4000-8000-0000000000a8', 'property', 1,
+   '"bx-prop-0005"', 'Address in the email matches the property.');

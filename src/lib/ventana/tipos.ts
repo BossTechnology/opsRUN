@@ -63,6 +63,20 @@ export type CampoPropiedad = {
   noEncontrado: boolean;
 };
 
+/** Una sugerencia de IA abierta (rank 1, sin decidir) de un campo del borrador: la marca AI de los paneles de Confirm. */
+export type SugerenciaAbierta = {
+  /** `ai_field.code`: `property`, `service`, `sender`, `cleaner_team`, … */
+  campo: string;
+  razon: string | null;
+};
+
+/**
+ * La respuesta del cleaner a la pregunta inicial (`status = 'replied'`). El
+ * texto vive en BzzzBX y se lee en la conversación; aquí su id, el equipo y el
+ * motivo de la lectura de la IA (`cleaner_reply`), si la hay.
+ */
+export type RespuestaDelCleaner = { id: string; equipoId: string; lectura: string | null };
+
 export type AlertaVista = { id: string; regla: string; nivel: "amber" | "red"; razon: string; pideAccion: boolean };
 
 export type Encabezado = {
@@ -95,8 +109,22 @@ export type VentanaJob = {
   /** El cleaner de la request: el del job desde Scheduled, el del borrador antes (OPR-27); null si no hay. */
   equipoId: string | null;
   gate: { dueno: boolean; details: boolean; sender: boolean; cleaner: boolean };
-  /** Datos de los que dependen los bloqueos de las acciones (§6.2). */
-  datos: { tienePropiedad: boolean; poRequerido: boolean; tienePo: boolean };
+  /**
+   * Datos de los que dependen los bloqueos de las acciones (§6.2) y los paneles
+   * de Assign y Confirm (OPR-28 §7): lo que falta del borrador para confirmar
+   * los detalles, si hay cliente y equipo en el borrador, la respuesta del
+   * cleaner que se puede aceptar y las sugerencias de IA abiertas.
+   */
+  datos: {
+    tienePropiedad: boolean;
+    poRequerido: boolean;
+    tienePo: boolean;
+    faltanDetalles: string[];
+    tieneCliente: boolean;
+    tieneEquipo: boolean;
+    respuestaDelCleaner: RespuestaDelCleaner | null;
+    sugerencias: SugerenciaAbierta[];
+  };
   /** Hay una instrucción de la request sin cerrar. */
   instruccionAbierta: boolean;
 };

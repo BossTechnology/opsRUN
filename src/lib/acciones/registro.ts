@@ -4,8 +4,9 @@
  * `label` de los catálogos `instruction_type` y `audit_event_type` de OPR-20,
  * y se cambian aquí sin migrar datos.
  *
- * En OPR-26 ninguna tiene ejecutor: todas las de V1.1 beta salen
- * `sin_construir` (OPR-28 ya registró los de `schedule` y `reject_job_link`). Cada tarjeta de etapa (OPR-28 a OPR-32) agrega a su entrada
+ * En OPR-26 ninguna tenía ejecutor: todas las de V1.1 beta salían
+ * `sin_construir`. OPR-28 ya registró los de Requests (`assign`, `confirm_*`,
+ * `schedule` y `reject_job_link`). Cada tarjeta de etapa (OPR-29 a OPR-32) agrega a su entrada
  * el `ejecutor` (y el `panel` si necesita campos propios) y pasa a `disponible`.
  * En la Fase A, las que se hacen en las herramientas de PINCH (crear,
  * reprogramar o cancelar el job) registran la decisión en opsRUN y opsRUN
@@ -19,6 +20,13 @@ import { disponibilidadDelComposer } from "../conversacion/composer";
 import type { Etapa } from "../tablero/tipos";
 
 import { crearEjecutoresDeEnlace } from "./enlace";
+import {
+  crearEjecutoresDeRequests,
+  TEXTO_SIN_CLIENTE,
+  TEXTO_SIN_EQUIPO,
+  TEXTO_YA_CONFIRMADA,
+  textoFaltanDetalles,
+} from "./requests";
 import type { DefinicionAccion } from "./tipos";
 
 /** La conversación (OPR-27): los ejecutores reales se cargan al usarlos; así este registro no arrastra la base al navegador. */
@@ -28,6 +36,10 @@ const TODAS_LAS_ETAPAS: Etapa[] = ["requests", "scheduled", "in_progress", "comp
 // OPR-28: el enlace de la Fase A. El módulo de servidor se carga al correr, no al importar el registro.
 const enlace = crearEjecutoresDeEnlace(async () => (await import("../ventana/servidor")).dependenciasDeEnlaceDeLaVentana());
 
+// OPR-28: Assign / Reassign y Confirm details, sender y cleaner. Solo escriben en opsRUN (ninguna es una
+// instrucción a BzzzBX); el módulo de servidor se carga al correr.
+const requests = crearEjecutoresDeRequests(async () => (await import("../requests/servidor")).datosDeRequests());
+
 export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   // Requests (OPR-28)
   {
@@ -36,8 +48,10 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     descripcion: "Set who owns this request.",
     etapas: ["requests"],
     enRelease: true,
-    motivo: "no",
+    // P-1: opcional. Sirve para decir por qué se pasa a otro sin frenar la asignación normal.
+    motivo: "opcional",
     necesitaBzzzbx: false,
+    ejecutor: requests.assign,
   },
   {
     codigo: "confirm_details",
@@ -47,6 +61,11 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     enRelease: true,
     motivo: "no",
     necesitaBzzzbx: false,
+    bloqueo: (v) => {
+      if (v.gate.details) return TEXTO_YA_CONFIRMADA;
+      return v.datos.faltanDetalles.length > 0 ? textoFaltanDetalles(v.datos.faltanDetalles) : null;
+    },
+    ejecutor: requests.confirm_details,
   },
   {
     codigo: "confirm_sender",
@@ -56,6 +75,11 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     enRelease: true,
     motivo: "no",
     necesitaBzzzbx: false,
+    bloqueo: (v) => {
+      if (v.gate.sender) return TEXTO_YA_CONFIRMADA;
+      return v.datos.tieneCliente ? null : TEXTO_SIN_CLIENTE;
+    },
+    ejecutor: requests.confirm_sender,
   },
   {
     codigo: "confirm_cleaner",
@@ -63,8 +87,14 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     descripcion: "Confirm the cleaner for the job.",
     etapas: ["requests"],
     enRelease: true,
-    motivo: "no",
+    // P-6: opcional, para anotar la llamada. No se guarda el teléfono ni el texto de la llamada.
+    motivo: "opcional",
     necesitaBzzzbx: false,
+    bloqueo: (v) => {
+      if (v.gate.cleaner) return TEXTO_YA_CONFIRMADA;
+      return v.datos.tieneEquipo ? null : TEXTO_SIN_EQUIPO;
+    },
+    ejecutor: requests.confirm_cleaner,
   },
   {
     codigo: "ask_cleaner",

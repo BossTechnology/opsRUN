@@ -285,9 +285,14 @@ test("A8: en cada etapa aparecen las acciones de esa etapa y ninguna de otra", a
     await expect(page.getByTestId("barra-acciones")).toBeVisible();
     expect(await etiquetasDeAcciones(page), id).toEqual(esperadas);
   }
-  // Solo corren las que ya tienen ejecutor: Schedule (OPR-28). El rechazo del enlace es interno y no sale en la barra.
+  // Solo corren las que ya tienen ejecutor y nada las bloquea (OPR-28): en R2, Assign, Confirm cleaner (sus details y
+  // sender ya están confirmados) y Schedule. El rechazo del enlace es interno y no sale en la barra.
   await page.goto(`/job/${R(2)}`);
-  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').evaluateAll((os) => os.map((o) => o.getAttribute("value")))).toEqual(["schedule"]);
+  expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').evaluateAll((os) => os.map((o) => o.getAttribute("value")))).toEqual([
+    "assign",
+    "confirm_cleaner",
+    "schedule",
+  ]);
   await expect(page.locator('[data-testid="accion"] option[value="reject_job_link"]')).toHaveCount(0);
   await page.goto(`/job/${R(5)}`);
   expect(await page.locator('[data-testid="accion"] option:not([value=""]):not([disabled])').count()).toBe(0);

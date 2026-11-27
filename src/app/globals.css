@@ -677,6 +677,55 @@ a.tarjeta:focus-visible {
   color: var(--tenue);
 }
 
+/* Paneles de Assign y Confirm (OPR-28) */
+.panel-assign,
+.panel-confirm-cleaner {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lista-operadores {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lista-operadores label,
+.panel-confirm-cleaner > label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.carga-numero {
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.campos-confirmar {
+  margin: 0;
+}
+
+.marca-ai {
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--tenue);
+  border: 1px solid var(--tenue);
+  border-radius: 999px;
+}
+
+.razon-ai {
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
 .panel-acciones-botones {
   display: flex;
   gap: 0.5rem;
