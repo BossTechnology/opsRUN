@@ -554,8 +554,10 @@ test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Au
 
 test("OPR-28: de punta a punta, elegir actor, abrir R7 y confirmar bx-job-0107: pasa a Scheduled y su Audit tiene request_scheduled", async ({
   page,
-}) => {
-  // En un reintento tras enlazar ya no hay flujo: se comprueba el resultado.
+}, testInfo) => {
+  // R7 se enlaza una sola vez por base: si otra prueba (Audit, OPR-35) ya la enlazó, esta se salta limpio.
+  // Solo un reintento propio (testInfo.retry > 0) comprueba el resultado de su corrida anterior.
+  test.skip((await estadoDeR7()).status !== "open" && testInfo.retry === 0, "R7 ya está enlazada: esta prueba pide una base nueva");
   if ((await estadoDeR7()).status === "open") {
     await (await tarjetaDelTablero(page, R(7))).click();
     await expect(page.getByTestId("encabezado")).toBeVisible();
