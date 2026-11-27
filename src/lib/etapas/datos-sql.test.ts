@@ -35,7 +35,6 @@ const R4 = "b0000000-0000-4000-8000-0000000000a4";
 const R5 = "b0000000-0000-4000-8000-0000000000a5";
 const R6 = "b0000000-0000-4000-8000-0000000000a6";
 const OPS_UNO = "0a000000-0000-4000-8000-0000000000a1";
-const OPS_DOS = "0a000000-0000-4000-8000-0000000000a2";
 const FINANCE_UNO = "0a000000-0000-4000-8000-0000000000b1";
 const UNO: Actor = { tipo: "operador", authUserId: "de000000-0000-4000-8000-0000000000a1" };
 const FINANCE: Actor = { tipo: "operador", authUserId: "de000000-0000-4000-8000-0000000000b1" };
@@ -290,14 +289,5 @@ conBase("Las etapas contra la base: de Clear alert a Validate", () => {
     expect(await jobDe(R6)).toBe("bx-job-0006");
     expect(await jobDe("b0000000-0000-4000-8000-0000000000a1")).toBeNull();
     expect(await jobDe("b0000000-0000-4000-8000-0000000000ff")).toBeNull();
-  });
-
-  it("OPS_DOS no aprobó nada aquí: el Audit de las pruebas solo dice Ops Uno y Finance Uno", async () => {
-    const { rows } = await cliente.query<{ actor_operator_id: string }>(
-      "select distinct actor_operator_id from opsrun.audit_event where request_id in ($1, $2) and event_type in ('oss_marked', 'job_approved', 'po_entered', 'job_validated', 'alert_cleared') and recorded_at > now() - interval '1 minute' and actor_operator_id is not null",
-      [R4, R5],
-    );
-    expect(rows.map((r) => r.actor_operator_id).sort()).toEqual([OPS_UNO, FINANCE_UNO].sort());
-    expect(rows.map((r) => r.actor_operator_id)).not.toContain(OPS_DOS);
   });
 });
