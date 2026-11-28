@@ -201,7 +201,7 @@ test("E2: Clear alert exige motivo; con motivo, Audit dice 'Alert cleared' con s
   await actuarComo(page, OPS_UNO);
   // R4 abre en Alerts: la MEC-003 pide acción.
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("alerta")).toHaveAttribute("data-regla", "MEC-003");
+  await expect(page.getByTestId("alertas-needs-action").getByTestId("alerta")).toHaveAttribute("data-regla", "MEC-003");
   await expect(opcion(page, "end_job_manually")).toBeDisabled();
 
   if (!(await limpiada())) {
@@ -599,7 +599,10 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
     // exact: la fila de Scheduled dice "linked to observed job", que no es la marca.
     await expect(audit(page).getByText("Observed", { exact: true })).toHaveCount(4);
     expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'job_paid'", [R(8)])).toBe(1);
-    const desdeScheduled = lista.slice(lista.indexOf("Scheduled") + 1).filter((e) => !observados.includes(e));
+    // El registrador de alertas (OPR-34) anota en Audit la apertura y el cierre de las alertas de R8 cuando el ciclo las ve
+    // (cada 15 s): su sitio entre lo demás depende de cuándo corre, así que se comprueban aparte.
+    const delRegistrador = ["Alert opened", "Alert level changed", "Alert resolved"];
+    const desdeScheduled = lista.slice(lista.indexOf("Scheduled") + 1).filter((e) => !observados.includes(e) && !delRegistrador.includes(e));
     expect(desdeScheduled).toEqual([
       "Alert cleared",
       "Marked as OSS / Not OSS",

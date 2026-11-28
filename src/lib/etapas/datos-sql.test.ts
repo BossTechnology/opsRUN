@@ -131,9 +131,9 @@ conBase("Las etapas contra la base: de Clear alert a Validate", () => {
     expect([...rows[0]!.reglas].sort()).toEqual([...REGLAS_LIMPIABLES].sort());
   });
 
-  it("R4 llega In Progress con su MEC-003 sin limpiar (solo trae resuelta la Delayed de la seed) y sin hechos del job", async () => {
+  it("R4 llega In Progress con su MEC-003 sin limpiar (solo trae resueltas las dos Delayed de la seed) y sin hechos del job", async () => {
     const fila = (await leerFilas(cliente as never)).find((f) => f.id === R4)!;
-    expect(fila).toMatchObject({ status: "scheduled", approved_at: null, validated_at: null, entered_po_number: null, alertas_limpiadas: ["bx-alert-0002"] });
+    expect(fila).toMatchObject({ status: "scheduled", approved_at: null, validated_at: null, entered_po_number: null, alertas_limpiadas: ["bx-alert-0002", "bx-alert-0009"] });
   });
 
   it("Clear alert: crea la ocurrencia con la instantánea, la resuelve, deja Audit con el motivo y la tarjeta y la ventana la descuentan", async () => {
@@ -167,8 +167,8 @@ conBase("Las etapas contra la base: de Clear alert a Validate", () => {
     expect(await version(R4)).toBe(antes);
 
     // La lectura del tablero y la de la ventana ya la traen como limpiada (P-7).
-    expect((await leerFilas(cliente as never)).find((f) => f.id === R4)!.alertas_limpiadas).toEqual(["bx-alert-0002", "bx-alert-0006"]);
-    expect((await leerDeOpsrun(cliente as never, R4))!.fila.alertas_limpiadas).toEqual(["bx-alert-0002", "bx-alert-0006"]);
+    expect((await leerFilas(cliente as never)).find((f) => f.id === R4)!.alertas_limpiadas).toEqual(["bx-alert-0002", "bx-alert-0006", "bx-alert-0009"]);
+    expect((await leerDeOpsrun(cliente as never, R4))!.fila.alertas_limpiadas).toEqual(["bx-alert-0002", "bx-alert-0006", "bx-alert-0009"]);
 
     // Otra vez la misma alerta: ya resuelta.
     await expect(datos().limpiarAlerta({ requestId: R4, version: await version(R4), alerta, motivo: "Again" }, UNO)).rejects.toMatchObject({

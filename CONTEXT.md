@@ -55,7 +55,11 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Término | Significado | Dónde aparece |
 |---|---|---|
 | Standard alerts | Las 9 reglas de V1.1 beta: OPS-001 Unassigned request, OPS-002 Request open too long, OPS-010 Delayed, OPS-020 Cleaner declined, MEC-003 Running long, ORG-002 No photos, ORG-003 Partial photos, TRN-005 PO missing, Message not delivered. | OPR-3, OPR-33 |
-| Needs action, Waiting, Resolved | Las tres secciones de la pestaña Alerts. | OPR-34 |
+| Needs action, Waiting, Resolved | Las tres secciones de la pestaña Alerts. Needs action: alertas abiertas de la request que opsRUN no tiene resueltas (lo que decide con qué pestaña abre la ventana); Waiting: preguntas abiertas al cleaner (`asked` o `replied`); Resolved: el historial de `alert_occurrence`, con quién y cómo. | OPR-34 |
+| Registrador de alertas | La tarea `registrador_alertas` del ciclo de fondo (cada 15 s): lee de BzzzBX qué alertas cambiaron y las anota en `alert_occurrence` y en Audit (`upsert_alert_occurrence`, como actor de sistema). Provisional hasta la read layer de OPR-22. | OPR-34, ADR 0006 |
+| Fixed by action / Cleared automatically / Cleared by operator | Cómo se resolvió una alerta. Fixed by action: un operador hizo, entre la apertura y el cierre, algo que arregla esa regla (`alert_fixing_events()`). Cleared automatically: cualquier otro cierre de BzzzBX (Delayed al llegar el check-in). Cleared by operator: solo Clear alert, con motivo. | OPR-34 §4.1 |
+| Insignia de Alerts | El conteo de la pestaña Alerts: roja o ámbar con el de Needs action, gris con el de Waiting si Needs action está vacía. Late unas veces cuando aparece una roja nueva en esa ventana. | OPR-34 §5.2 |
+| Panel de Alerts | El diálogo no modal que abre el ícono de Alerts de la barra superior: Needs action y Waiting de toda la operación, con los filtros Level, Rule, Stage y Assigned to. Cada fila abre la Job window sin `?tab`. | OPR-34 §6 |
 | Clear alert | Marcar como revisada una alerta (Running long) con motivo obligatorio. El nombre final está por confirmar en OPR-4. | OPR-4, OPR-30 |
 
 ## Pantallas y acciones
@@ -114,7 +118,7 @@ Términos de la ventana de cada job. Detalle en `docs/spec/opr-26-job-window.md`
 | Disponibilidad | Estado de una acción para un job: `disponible`, `no_aplica` (no aparece), `bloqueada` (en gris con su motivo), `sin_construir` ("Not built yet") o `fuera_de_release` ("Not available in this release"; con `fase: "b"`, "Available when actions are switched on"). | OPR-26 §5.2, OPR-30 P-10 |
 | Ranura | Lugar de la Job window que otra tarjeta llena (conversación, enlace de la Fase A, Audit, Alerts, Job tracker, Billing), con su contrato de props y su marcador `data-ranura`. | OPR-26 §7 |
 | Acting as | Selector solo local con el que la demo elige qué operador de la seed actúa, sin login. Existe únicamente con `OPSRUN_ACTOR_DEMO=1`, `BZZZBX_MODO=falso` y sin `OPSRUN_SERVIDOR=1`; si falta una, no hay selector y la cookie se ignora. | OPR-26, P-2 |
-| Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Provisional hasta que OPR-34 la separe de Waiting. | OPR-26 S-8, OPR-34 |
+| Needs action | Alerta abierta del job que pide acción; decide con qué pestaña abre la ventana (Alerts). Desde OPR-34 es exactamente la sección Needs action, sin Waiting ni lo que opsRUN ya resolvió. | OPR-26 S-8, OPR-34 |
 
 ## Etapas: In Progress, Complete y Validation (OPR-30, OPR-31 y OPR-32)
 
@@ -161,7 +165,7 @@ Términos de la entrada de correo y del ciclo de fondo. Detalle en `docs/spec/op
 | Término | Significado | Dónde aparece |
 |---|---|---|
 | Entrada de correo | El proceso de sistema `entrada_correo`: lee los correos entrantes nuevos del puerto de lectura de BzzzBX y le pide a la base (`opsrun.ingest_request_email`) que cree la request del hilo, vincule la respuesta o diga que ya estaba. Nunca lee Gmail ni guarda nada de PINCH: a la base solo viajan el ID del mensaje, el del hilo y la hora. | OPR-15, `src/lib/entrada/` |
-| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. Sus tareas hoy: la entrada de correo, la reconciliación de envíos y el observador de etapas; el registrador de alertas se suma. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
+| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. Sus tareas hoy: la entrada de correo, la reconciliación de envíos, el observador de etapas y el registrador de alertas. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
 | Marca de agua | Desde dónde recupera la entrada al arrancar o tras `CursorCaducado`: la última `request.received_at` menos 24 h. Sin ninguna request, no recupera nada (la entrada empieza en "ahora"). | OPR-15 §4.3 |
 | Email received | Evento de Audit (`email_received`) cuando la entrada vincula una respuesta del cliente a la request de su hilo. El primer correo deja Request received. | OPR-15 P-4, OPR-35 |
 

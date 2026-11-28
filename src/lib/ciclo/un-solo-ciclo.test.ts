@@ -15,6 +15,11 @@
  *     y sus funciones): una lectura nunca escribe. Las lecturas se descubren
  *     por su forma (un `route.ts` que exporta GET, un `page`/`layout`), no por
  *     una lista.
+ *  4. Ninguna lectura (las mismas, descubiertas igual) importa ni llama al
+ *     registrador de alertas (OPR-34, P-2: `lib/alertas/registrador`, `tarea` y
+ *     `datos-sql`) ni a `upsert_alert_occurrence`: el historial de alertas lo anota
+ *     la tarea `registrador_alertas` del ciclo, nunca un GET. `lib/alertas/armar`,
+ *     `consultas` y `reglas` son de lectura y sí se pueden importar.
  *
  * Descubre en vez de enumerar: recorre `src/` y mira cada archivo. Se ve fallar
  * en cada corrida: arma un `src/` de prueba con un temporizador propio y una
@@ -83,6 +88,22 @@ export function lecturasQueReconcilian(raiz: string): string[] {
   });
 }
 
+/** El registrador de alertas y su única función de escritura (OPR-34). */
+const IMPORTA_EL_REGISTRADOR = /from\s+["'][^"']*\/alertas\/(?:registrador|tarea|datos-sql)["']/;
+const LLAMA_AL_REGISTRADOR =
+  /\b(?:crearRegistrador|tareaRegistradorAlertas|crearDatosDelRegistrador|dependenciasDelRegistrador|upsert_alert_occurrence)\b/;
+
+/** Lecturas que importan o llaman al registrador de alertas. */
+export function lecturasQueRegistranAlertas(raiz: string): string[] {
+  return archivos(raiz).flatMap((ruta) => {
+    const rel = relative(raiz, ruta).split(sep).join("/");
+    const texto = readFileSync(ruta, "utf8");
+    if (!esLectura(rel, texto)) return [];
+    const codigo = SIN_COMENTARIOS(texto);
+    return IMPORTA_EL_REGISTRADOR.test(codigo) || LLAMA_AL_REGISTRADOR.test(codigo) ? [rel] : [];
+  });
+}
+
 describe("G16: un solo ciclo de fondo", () => {
   it("el guard tiene qué mirar", () => {
     expect(archivos(RAIZ).length).toBeGreaterThan(100);
@@ -99,6 +120,10 @@ describe("G16: un solo ciclo de fondo", () => {
 
   it("ninguna lectura importa ni llama a la reconciliación de envíos", () => {
     expect(lecturasQueReconcilian(RAIZ)).toEqual([]);
+  });
+
+  it("ninguna lectura importa ni llama al registrador de alertas ni a upsert_alert_occurrence (OPR-34)", () => {
+    expect(lecturasQueRegistranAlertas(RAIZ)).toEqual([]);
   });
 
   it("descubre lecturas de verdad: la ruta del sondeo y el tablero cuentan", () => {
@@ -131,6 +156,18 @@ describe("G16: un solo ciclo de fondo", () => {
     poner("lib/ventana/leer.ts", 'import { tareaReconciliacionEnvios } from "../instrucciones/reconciliacion";\nexport const x = tareaReconciliacionEnvios;\n');
     poner("lib/ventana/limpia.ts", '// reconciliarSiToca solo en un comentario\nexport const y = 1;\n');
     poner("lib/instrucciones/reconciliacion.ts", "export const tareaReconciliacionEnvios = () => ({});\n");
+    poner("app/api/tablero/otro/route.ts", 'import { crearRegistrador } from "@/lib/alertas/registrador";\nexport const GET = () => crearRegistrador;\n');
+    poner(
+      "app/api/tablero/mas/route.ts",
+      'export async function GET(db: { query(s: string): Promise<void> }) { await db.query("select opsrun.upsert_alert_occurrence($1)"); return Response.json({}); }\n',
+    );
+    poner(
+      "app/_ventana/ranura-alertas.tsx",
+      'import { armarAlertas } from "@/lib/alertas/armar";\nimport { leerAlertas } from "@/lib/alertas/consultas";\nexport default function P() { return armarAlertas && leerAlertas; }\n',
+    );
+    poner("app/api/accion/alertas/route.ts", 'import { tareaRegistradorAlertas } from "@/lib/alertas/tarea";\nexport const POST = tareaRegistradorAlertas;\n');
+    poner("lib/ventana/comentario.ts", "// upsert_alert_occurrence solo en un comentario\nexport const z = 1;\n");
+    poner("lib/alertas/tarea.ts", "export const tareaRegistradorAlertas = () => ({});\n");
 
     afterAll(() => rmSync(falsa, { recursive: true, force: true }));
 
@@ -140,6 +177,10 @@ describe("G16: un solo ciclo de fondo", () => {
 
     it("detecta una ruta de lectura que importa la entrada, y no una que no", () => {
       expect(lecturasQueEscriben(falsa)).toEqual(["app/api/tablero/cambios/route.ts"]);
+    });
+
+    it("detecta una lectura que importa o llama al registrador de alertas, y no un POST, ni un comentario, ni las lecturas de Alerts", () => {
+      expect(lecturasQueRegistranAlertas(falsa)).toEqual(["app/api/tablero/mas/route.ts", "app/api/tablero/otro/route.ts"]);
     });
 
     it("detecta una lectura que reconcilia (GET, página o módulo de lectura), y no un POST, ni un comentario, ni el módulo de la tarea", () => {

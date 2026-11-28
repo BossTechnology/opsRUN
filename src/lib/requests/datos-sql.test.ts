@@ -174,6 +174,8 @@ conBase("Assign y Confirm contra la base: R8 de punta a punta", () => {
 
     expect((await eventos()).map((e) => [e.event_type, e.actor_operator_id])).toEqual([
       ["request_received", null],
+      // La OPS-001 de R8 que la seed ya trae anotada (bx-alert-0005, OPR-34).
+      ["alert_opened", null],
       ["request_assigned", OPS_UNO],
       ["request_reassigned", OPS_UNO],
       ["details_confirmed", OPS_UNO],

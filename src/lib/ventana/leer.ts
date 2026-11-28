@@ -48,8 +48,11 @@ async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzz
     mensajes.map((m) => lectura.listarPor("alert_result", { sujeto: { tipo: "message", bzzzbx_message_id: m.bzzzbx_message_id } })),
   );
 
+  // Y las que opsRUN tiene abiertas con un mensaje (OPR-34, P-3): se releen por id, como en el tablero.
+  const porId = fila.alertas_de_mensaje.length > 0 ? await lectura.obtenerVarios("alert_result", fila.alertas_de_mensaje) : [];
+
   const alertas = new Map<string, AlertResult>();
-  for (const a of [...base.alertas, ...deMensajes.flat()]) alertas.set(a.bzzzbx_alert_id, a);
+  for (const a of [...base.alertas, ...deMensajes.flat(), ...porId]) alertas.set(a.bzzzbx_alert_id, a);
 
   // El puerto agrega `version` y `leido_en`; son parte del tipo `Leido`.
   return {

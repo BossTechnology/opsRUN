@@ -10,7 +10,7 @@
 import { horaConFecha } from "../tablero/formato";
 import { SIN_VALOR } from "../tablero/tipos";
 
-import { reglaConNombre } from "./reglas";
+import { reglaConNombre } from "../alertas/reglas";
 import {
   ENTIDADES_CON_NOMBRE,
   type EntidadConNombre,

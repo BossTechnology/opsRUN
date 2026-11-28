@@ -14,6 +14,7 @@
  *   R7  Requests, lista para enlazar (OPR-26, P-3)      correo bx-msg-0007, job de PINCH bx-job-0107
  *   R8  Requests, nueva y sin dueño (OPR-28, P-7)       correo bx-msg-0008, alerta OPS-001 abierta, job de PINCH bx-job-0108
  *                                                       (su cliente bx-cust-0003 exige PO y no hay: Add PO, OPR-32)
+ *   R9  Validation, aprobada y sin PO (OPR-34, P-9)      correo bx-msg-0009, bx-job-0109 (TRN-005 PO missing abierta, bx-alert-0007)
  * Y jobs de la Fase A, creados en las herramientas de PINCH y sin request
  * (spec Fase A §3): bx-job-0102 encaja con R2 (cliente, propiedad, fecha y
  * ventana), bx-job-0103 es de la misma propiedad otro día, bx-job-0104 está
@@ -75,6 +76,8 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       // R8 de la seed (OPR-28, P-7): una request nueva que recorre Requests entera. Encaja en cliente, propiedad, fecha, ventana y equipo.
       // Su cliente exige PO y el job no trae (OPR-30 a OPR-32, P-14): el E2E pasa por "Add PO" antes de Validate.
       { bzzzbx_job_id: "bx-job-0108", job_number: "EX-00108", bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0005", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(4), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0003", po_number: null, price: { amount_cents: 21_000, currency: "USD" } },
+      // R9 (OPR-34, P-9): en Validation, aprobada y sin PO, con el cliente que lo exige.
+      { bzzzbx_job_id: "bx-job-0109", job_number: "EX-00109", bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(-3), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 26_500, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0102", job_number: "EX-00102", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: "bx-space-0002", bzzzbx_service_id: "bx-svc-0001", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null, price: { amount_cents: 15_500, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0103", job_number: "EX-00103", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(4), window_start: "13:00", window_end: "16:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 15_500, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0104", job_number: "EX-00104", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0001", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "cancelled", bzzzbx_team_id: null, po_number: null, price: { amount_cents: 20_000, currency: "USD" } },
@@ -85,12 +88,15 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_assignment_id: "bx-asg-0004", bzzzbx_job_id: "bx-job-0004", bzzzbx_team_id: "bx-team-0001", status: "confirmed" },
       { bzzzbx_assignment_id: "bx-asg-0005", bzzzbx_job_id: "bx-job-0005", bzzzbx_team_id: "bx-team-0003", status: "confirmed" },
       { bzzzbx_assignment_id: "bx-asg-0006", bzzzbx_job_id: "bx-job-0006", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
+      { bzzzbx_assignment_id: "bx-asg-0109", bzzzbx_job_id: "bx-job-0109", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
     ],
     jobtracker_event: [
       { bzzzbx_event_id: "bx-evt-0001", bzzzbx_job_id: "bx-job-0004", kind: "checked_in", occurred_at: hace(HORA) },
       { bzzzbx_event_id: "bx-evt-0002", bzzzbx_job_id: "bx-job-0004", kind: "started", occurred_at: hace(55 * MIN) },
       { bzzzbx_event_id: "bx-evt-0003", bzzzbx_job_id: "bx-job-0006", kind: "checked_in", occurred_at: hace(5 * DIA + 6 * HORA) },
       { bzzzbx_event_id: "bx-evt-0004", bzzzbx_job_id: "bx-job-0006", kind: "completed", occurred_at: hace(5 * DIA + HORA) },
+      { bzzzbx_event_id: "bx-evt-0101", bzzzbx_job_id: "bx-job-0109", kind: "checked_in", occurred_at: hace(3 * DIA + 6 * HORA) },
+      { bzzzbx_event_id: "bx-evt-0102", bzzzbx_job_id: "bx-job-0109", kind: "completed", occurred_at: hace(3 * DIA + HORA) },
     ],
     photo: [
       { bzzzbx_photo_id: "bx-photo-0001", bzzzbx_job_id: "bx-job-0006", phase: "before", taken_at: hace(5 * DIA + 6 * HORA), ref: "stand-in:photo/bx-photo-0001" },
@@ -105,6 +111,7 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       correoOriginal(6, "contact.four@example.test", "Move-out at Test Terrace", hace(9 * DIA)),
       correoOriginal(7, "contact.two@example.test", "Clean for Placeholder House", hace(4 * HORA)),
       correoOriginal(8, "contact.three@example.test", "Deep clean at Mock Gardens 5D", hace(25 * MIN)),
+      correoOriginal(9, "contact.four@example.test", "Deep clean at Test Terrace 3F", hace(6 * DIA)),
       {
         bzzzbx_message_id: "bx-msg-0102",
         bzzzbx_thread_id: null,
@@ -125,6 +132,8 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0006", paid: true, paid_at: hace(DIA), bzzzbx_event_id: "bx-evt-0005" },
       // R8 (OPR-30 a OPR-32): sin pagar; `/api/falso cambiar payment` lo lleva a Paid.
       { bzzzbx_job_id: "bx-job-0108", paid: false, paid_at: null, bzzzbx_event_id: null },
+      // R9 (OPR-34): sin pagar.
+      { bzzzbx_job_id: "bx-job-0109", paid: false, paid_at: null, bzzzbx_event_id: null },
     ],
     alert_result: [
       { bzzzbx_alert_id: "bx-alert-0001", sujeto: { tipo: "request", request_id: "b0000000-0000-4000-8000-0000000000a1" }, rule_id: "OPS-001", rule_version: "1", level: "amber", reason_text: "Unassigned for 15 min.", opened_at: hace(5 * MIN), cleared_at: null },
@@ -133,6 +142,11 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_alert_id: "bx-alert-0002", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, rule_id: "OPS-010", rule_version: "1", level: "red", reason_text: "Not started by 1:00 PM.", opened_at: hace(2 * HORA), cleared_at: hace(HORA) },
       { bzzzbx_alert_id: "bx-alert-0003", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0006" }, rule_id: "TRN-005", rule_version: "1", level: "amber", reason_text: "Customer requires a PO.", opened_at: hace(4 * DIA), cleared_at: hace(3 * DIA) },
       { bzzzbx_alert_id: "bx-alert-0004", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0005" }, rule_id: "MEC-003", rule_version: "1", level: "amber", reason_text: "Running 90 min over the window.", opened_at: hace(22 * HORA), cleared_at: hace(21 * HORA) },
+      // R9 (OPR-34, P-9): TRN-005 PO missing abierta, ámbar; el E2E (L9) le cambia el nivel a rojo.
+      { bzzzbx_alert_id: "bx-alert-0007", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0109" }, rule_id: "TRN-005", rule_version: "1", level: "amber", reason_text: "Customer requires a PO.", opened_at: hace(2 * HORA), cleared_at: null },
+      // R4 (OPR-34, P-9): una segunda OPS-010 de hace un día, cerrada, para "Repeats on this job: 2". Su id es el 0009: el
+      // 0006 ya es la MEC-003 de R4, el 0007 la TRN-005 de R9 y el 0008 queda para la MEC-003 nueva del E2E (L7).
+      { bzzzbx_alert_id: "bx-alert-0009", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, rule_id: "OPS-010", rule_version: "1", level: "red", reason_text: "Not started by 1:00 PM.", opened_at: hace(DIA + 3 * HORA), cleared_at: hace(DIA) },
       // R4 (OPR-30, P-14): Running long abierta, para Clear alert. (bx-alert-0005 es la OPS-001 de R8.)
       { bzzzbx_alert_id: "bx-alert-0006", sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, rule_id: "MEC-003", rule_version: "1", level: "amber", reason_text: "Running 45 min over the window.", opened_at: hace(10 * MIN), cleared_at: null },
     ],
@@ -142,6 +156,7 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0005", status: "on_track" },
       { bzzzbx_job_id: "bx-job-0006", status: "on_track" },
       { bzzzbx_job_id: "bx-job-0108", status: "on_track" },
+      { bzzzbx_job_id: "bx-job-0109", status: "on_track" },
     ],
   };
 }

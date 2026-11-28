@@ -47,7 +47,9 @@ test("cinco columnas, cada request en su etapa, con conteos", async ({ page }) =
   await expect(columna(page, "requests").getByTestId("alertas-columna")).toHaveText("2");
   // R4 (EX-00004) trae una Running long abierta para Clear alert (OPR-30).
   await expect(columna(page, "in_progress").getByTestId("alertas-columna")).toHaveText("1");
-  await expect(page.getByTestId("alertas-operacion")).toContainText("3");
+  // R9 (OPR-34) está en Validation sin PO, con su TRN-005 abierta.
+  await expect(columna(page, "validation").getByTestId("alertas-columna")).toHaveText("1");
+  await expect(page.getByTestId("alertas-operacion")).toContainText("4");
 });
 
 test("anatomía de la tarjeta y — — en lo no definido", async ({ page }) => {
@@ -78,14 +80,11 @@ test("estados de color de la seed: borde rojo, verde pagada en la fila paid", as
   await expect(r6.getByTestId("estado")).toHaveText(/^Paid /);
 });
 
-test("sombreado rojo, oscura sin dueño y Delayed", async ({ page }) => {
+// Ninguna prueba de aquí cierra las alertas de la seed (R1, R4, R8, R9): el registrador de alertas (OPR-34) anota el cierre
+// en opsRUN y una alerta resuelta ahí no se reabre, así que ya no contaría en las pruebas que vienen. La tarjeta "oscura
+// sin dueño" la cubre `armar.test.ts`.
+test("sombreado rojo y Delayed", async ({ page }) => {
   await control(page, { accion: "cambiar", entidad: "job_health", id: "bx-job-0003", parche: { status: "breached" } });
-  await control(page, {
-    accion: "cambiar",
-    entidad: "alert_result",
-    id: "bx-alert-0001",
-    parche: { cleared_at: new Date().toISOString() },
-  });
   await control(page, {
     accion: "poner",
     entidad: "alert_result",
@@ -105,7 +104,6 @@ test("sombreado rojo, oscura sin dueño y Delayed", async ({ page }) => {
   await expect(r3).toHaveAttribute("data-color", "sombreada");
   await expect(r3.getByTestId("estado")).toHaveText("Delayed");
   await expect(r3).toHaveAttribute("data-estado", "delayed");
-  await expect(porRequest(page, R1)).toHaveAttribute("data-color", "sin_dueno");
   await expect(columna(page, "scheduled").getByTestId("alertas-columna")).toHaveAttribute("data-nivel", "red");
 });
 

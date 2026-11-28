@@ -35,6 +35,7 @@ const base = (ahora: Date, n: number): FilaRequest => ({
   entered_po_number: null,
   validated_at: null,
   alertas_limpiadas: [],
+  alertas_de_mensaje: [],
   bzzzbx_thread_id: `bx-thread-000${n}`,
 });
 

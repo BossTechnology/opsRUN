@@ -224,7 +224,7 @@ test("D1: R8 nueva → asignar → 3 confirmaciones → enlazar", async ({ page 
     await expect(page.getByTestId("stage")).toHaveText("Requests");
     await expect(page.getByTestId("asignado")).toHaveText("Unassigned");
     await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("alerta")).toHaveAttribute("data-regla", "OPS-001");
+    await expect(page.getByTestId("alertas-needs-action").getByTestId("alerta")).toHaveAttribute("data-regla", "OPS-001");
 
     await actuarComo(page, OPS_UNO);
 
@@ -297,6 +297,8 @@ test("D1: R8 nueva → asignar → 3 confirmaciones → enlazar", async ({ page 
   await expect(audit(page).getByRole("list", { name: "Audit" })).toBeVisible();
   expect(await audit(page).getByTestId("audit-evento").allInnerTexts()).toEqual([
     "Request received",
+    // La OPS-001 de la seed (bx-alert-0005), que el registrador de alertas anota al abrirse (OPR-34).
+    "Alert opened",
     "Assigned",
     "Reassigned",
     "Details confirmed",

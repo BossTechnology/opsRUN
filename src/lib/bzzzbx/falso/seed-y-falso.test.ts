@@ -96,4 +96,25 @@ conBase("seed y falso: IDs que la seed arma en la base", () => {
       await cliente.end();
     }
   });
+
+  it("cada alerta de la seed existe en el falso con el mismo estado: abierta en los dos o cerrada en los dos (OPR-34 §9)", async () => {
+    expect(url, "Supabase local no responde a `supabase status`").not.toBeNull();
+    const cliente = new Client({ connectionString: url! });
+    await cliente.connect();
+    try {
+      const { rows } = await cliente.query<{ bzzzbx_alert_id: string; abierta: boolean }>(
+        "select bzzzbx_alert_id, resolved_at is null as abierta from opsrun.alert_occurrence order by 1",
+      );
+      expect(rows.length).toBeGreaterThanOrEqual(8);
+      const { lectura } = crearFalso();
+      const falso = new Map((lectura.todos("alert_result") as { bzzzbx_alert_id: string; cleared_at: string | null }[]).map((a) => [a.bzzzbx_alert_id, a.cleared_at === null]));
+      // Si no coinciden, el registrador escribiría eventos al arrancar.
+      expect(rows.map((r) => [r.bzzzbx_alert_id, falso.get(r.bzzzbx_alert_id)])).toEqual(rows.map((r) => [r.bzzzbx_alert_id, r.abierta]));
+      // Y al revés: toda alerta abierta del falso sobre una request de la seed ya tiene su ocurrencia.
+      const enLaSeed = new Set(rows.map((r) => r.bzzzbx_alert_id));
+      expect([...falso.keys()].filter((id) => !enLaSeed.has(id))).toEqual([]);
+    } finally {
+      await cliente.end();
+    }
+  });
 });

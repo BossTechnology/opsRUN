@@ -2,10 +2,12 @@
  * Arma el modelo del tablero (spec OPR-25 §1) con lo de opsRUN y lo leído de
  * BzzzBX. Función pura: sin base, sin puerto, sin reloj propio.
  */
+import { alertasDeLaRequest, filaDelPanel, queSeEspera } from "../alertas/armar";
+import type { EsperaDelPanel, EsperaDeOpsrun, FilaDelPanel } from "../alertas/tipos";
 import type { AlertResult, JobTrackerEvent } from "../bzzzbx/tipos";
 import { poVigente } from "../billing/po";
 
-import { diaCorto, fechaYVentana, horaOFecha, iniciales } from "./formato";
+import { diaCorto, duracion, fechaYVentana, horaOFecha, iniciales } from "./formato";
 import {
   ETAPAS,
   SIN_VALOR,
@@ -36,6 +38,10 @@ export type EntradaTablero = {
   /** Zona de la operación para las horas (S-6). */
   zona: string;
   bzzzbx: Tablero["bzzzbx"];
+  /** Las preguntas al cleaner sin cerrar de toda la operación (Waiting del panel de Alerts, OPR-34). */
+  esperas?: EsperaDeOpsrun[];
+  /** Los operadores activos, para el filtro Assigned to del panel. */
+  operadores?: { id: string; nombre: string }[];
 };
 
 const porClave = <T, K extends keyof T>(filas: T[], clave: K) =>
@@ -62,7 +68,7 @@ function sumar(resumenes: ResumenAlertas[]): ResumenAlertas {
   return { total, nivel: resumenes.some((r) => r.nivel === "red") ? "red" : "amber" };
 }
 
-export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTablero): Tablero {
+export function armarTablero({ filas, leidos, ahora, zona, bzzzbx, esperas = [], operadores = [] }: EntradaTablero): Tablero {
   const jobs = porClave(leidos.jobs, "bzzzbx_job_id");
   const properties = porClave(leidos.properties, "bzzzbx_property_id");
   const customers = porClave(leidos.customers, "bzzzbx_customer_id");
@@ -72,16 +78,9 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
   const eventos = agrupar(leidos.eventos, (e) => e.bzzzbx_job_id);
   const mensajes = agrupar(leidos.mensajes, (m) => m.bzzzbx_thread_id);
 
-  const requestDeJob = new Map(filas.filter((f) => f.bzzzbx_job_id).map((f) => [f.bzzzbx_job_id!, f.id]));
-  const abiertas = agrupar(
-    leidos.alertas.filter((a) => a.cleared_at === null),
-    (a) =>
-      a.sujeto.tipo === "request"
-        ? a.sujeto.request_id
-        : a.sujeto.tipo === "job"
-          ? (requestDeJob.get(a.sujeto.bzzzbx_job_id) ?? null)
-          : null,
-  );
+  const esperasPorRequest = agrupar(esperas, (e) => e.request_id);
+  const filasDelPanel: FilaDelPanel[] = [];
+  const esperasDelPanel: EsperaDelPanel[] = [];
 
   const tarjetas: Tarjeta[] = [];
   for (const fila of filas) {
@@ -101,8 +100,14 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
     const customer = customerId ? customers.get(customerId) : undefined;
     const pago = fila.bzzzbx_job_id ? pagos.get(fila.bzzzbx_job_id) : undefined;
     const evs = fila.bzzzbx_job_id ? (eventos.get(fila.bzzzbx_job_id) ?? []) : [];
-    // Una alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando abierta (OPR-30, P-7).
-    const alertas = (abiertas.get(fila.id) ?? []).filter((a) => !fila.alertas_limpiadas.includes(a.bzzzbx_alert_id));
+    // La misma función que usan la barra, el panel y la ventana (OPR-34 §3.2): las de la request, su job y sus
+    // mensajes, menos las que opsRUN ya tiene resueltas de cualquier forma aunque BzzzBX las siga dando abiertas (P-7).
+    const alertas = alertasDeLaRequest({
+      fila,
+      alertas: leidos.alertas,
+      hilos: fila.bzzzbx_thread_id ? [fila.bzzzbx_thread_id] : [],
+      mensajes: leidos.mensajes,
+    });
 
     const checkIn = primero(evs, "checked_in");
     const fin = primero(evs, "completed")?.occurred_at ?? fila.ended_manually_at;
@@ -170,10 +175,31 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
     const original = hilo.reduce<string | null>((min, m) => (min === null || m.sent_at < min ? m.sent_at : min), null);
     const chat = hilo.some((m) => m.direction === "inbound" && original !== null && m.sent_at > original);
 
+    const numero = fila.job_number ?? `R${fila.r_number}`;
+    const dueno =
+      fila.owner_operator_id && fila.owner_display_name
+        ? { id: fila.owner_operator_id, nombre: fila.owner_display_name, iniciales: iniciales(fila.owner_display_name) }
+        : null;
+    for (const a of alertas) filasDelPanel.push(filaDelPanel(a, { requestId: fila.id, nombre, numero, etapa, dueno }, ahora));
+    for (const e of esperasPorRequest.get(fila.id) ?? []) {
+      esperasDelPanel.push({
+        id: e.id,
+        requestId: fila.id,
+        job: nombre,
+        numero,
+        etapa,
+        etapaTitulo: TITULOS[etapa],
+        asignadoId: dueno?.id ?? null,
+        asignadoNombre: dueno?.nombre ?? null,
+        que: queSeEspera(e),
+        desde: `Waiting ${duracion(e.asked_at, ahora)}`,
+      });
+    }
+
     tarjetas.push({
       requestId: fila.id,
       etapa,
-      numero: fila.job_number ?? `R${fila.r_number}`,
+      numero,
       nombre,
       estado,
       ciudad: property?.city ?? SIN_VALOR,
@@ -182,10 +208,7 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
       chat,
       flags,
       color,
-      dueno:
-        fila.owner_operator_id && fila.owner_display_name
-          ? { id: fila.owner_operator_id, nombre: fila.owner_display_name, iniciales: iniciales(fila.owner_display_name) }
-          : null,
+      dueno,
       alertas: resumen,
       orden: claveDeOrden(etapa, fila, job?.service_date, job?.window_start, checkIn?.occurred_at, fin),
     });
@@ -204,7 +227,13 @@ export function armarTablero({ filas, leidos, ahora, zona, bzzzbx }: EntradaTabl
     };
   });
 
-  return { columnas, alertasAbiertas: sumar(columnas.map((c) => c.alertas)), bzzzbx };
+  return {
+    columnas,
+    alertasAbiertas: sumar(columnas.map((c) => c.alertas)),
+    panelAlertas: { filas: filasDelPanel, esperas: esperasDelPanel, operadores },
+    idsRojos: filasDelPanel.filter((f) => f.nivel === "red").map((f) => f.id),
+    bzzzbx,
+  };
 }
 
 function primero(eventos: JobTrackerEvent[], kind: JobTrackerEvent["kind"]): JobTrackerEvent | undefined {

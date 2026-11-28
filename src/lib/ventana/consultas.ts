@@ -2,6 +2,8 @@
  * Lo que la Job window lee de opsRUN (spec OPR-26 §8.1), como `opsrun_app` y en
  * solo lectura, en una sola transacción. La ventana no escribe nada.
  */
+import { leerEsperasDeLaRequest } from "../alertas/consultas";
+import type { EsperaDeOpsrun } from "../alertas/tipos";
 import type { Tx } from "../db/pool";
 import { COLUMNAS_FILA, DESDE_FILA } from "../tablero/consultas";
 
@@ -61,6 +63,8 @@ export type LecturaDeOpsrun = {
   operadores: OperadorConCarga[];
   confirmaciones: Confirmaciones;
   instruccionAbierta: boolean;
+  /** Las preguntas abiertas al cleaner (Waiting de Alerts, OPR-34): dan la insignia gris de la pestaña. */
+  esperas: EsperaDeOpsrun[];
 };
 
 /** Todo lo de opsRUN que pide la ventana; null si la request no existe. */
@@ -71,6 +75,7 @@ export async function leerDeOpsrun(db: Tx, requestId: string): Promise<LecturaDe
   const operadores = await db.query<OperadorConCarga>(CONSULTA_OPERADORES);
   const confirmaciones = await db.query<{ kind: keyof Confirmaciones }>(CONSULTA_CONFIRMACIONES, [requestId]);
   const abierta = await db.query<{ abierta: boolean }>(CONSULTA_INSTRUCCION_ABIERTA, [requestId]);
+  const esperas = await leerEsperasDeLaRequest(db, requestId);
   const fila = filas.rows[0];
   if (!fila) return null;
   const vigentes = new Set(confirmaciones.rows.map((c) => c.kind));
@@ -80,5 +85,6 @@ export async function leerDeOpsrun(db: Tx, requestId: string): Promise<LecturaDe
     operadores: operadores.rows,
     confirmaciones: { details: vigentes.has("details"), sender: vigentes.has("sender"), cleaner: vigentes.has("cleaner") },
     instruccionAbierta: abierta.rows[0]?.abierta === true,
+    esperas,
   };
 }

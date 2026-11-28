@@ -3,6 +3,7 @@
  * opsRUN y lo leído de BzzzBX; los componentes solo lo pintan. Nada de esto se
  * guarda ni se escribe: la ventana solo lee.
  */
+import type { Insignia } from "../alertas/tipos";
 import type { AlertResult, CleanerTeam, Contact, Photo } from "../bzzzbx/tipos";
 import type { PoVigente } from "../billing/po";
 import type { Etapa, FilaRequest, Leidos } from "../tablero/tipos";
@@ -61,8 +62,12 @@ export type Pestana = {
   /** $ y People: se ven en gris y no se seleccionan. */
   deshabilitada: boolean;
   titulo?: string;
-  /** Alerts: las que piden acción. */
+  /** Alerts: las que piden acción (Needs action). */
   conteo?: number;
+  /** Alerts: la insignia (roja, ámbar o gris con Waiting, OPR-34 §5.2); null si no hay nada. */
+  insignia?: Insignia | null;
+  /** Alerts: los `bzzzbx_alert_id` rojos de Needs action, para el pulso. */
+  idsRojos?: string[];
 };
 
 export type CampoPropiedad = {

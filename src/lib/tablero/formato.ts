@@ -75,6 +75,20 @@ export function fechaYVentana(fecha: string | null, inicio: string | null, fin: 
   return `${dia} · ${ventana}`;
 }
 
+/**
+ * Cuánto tiempo pasó, para "Open 1 h 5 min" y "Waiting 2 h 10 min" (OPR-34 §5.1):
+ * "0 min", "45 min", "1 h 5 min", "2 h", "1 d 3 h". Nunca negativo.
+ */
+export function duracion(desde: string, hasta: Date | string): string {
+  const fin = typeof hasta === "string" ? Date.parse(hasta) : hasta.getTime();
+  const minutos = Math.max(0, Math.floor((fin - Date.parse(desde)) / 60_000));
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (minutos < 24 * 60) return minutos % 60 === 0 ? `${horas} h` : `${horas} h ${minutos % 60} min`;
+  const dias = Math.floor(horas / 24);
+  return horas % 24 === 0 ? `${dias} d` : `${dias} d ${horas % 24} h`;
+}
+
 export function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/).filter(Boolean);
   if (partes.length === 0) return "";

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import type { PropsPanelAccion } from "@/lib/acciones/tipos";
-import { reglaConNombre } from "@/lib/audit/reglas";
+import { reglaConNombre } from "@/lib/alertas/reglas";
 import { PO_MAX } from "@/lib/etapas/reglas";
 import type { CampoPropiedad, VentanaJob } from "@/lib/ventana/tipos";
 
@@ -74,9 +74,10 @@ function useCompletoAlMontar(onCambio: PropsPanelAccion["onCambio"]) {
   }, []);
 }
 
-export function PanelAssign({ ventana, actorId = null, onCambio }: PropsPanelAccion) {
+export function PanelAssign({ ventana, actorId = null, inicial = null, onCambio }: PropsPanelAccion) {
   const { asignado, cargas } = ventana.encabezado;
-  const [elegido, setElegido] = useState<string | null>(null);
+  // Desde una alerta OPS-001 abre con "Assign to me" elegido (OPR-34 §5.3); si "yo" no se puede elegir, no se elige a nadie.
+  const [elegido, setElegido] = useState<string | null>(inicial?.asignarme === true ? actorId : null);
 
   // El dueño actual no se ofrece (OP015): el panel no lo deja elegir.
   const lista = cargas.filter((o) => o.id !== asignado.operadorId);
@@ -211,9 +212,10 @@ export function PanelConfirmCleaner({ ventana, onCambio }: PropsPanelAccion) {
  * texto y hace cuánto abrió. Si hay varias se elige una; con una sola ya viene
  * elegida. El motivo es obligatorio y lo pide la barra.
  */
-export function PanelClearAlert({ ventana, onCambio }: PropsPanelAccion) {
+export function PanelClearAlert({ ventana, inicial = null, onCambio }: PropsPanelAccion) {
   const lista = ventana.datos.alertasLimpiables;
-  const [elegida, setElegida] = useState<string | null>(null);
+  // Desde el botón de una alerta MEC-003 abre con esa alerta elegida (OPR-34 §5.3).
+  const [elegida, setElegida] = useState<string | null>(typeof inicial?.bzzzbx_alert_id === "string" ? inicial.bzzzbx_alert_id : null);
   // Una sola alerta ya está elegida; si la elegida dejó de estar (se refrescó la ventana), se desmarca.
   const valida = lista.length === 1 ? lista[0]!.id : lista.some((a) => a.id === elegida) ? elegida : null;
 

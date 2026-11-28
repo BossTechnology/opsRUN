@@ -28,7 +28,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "chromium", testIgnore: /(audit|assign-confirm|entrada-correo|etapas)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", testIgnore: /(audit|assign-confirm|entrada-correo|etapas|alertas)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     // La pestaña Audit enlaza R7 (una vez por base): corre después del resto, no a la vez (OPR-35).
     { name: "chromium-audit", testMatch: /audit\.spec\.ts/, dependencies: ["chromium"], use: { ...devices["Desktop Chrome"] } },
     // Assign y Confirm enlazan R8 (una vez por base) y mueven el dueño de R2: también después del resto (OPR-28).
@@ -50,6 +50,13 @@ export default defineConfig({
       name: "chromium-etapas",
       testMatch: /etapas\.spec\.ts/,
       dependencies: ["chromium-entrada"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // Alerts resuelve alertas de R1, R3, R4 y R9 una vez por base (E2E-2 a E2E-7, OPR-34): después de Audit, Assign y las etapas, que no cierran las de la seed.
+    {
+      name: "chromium-alertas",
+      testMatch: /alertas\.spec\.ts/,
+      dependencies: ["chromium-etapas"],
       use: { ...devices["Desktop Chrome"] },
     },
   ],

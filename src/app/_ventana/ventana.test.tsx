@@ -122,8 +122,8 @@ describe("Pestanas", () => {
     const { rerender } = render(
       <Pestanas pestanas={v.pestanas} inicial={{ id: "alerts", porRegla: true }} pideAccion={1} paneles={paneles(v)} />,
     );
-    expect(tab("Alerts1").getAttribute("aria-selected")).toBe("true");
-    const sinAlertas = v.pestanas.map((p) => (p.id === "alerts" ? { ...p, conteo: 0 } : p));
+    expect(tab("Alerts, 1 need action, amber").getAttribute("aria-selected")).toBe("true");
+    const sinAlertas = v.pestanas.map((p) => (p.id === "alerts" ? { ...p, conteo: 0, insignia: null } : p));
     rerender(<Pestanas pestanas={sinAlertas} inicial={{ id: "alerts", porRegla: true }} pideAccion={0} paneles={paneles(v)} />);
     expect(tab("4B").getAttribute("aria-selected")).toBe("true");
     expect(tab("Alerts").getAttribute("aria-selected")).toBe("false");
@@ -134,9 +134,9 @@ describe("Pestanas", () => {
     const { rerender } = render(
       <Pestanas pestanas={v.pestanas} inicial={{ id: "property", porRegla: false }} pideAccion={1} paneles={paneles(v)} />,
     );
-    fireEvent.click(tab("Alerts1"));
+    fireEvent.click(tab("Alerts, 1 need action, amber"));
     rerender(<Pestanas pestanas={v.pestanas} inicial={{ id: "property", porRegla: false }} pideAccion={0} paneles={paneles(v)} />);
-    expect(tab("Alerts1").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Alerts, 1 need action, amber").getAttribute("aria-selected")).toBe("true");
   });
 
   it("Alerts abierta por la regla y luego elegida a mano tampoco vuelve sola", () => {
@@ -145,9 +145,9 @@ describe("Pestanas", () => {
       <Pestanas pestanas={v.pestanas} inicial={{ id: "alerts", porRegla: true }} pideAccion={1} paneles={paneles(v)} />,
     );
     fireEvent.click(tab("4B"));
-    fireEvent.click(tab("Alerts1"));
+    fireEvent.click(tab("Alerts, 1 need action, amber"));
     rerender(<Pestanas pestanas={v.pestanas} inicial={{ id: "alerts", porRegla: true }} pideAccion={0} paneles={paneles(v)} />);
-    expect(tab("Alerts1").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Alerts, 1 need action, amber").getAttribute("aria-selected")).toBe("true");
   });
 
   it("si la pestaña elegida deja de existir, cae a la inicial", () => {

@@ -8,7 +8,7 @@ import { lecturaOAusente } from "../bzzzbx/ausente";
 import { comoOpsrunApp } from "../db/servidor";
 
 import { revisarCambios, type Revision } from "./cambios";
-import { leerFilas, leerMarca } from "./consultas";
+import { leerFilas, leerMarca, leerParaElPanel } from "./consultas";
 import { leerTablero, type MemoriaTablero } from "./leer";
 import type { Tablero } from "./tipos";
 
@@ -34,10 +34,13 @@ export { lecturaOAusente };
 const global = globalThis as typeof globalThis & { __opsrunMemoriaTablero?: MemoriaTablero };
 
 export async function obtenerTablero(): Promise<Tablero> {
-  const filas = await comoOpsrunApp(leerFilas);
+  // Todo de opsRUN en una sola transacción de solo lectura: las filas, y lo que pide el panel de Alerts.
+  const { filas, panel } = await comoOpsrunApp(async (db) => ({ filas: await leerFilas(db), panel: await leerParaElPanel(db) }));
   global.__opsrunMemoriaTablero ??= { leidos: null, en: null };
   return leerTablero({
     filas,
+    esperas: panel.esperas,
+    operadores: panel.operadores,
     lectura: lecturaOAusente(),
     ahora: new Date(),
     zona: zonaDeLaOperacion(),

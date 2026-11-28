@@ -3,7 +3,8 @@ import type { Tablero } from "@/lib/tablero/tipos";
 
 import { Columna } from "./columna";
 import { EnVivo } from "./en-vivo";
-import { IconoAlertas, IconoGenerico, IconoRosie } from "./iconos";
+import { IconoGenerico, IconoRosie } from "./iconos";
+import { BotonYPanelDeAlertas } from "./panel-alertas";
 
 const MAS_ADELANTE = "Available in a later release";
 
@@ -41,16 +42,12 @@ export function VistaTablero({ tablero, zona, sondeoMs, cursor }: Props) {
           texto={textoEnVivo}
         />
         <span className="barra-espacio" />
-        <button
-          type="button"
-          className="alertas-operacion"
-          data-testid="alertas-operacion"
-          data-nivel={alertasAbiertas.nivel ?? "ninguna"}
-          aria-label={`Alerts, ${alertasAbiertas.total} open`}
-        >
-          <IconoAlertas />
-          <span>{alertasAbiertas.total}</span>
-        </button>
+        <BotonYPanelDeAlertas
+          resumen={alertasAbiertas}
+          panel={tablero.panelAlertas}
+          idsRojos={tablero.idsRojos}
+          franja={bzzzbx.disponible ? null : textoEnVivo}
+        />
         <NoDisponible nombre="Alarms" />
         <NoDisponible nombre="Anomalies" />
         <NoDisponible nombre="Actions" />

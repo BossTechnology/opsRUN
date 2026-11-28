@@ -31,6 +31,8 @@ export function Hilo({ entradas, mensajesNoDisponibles, onReenviar }: Props) {
             key={e.id}
             className={`entrada entrada-${e.tipo} entrada-${e.direccion}`}
             data-testid="entrada"
+            data-entrada={e.id}
+            tabIndex={-1}
             data-tipo={e.tipo}
             data-direccion={e.direccion}
           >
