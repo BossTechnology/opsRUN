@@ -1,8 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
-import { urlsSupabaseLocal } from "../scripts/supabase-local.mjs";
-
 /**
  * El análisis de la request por IA (OPR-36, criterios I1 a I9 del spec
  * docs/spec/opr-36-analisis-ia.md §15.3) contra el build de producción, la seed y el
@@ -64,7 +62,14 @@ const auditDe = (requestId: string) =>
 const eventos = async (requestId: string, tipo: string) => (await auditDe(requestId)).filter((e) => e.event_type === tipo);
 
 /** Como el dueño de las tablas: solo para armar un fixture que ninguna acción del operador arma todavía. */
-const comoDueno = <T extends Record<string, unknown>>(sql: string, parametros: unknown[] = []) => consultar<T>(sql, parametros, urlsSupabaseLocal().migrador);
+function urlDelDueno(): string {
+  // La misma base que la app, con el login del dueño (las claves locales y públicas de supabase/alta-local.sql).
+  const url = new URL(process.env.OPSRUN_DATABASE_URL!);
+  url.username = "opsrun_migrador";
+  url.password = "opsrun_migrador_local";
+  return url.toString();
+}
+const comoDueno = <T extends Record<string, unknown>>(sql: string, parametros: unknown[] = []) => consultar<T>(sql, parametros, urlDelDueno());
 
 /** Pide un correo nuevo con su guion de IA, abre la tarjeta cuando aparece y devuelve la request. */
 async function correoConIa(page: Page, ia: string): Promise<{ requestId: string; correo: Correo }> {
