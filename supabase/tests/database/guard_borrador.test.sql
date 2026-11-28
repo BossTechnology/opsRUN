@@ -25,7 +25,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(22);
 
 grant opsrun_migrador to current_user with inherit true, set true;
 
@@ -183,6 +183,28 @@ as $$
   where f <> all (opsrun_private.draft_invalidating_fields(k))
 $$;
 
+-- OPR-36: lo que llena el análisis de IA. Toda columna de ai_draft_columns es :draft y
+-- todo campo de ai_analysis_fields es un opsrun.ai_field.
+create function pg_temp.ia_columnas_que_no_son_draft()
+returns setof text
+language sql
+stable
+as $$
+  select f || '.' || c
+  from unnest(opsrun_private.ai_analysis_fields()) as f
+  cross join lateral unnest(opsrun_private.ai_draft_columns(f)) as c
+  where c::name not in (select pg_temp.columnas_borrador())
+$$;
+
+create function pg_temp.ia_campos_sin_ai_field()
+returns setof text
+language sql
+stable
+as $$
+  select f from unnest(opsrun_private.ai_analysis_fields()) as f
+  where f not in (select code from opsrun.ai_field)
+$$;
+
 create function pg_temp.ia_sin_tipo()
 returns setof text
 language sql
@@ -244,6 +266,31 @@ set search_path = ''
 as $$ select array['unit'] $$;
 select ok('details.owner_operator_id' in (select * from pg_temp.confirmado_que_no_invalida()),
   'G13 se ve fallar: detecta lo que se confirma pero no invalida');
+
+-- OPR-36: el análisis de IA solo llena columnas del borrador y campos que existen.
+select is_empty('select * from pg_temp.ia_columnas_que_no_son_draft()',
+  'G13 (OPR-36): toda columna de ai_draft_columns es :draft');
+select is_empty('select * from pg_temp.ia_campos_sin_ai_field()',
+  'G13 (OPR-36): todo campo de ai_analysis_fields está en ai_field');
+
+-- G13 (OPR-36) se ve fallar: el análisis llena una columna que no es del borrador y pide un campo que no existe.
+create or replace function opsrun_private.ai_draft_columns(p_field text)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$ select array['owner_operator_id'] $$;
+select ok('property.owner_operator_id' in (select * from pg_temp.ia_columnas_que_no_son_draft()),
+  'G13 (OPR-36) se ve fallar: detecta una columna de ai_draft_columns que no es :draft');
+
+create or replace function opsrun_private.ai_analysis_fields()
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$ select array['property', 'campo_que_no_existe'] $$;
+select ok('campo_que_no_existe' in (select * from pg_temp.ia_campos_sin_ai_field()),
+  'G13 (OPR-36) se ve fallar: detecta un campo de ai_analysis_fields que no está en ai_field');
 
 select * from finish();
 rollback;

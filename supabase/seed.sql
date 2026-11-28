@@ -593,3 +593,20 @@ select id, 'request_scheduled', 'operator', owner_operator_id, scheduled_at,
        jsonb_build_object('mode', 'linked', 'bzzzbx_job_id', bzzzbx_job_id, 'job_number', job_number)
 from opsrun.request
 where id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+-- ---------------------------------------------------------------------------
+-- OPR-36 (P-10): R2, R7 y R8 son open y no tenían análisis de IA. El barrido de la
+-- tarea `analisis_ia` los habría tomado y habría cambiado su borrador y su Audit,
+-- de los que dependen la demo y los E2E de Assign y Confirm (OPR-28) y de Audit
+-- (OPR-35). Cada una lleva un análisis `completed` sin sugerencias y sin Audit,
+-- sin instrucción (salió por la capa de IA, no por el outbox), que el barrido salta.
+-- R1 ya tiene el suyo; R3 a R6 y R9 a R11 no son open. Va al final del archivo
+-- para no mover los `id` de los eventos que ya estaban.
+-- ---------------------------------------------------------------------------
+insert into opsrun.ai_analysis (id, request_id, instruction_id, status, model, requested_at, completed_at) values
+  ('e0000000-0000-4000-8000-0000000000a2', 'b0000000-0000-4000-8000-0000000000a2', null, 'completed', 'example-model',
+   now() - interval '2 hours 5 minutes', now() - interval '2 hours 4 minutes'),
+  ('e0000000-0000-4000-8000-0000000000a7', 'b0000000-0000-4000-8000-0000000000a7', null, 'completed', 'example-model',
+   now() - interval '1 hour 5 minutes', now() - interval '1 hour 4 minutes'),
+  ('e0000000-0000-4000-8000-0000000000a8', 'b0000000-0000-4000-8000-0000000000a8', null, 'completed', 'example-model',
+   now() - interval '35 minutes', now() - interval '34 minutes');
