@@ -19,7 +19,7 @@
 import { disponibilidadDelComposer } from "../conversacion/composer";
 import type { Etapa } from "../tablero/tipos";
 
-import { crearEjecutoresDeEnlace } from "./enlace";
+import { crearEjecutoresDeEnlace, TEXTO_SIN_OTRO_JOB } from "./enlace";
 import { crearEjecutoresDeEtapas, TEXTO_ADD_PO, TEXTO_SIN_ALERTA, TEXTO_YA_VALIDADO } from "./etapas";
 import {
   crearEjecutoresDeRequests,
@@ -144,7 +144,7 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   {
     codigo: "reschedule_job",
     etiqueta: "Reschedule",
-    descripcion: "Move the job to another date or window.",
+    descripcion: "Reschedule the job in the PINCH tools; opsRUN shows the new date.",
     etapas: ["scheduled"],
     enRelease: true,
     faseB: true,
@@ -154,12 +154,26 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   {
     codigo: "cancel_job",
     etiqueta: "Cancel job",
-    descripcion: "Cancel the job.",
+    descripcion: "Cancel the job in the PINCH tools; opsRUN takes it off the board.",
     etapas: ["scheduled"],
     enRelease: true,
     faseB: true,
     motivo: "obligatorio",
     necesitaBzzzbx: true,
+  },
+  {
+    // OPR-29 (P-2): la salida para un enlace equivocado o un job que PINCH canceló y reemplazó. Solo cambia el
+    // crosswalk de opsRUN, así que es de la Fase A. Lee el job nuevo y el actual en BzzzBX; sin candidatos, bloqueada.
+    codigo: "relink_job",
+    etiqueta: "Change linked job",
+    descripcion: "Link this request to another job in PINCH, for a wrong link or a job PINCH cancelled and replaced.",
+    etapas: ["scheduled"],
+    conJobCancelado: true,
+    enRelease: true,
+    motivo: "obligatorio",
+    necesitaBzzzbx: true,
+    bloqueo: (v) => (v.datos.candidatosDeCambio.length === 0 ? TEXTO_SIN_OTRO_JOB : null),
+    ejecutor: enlace.relink_job,
   },
   // In Progress (OPR-30)
   {

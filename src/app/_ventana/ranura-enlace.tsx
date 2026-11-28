@@ -20,7 +20,7 @@ export const TEXTO_VACIO: Record<Exclude<MotivoVacio, "request_no_abierta">, str
   sin_candidatos: "No matching job found in PINCH tools yet",
 };
 
-const ETIQUETA_COINCIDENCIA: Record<Coincidencia, string> = {
+export const ETIQUETA_COINCIDENCIA: Record<Coincidencia, string> = {
   misma_propiedad: "Same property",
   mismo_cliente: "Same customer",
   misma_fecha: "Same date",

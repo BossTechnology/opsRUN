@@ -30,6 +30,9 @@ export function filaVentana(ahora: Date, n: number): FilaVentana {
     oss_source: fila.oss_mark === null ? null : n === 5 ? "auto" : "operator",
     approved_by_nombre: fila.approved_at ? "Finance Uno" : null,
     validated_by_nombre: fila.validated_at ? "Finance Uno" : null,
+    // OPR-29: el enlace del job, de Audit.
+    linked_at: fila.job_number ? new Date(ahora.getTime() - 86_400_000).toISOString() : null,
+    linked_by_nombre: fila.job_number ? "Ops Uno" : null,
   };
 }
 

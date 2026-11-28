@@ -15,6 +15,8 @@ const dia = (d: number) => new Date(ahora.getTime() + d * 86_400_000).toISOStrin
 const R7: RequestParaEnlace = {
   id: "b0000000-0000-4000-8000-0000000000a7",
   status: "open",
+  bzzzbx_job_id: null,
+  change_seq: "1",
   received_at: new Date(ahora.getTime() - 4 * 3_600_000).toISOString(),
   bzzzbx_customer_id: "bx-cust-0002",
   bzzzbx_property_id: "bx-prop-0004",
@@ -28,8 +30,10 @@ const datos = (request: RequestParaEnlace | null = R7): DatosDeEnlace => ({
   leerRequest: async () => request,
   jobsEnlazadosAOtra: async () => new Set(),
   jobsRechazados: async () => new Set(),
+  jobsReenlazados: async () => new Set(),
   enlazar: async () => {},
   rechazar: async () => {},
+  cambiar: async () => {},
 });
 
 describe("propuestaParaLaVentana", () => {

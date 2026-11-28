@@ -128,7 +128,7 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
   });
 
   it("Scheduled, In Progress, Complete y Validation", () => {
-    expect(etiquetas(3)).toEqual(["Reschedule", "Cancel job"]);
+    expect(etiquetas(3)).toEqual(["Reschedule", "Cancel job", "Change linked job"]);
     expect(etiquetas(4)).toEqual(["Clear alert", "End manually"]);
     expect(etiquetas(5)).toEqual(["Approve & confirm", "Mark as OSS / Not OSS", "Reject · re-clean"]);
     expect(etiquetas(6)).toEqual(["Enter PO", "Validate"]);
@@ -171,6 +171,7 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(acciones.map((a) => [a.etiqueta, a.nota])).toEqual([
       ["Reschedule", "Available when actions are switched on"],
       ["Cancel job", "Available when actions are switched on"],
+      ["Change linked job", "BzzzBX unavailable"],
     ]);
     const requests = accionesVisibles(ventana(2, { disponible: false }));
     // Assign y Confirm solo escriben una decisión en opsRUN: siguen disponibles sin BzzzBX (S-13).
@@ -178,9 +179,32 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
     expect(requests.find((a) => a.etiqueta === "Ask cleaner")!.nota).toBe("BzzzBX unavailable");
   });
 
-  it("un job cancelado no tiene acciones", () => {
+  it("un job cancelado solo tiene Change linked job (OPR-29): las demás no aplican", () => {
     const cancelada = { ...ventana(3), etapa: "cancelled" as const };
-    expect(accionesVisibles(cancelada)).toEqual([]);
+    expect(accionesVisibles(cancelada).map((a) => a.codigo)).toEqual(["relink_job"]);
+    // Reschedule y Cancel job (Fase B) no aplican con el job cancelado.
+    expect(disponibilidadDe(def({ etapas: ["scheduled"] }), cancelada)).toEqual({ tipo: "no_aplica" });
+    expect(disponibilidadDe(def({ etapas: ["scheduled"], conJobCancelado: true }), cancelada)).toEqual({ tipo: "disponible" });
+  });
+
+  it("Change linked job (OPR-29): disponible en Scheduled y con el job cancelado si hay otro job; bloqueada sin candidatos o sin BzzzBX; no aplica en Requests ni en In Progress", () => {
+    const conCandidato = (v: VentanaJob): VentanaJob => ({
+      ...v,
+      datos: {
+        ...v.datos,
+        candidatosDeCambio: [
+          { bzzzbxJobId: "bx-job-x", jobNumber: "EX-X", fecha: "Nov 28", cleaner: "— —", coincide: ["misma_propiedad"], sugerido: false },
+        ],
+      },
+    });
+    const relink = (v: VentanaJob) => accionesVisibles(v).find((a) => a.codigo === "relink_job")?.disponibilidad;
+    expect(relink(conCandidato(ventana(3)))).toEqual({ tipo: "disponible" });
+    expect(relink(conCandidato({ ...ventana(3), etapa: "cancelled" }))).toEqual({ tipo: "disponible" });
+    expect(relink(ventana(3))).toEqual({ tipo: "bloqueada", motivo: "No other job to link" });
+    expect(relink(conCandidato(ventana(3, { disponible: false })))).toEqual({ tipo: "bloqueada", motivo: BZZZBX_NO_DISPONIBLE });
+    expect(relink(conCandidato(ventana(2)))).toBeUndefined();
+    expect(relink(conCandidato(ventana(4)))).toBeUndefined();
+    expect(relink(conCandidato(ventana(5)))).toBeUndefined();
   });
 
   it("bloqueos por dato que falta (§6.2)", () => {
@@ -197,7 +221,7 @@ describe("accionesVisibles con el registro real (§5.3)", () => {
 
   it("el motivo de cada acción sale del registro", () => {
     const porCodigo = (n: number) => Object.fromEntries(accionesVisibles(ventana(n)).map((a) => [a.codigo, a.motivo]));
-    expect(porCodigo(3)).toEqual({ reschedule_job: "obligatorio", cancel_job: "obligatorio" });
+    expect(porCodigo(3)).toEqual({ reschedule_job: "obligatorio", cancel_job: "obligatorio", relink_job: "obligatorio" });
     expect(porCodigo(4)).toEqual({ clear_alert: "obligatorio", end_job_manually: "obligatorio" });
     // OPR-31: el motivo de Mark as OSS es opcional; Approve, Enter PO y Validate no lo piden.
     expect(porCodigo(5)).toMatchObject({ approve_confirm: "no", mark_oss: "opcional" });

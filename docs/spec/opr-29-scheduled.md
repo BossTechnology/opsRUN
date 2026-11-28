@@ -1,7 +1,7 @@
 # OPR-29 — Scheduled: la etapa en la Fase A, Delayed y Reschedule / Cancel job en gris
 
 - **Tarjeta:** OPR-29 (P3 · Scheduled: Reschedule, Cancel job, Delayed). Depende de OPR-4 (regla de Delayed, nombres), OPR-17 (textos de ida y vuelta) y OPR-33 (alertas en BzzzBX). Leída en Relevo el 2026-11-27, junto con la regla oficial de Henry sobre la Fase A y la Fase B (OPR-42). La tarjeta es información; este spec manda sobre la construcción solo cuando Henry lo apruebe.
-- **Estado:** borrador para revisión. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§14).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-11 según las recomendaciones (§14.1). En construcción en la rama `opr-29-scheduled`. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§14).
 - **Hecho cuando (tarjeta):** E2E-3 y E2E-9 pasan en staging. En local se prueba la parte de la Fase A sobre el stand-in (§11.3). E2E-3 completo pide las reglas reales de OPR-33; la parte de E2E-9 que reprograma o cancela desde opsRUN es de la Fase B [S-8].
 - **Construye sobre (todo en `main`):** el modelo de datos (`docs/spec/opr-20-modelo-de-datos.md` §1.1, §3.4, §3.7, §3.8, §3.11, §4 y §5), el puerto de BzzzBX y su falso (`docs/spec/opr-22-stand-ins.md`), el tablero (OPR-25, con Delayed que ya parpadea), la Job window con su registro de acciones (`docs/spec/opr-26-job-window.md` §5, `src/lib/acciones/registro.ts`, donde Reschedule y Cancel job ya salen con `faseB: true`), el enlace de la Fase A (`docs/spec/fase-a-enlace.md`, que dejó "deshacer un enlace" para esta tarjeta, su P-4), Audit (`docs/spec/opr-35-audit.md`), las etapas hasta Paid (`docs/spec/opr-30-31-32-etapas.md`: `fuera_de_release` con `fase: "b"`, `lock_scheduled_request`, `record_observed_event` y el observador) y el ciclo de fondo único (ADR 0006, `src/lib/ciclo/`).
 - **Depende además de OPR-34, aprobado y en construcción (PR #32, sin fusionar):** `docs/spec/opr-34-alerts.md` (registrador de alertas, `upsert_alert_occurrence`, pestaña Alerts con "Clears at check-in" para OPS-010, `OP035` a `OP039`, migración `20261205120000_alertas.sql`). Las entradas de Delayed en Audit las escribe ese registrador (§5.3, P-8).
@@ -370,3 +370,20 @@ Todo inventado (repo público). No cambian los crosswalk IDs que la seed y el fa
 - **P-9. Seed y falso.** **Recomiendo** R10 y R11 con `bx-job-0110`, `0111` y `0112` (§12), después de los ids que usa PR #32, y poner la OPS-010 (`bx-alert-0011`) durante la prueba. Alternativa: usar R3 (`bx-job-0003`), que choca con L6 de OPR-34, que la lleva a In Progress.
 - **P-10. Fase B.** **Recomiendo** no cambiar el modelo ahora: `cleaner_confirmation` `reschedule`, las instrucciones, los tipos de Audit y las plantillas ya cubren la tarjeta (§9); se reservan `OP042` a `OP044`. Alternativa: escribir ya las firmas de `reschedule_job` y `cancel_job` sin cuerpo, que fija decisiones de la Fase B antes de tiempo.
 - **P-11. Número del guard.** G16 es el guard del ciclo de fondo (ADR 0006) y G17 el de alertas de OPR-34 (PR #32, sin fusionar). **Recomiendo G18** para el de este spec (`guard_job_enlazado.test.sql`). Alternativa: si PR #32 cambia de número antes de fusionarse, tomar el siguiente libre al construir OPR-29.
+
+### 14.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con P-0 a P-11 según las recomendaciones. Quedó así:
+
+- **P-0:** la migración de §10 va (`20261206120000_scheduled.sql`): `job_relinked`, `job_cancel_observed`, `relink_observed_job`, `OP040` y `OP041` (con `OP042` a `OP044` reservados) y G18. Sin tablas, columnas ni vistas nuevas.
+- **P-1:** se construye todo lo de §1.1: la vista de Scheduled, Delayed leído de BzzzBX con chip y Audit, Reschedule y Cancel job en gris, lo observado de PINCH y Change linked job.
+- **P-2:** Change linked job cambia el job sin salir de Scheduled, con motivo obligatorio, también con el job cancelado.
+- **P-3:** `job_cancel_observed`, anotado por el observador del ciclo con el id sintético `<job>:cancelled` y la hora en que se vio, provisional hasta OPR-6.
+- **P-4:** la reprogramación observada no se anota en Audit en la Fase A.
+- **P-5:** Delayed lo calcula solo Signal Maker (OPS-010); opsRUN no tiene respaldo propio.
+- **P-6:** con `OPSRUN_SERVIDOR=1` el servidor no arranca sin una `OPSRUN_ZONA_HORARIA` válida; `pnpm local` fija `America/New_York`; el default se confirma con OPR-4.
+- **P-7:** el "1:00 PM" de Audit es el `reason_text` tal como llegó, con "Delayed · " delante.
+- **P-8:** OPR-29 se construye después de OPR-34 (ya fusionado, PR #32).
+- **P-9:** R10 y R11 con `bx-job-0110` a `0112`; `bx-alert-0011` se pone durante la prueba.
+- **P-10:** la Fase B no cambia el modelo ahora; se reservan `OP042` a `OP044`.
+- **P-11:** el guard nuevo es G18 (`guard_job_enlazado.test.sql`).

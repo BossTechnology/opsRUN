@@ -36,6 +36,8 @@ Actualización (2026-11-27, OPR-30 a OPR-32 P-9): el observador de hechos de PIN
 
 Actualización (2026-11-27, OPR-34, P-2 aprobada por Henry): el registrador de alertas es la tarea `registrador_alertas` (cada 15 s, `src/lib/alertas/tarea.ts`, sin `server-only`, con las dependencias pedidas en cada vuelta). Lee `cambiosDesde` filtrado a `alert_result` con su cursor en el cierre de la tarea (sin `globalThis`), hace una pasada completa al arrancar y tras `CursorCaducado`, y escribe una alerta por transacción con `opsrun.upsert_alert_occurrence` como actor de sistema `registrador_alertas`. No cuelga de `/api/tablero/cambios`: `un-solo-ciclo.test.ts` (G16, que también falla si una lectura importa el registrador o llama a `upsert_alert_occurrence`) y `observados/solo-en-segundo-plano.test.ts` (que además comprueba que el arranque lo registra) lo vigilan. Tareas del ciclo hoy: `entrada_correo`, `reconciliacion_envios`, `observador_etapas` y `registrador_alertas`.
 
+Actualización (2026-11-27, OPR-29, P-3 aprobada por Henry): la cancelación de un job en PINCH la anota la misma tarea `observador_etapas`, sin tarea ni temporizador nuevos. En su recorrido por cada request programada lee también el `Job` y, si está cancelado, escribe `job_cancel_observed` (id `<job>:cancelled`, hora de la lectura). Tareas del ciclo hoy: `entrada_correo`, `reconciliacion_envios`, `observador_etapas` y `registrador_alertas`.
+
 ## Consecuencias
 - **Se gana:**
   - un lugar para el trabajo de fondo, con cadencia, exclusión y manejo de errores iguales para todos;

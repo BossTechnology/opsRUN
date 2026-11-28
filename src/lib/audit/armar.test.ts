@@ -24,6 +24,8 @@ function fila(parcial: Partial<FilaDeAudit> & Pick<FilaDeAudit, "event_type">): 
     marca_oss: null,
     po_numero: null,
     job_number: null,
+    job_anterior_number: null,
+    job_nuevo_number: null,
     bzzzbx_job_id: null,
     sugerencias: null,
     alerta_regla: null,

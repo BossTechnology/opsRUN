@@ -326,6 +326,8 @@ describe("BarraAcciones", () => {
     expect(opciones.map((o) => o.textContent)).toEqual([
       "Reschedule — Available when actions are switched on",
       "Cancel job — Available when actions are switched on",
+      // OPR-29: sin otro job que enlazar, también en gris.
+      "Change linked job — No other job to link",
     ]);
     expect(opciones.every((o) => o.disabled)).toBe(true);
   });

@@ -92,8 +92,8 @@ conBase("consultas de la Job window (seed)", () => {
   it("los operadores activos con su carga: requests suyas que aún no llegan a Validation", async () => {
     const { operadores } = (await leer(3))!;
     const porNombre = Object.fromEntries(operadores.map((o) => [o.nombre, o.abiertas]));
-    // Ops Uno: R2 y R3. Ops Dos: R4, R5 y R7. Finance Uno: R6, ya aprobada.
-    expect(porNombre).toMatchObject({ "Ops Uno": 2, "Ops Dos": 3, "Finance Uno": 0, "Finance Dos": 0 });
+    // Ops Uno: R2, R3, R10 y R11 (OPR-29). Ops Dos: R4, R5 y R7. Finance Uno: R6, ya aprobada.
+    expect(porNombre).toMatchObject({ "Ops Uno": 4, "Ops Dos": 3, "Finance Uno": 0, "Finance Dos": 0 });
   });
 
   it("una request que no existe es null", async () => {

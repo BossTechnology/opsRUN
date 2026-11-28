@@ -158,6 +158,24 @@ export function problemasBzzzbx(env: Entorno = process.env): string[] {
   return [];
 }
 
+/**
+ * La zona de la operación (OPR-29, P-6). Las horas que ve el operador y la hora
+ * límite de Delayed ("1:00 PM") se leen en esa zona; con UTC en silencio el
+ * "1:00 PM" engaña. En el servidor es obligatoria y tiene que ser una zona IANA
+ * válida; fuera del servidor sigue cayendo a UTC con un aviso (`zonaDeLaOperacion`).
+ */
+export function problemasDeZona(env: Entorno = process.env): string[] {
+  if (!enServidor(env)) return [];
+  const zona = env.OPSRUN_ZONA_HORARIA?.trim();
+  if (!zona) return ["OPSRUN_ZONA_HORARIA no está definida"];
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zona });
+  } catch {
+    return ["OPSRUN_ZONA_HORARIA no es una zona válida"];
+  }
+  return [];
+}
+
 /** Todos los problemas a la vez, por nombre y nunca por valor. Vacío: puede arrancar. */
 export function problemasDeEntorno(env: Entorno = process.env, leer: Lector = leerArchivo): string[] {
   const problemas: string[] = [];
@@ -175,6 +193,8 @@ export function problemasDeEntorno(env: Entorno = process.env, leer: Lector = le
   }
   // OPR-22: el stand-in de BzzzBX no corre en el servidor.
   problemas.push(...problemasBzzzbx(env));
+  // OPR-29 (P-6): la zona de la operación es obligatoria en el servidor.
+  problemas.push(...problemasDeZona(env));
   return problemas;
 }
 

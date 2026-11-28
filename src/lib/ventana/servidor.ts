@@ -18,7 +18,7 @@ import { alertasAbiertas, armarVentana, type EntradaVentana } from "./armar";
 import { leerParaConfirmar } from "./confirmar";
 import { esIdDeRequest, leerDeOpsrun } from "./consultas";
 import { leerVentanaDeBzzzbx, type MemoriaVentana } from "./leer";
-import { propuestaParaLaVentana, type PropuestaDeRanura } from "./propuesta";
+import { candidatosParaElCambio, propuestaParaLaVentana, type PropuestaDeRanura } from "./propuesta";
 import type { VentanaJob } from "./tipos";
 
 const global = globalThis as typeof globalThis & { __opsrunMemoriaVentana?: MemoriaVentana };
@@ -72,7 +72,27 @@ async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab
  */
 export async function obtenerVentana(requestId: string, tab: string | null = null): Promise<VentanaJob | null> {
   const entrada = await leerEntrada(requestId);
-  return entrada ? armarVentana({ ...entrada, tab }) : null;
+  if (!entrada) return null;
+  const ventana = armarVentana({ ...entrada, tab });
+  // Change linked job (OPR-29) solo aplica en Scheduled o con el job cancelado, y necesita BzzzBX: ahí se leen los candidatos.
+  const puedeCambiarElJob = entrada.fila.status === "scheduled" && (ventana.etapa === "scheduled" || ventana.etapa === "cancelled");
+  if (!puedeCambiarElJob || !ventana.bzzzbx.disponible) return ventana;
+  return armarVentana({ ...entrada, tab, ...(await candidatosDeCambio(requestId)) });
+}
+
+/**
+ * Los jobs a los que se puede cambiar el enlace de la request, con el nombre de su cleaner. Una lectura que falla
+ * no rompe la ventana: sin candidatos, Change linked job sale bloqueada.
+ */
+async function candidatosDeCambio(requestId: string) {
+  try {
+    const propuesta = await propuestaParaLaVentana(dependenciasDeEnlaceDeLaVentana(), requestId, { paraCambio: true });
+    const equipos = "error" in propuesta ? {} : await nombresDeEquipos(propuesta.candidatos.flatMap((c) => (c.job.bzzzbx_team_id ? [c.job.bzzzbx_team_id] : [])));
+    return candidatosParaElCambio(propuesta, equipos);
+  } catch (e) {
+    console.error("[opsRUN] ventana: no se pudieron leer los candidatos de Change linked job:", e instanceof Error ? e.message : e);
+    return { candidatosDeCambio: [], candidatosTruncado: false };
+  }
 }
 
 /** Lo leído de la request, una vez por render: lo piden las ranuras Job tracker y Billing (React `cache`). */

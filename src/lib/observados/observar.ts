@@ -15,6 +15,9 @@
  * cadencia ni de concurrencia; sí hay memoria entre vueltas (los ids ya
  * escritos), que vive en la tarea.
  *
+ * También anota un job cancelado en PINCH (`job_cancel_observed`, OPR-29): es el mismo recorrido, con una lectura
+ * más del `Job`, sin tarea ni temporizador nuevos.
+ *
  * Nada de lo leído de PINCH se copia a una columna de opsRUN: las duraciones, el
  * "running long" y el PO vigente se calculan al pintar.
  */
@@ -29,9 +32,15 @@ export const TIPO_DE_AUDIT: Record<JobTrackerEvent["kind"], string> = {
   completed: "job_completed",
 };
 
+/** El tipo de Audit de un job que PINCH canceló (OPR-29, P-3). */
+export const TIPO_JOB_CANCELADO = "job_cancel_observed";
+
+/** El id sintético de la cancelación observada: un job se cancela una sola vez (OPR-29, S-9), hasta que OPR-6 dé un evento con id. */
+export const idDeCancelacion = (bzzzbxJobId: string): string => `${bzzzbxJobId}:cancelled`;
+
 export type HechoObservado = {
   bzzzbxJobId: string;
-  /** `job_checked_in`, `job_started`, `job_completed` o `job_paid`. */
+  /** `job_checked_in`, `job_started`, `job_completed`, `job_paid` o `job_cancel_observed`. */
   tipo: string;
   bzzzbxEventId: string;
   /** Hora de BzzzBX, ISO 8601 UTC. */
@@ -98,6 +107,15 @@ export function crearObservador(dependencias: () => DependenciasDelObservador, {
           const pago = await lectura.obtener("payment", jobId);
           if (pago?.paid && pago.paid_at && pago.bzzzbx_event_id) {
             await registrar(datos, { bzzzbxJobId: jobId, tipo: "job_paid", bzzzbxEventId: pago.bzzzbx_event_id, ocurridoEn: pago.paid_at }, cuenta);
+          }
+          // OPR-29 (P-3): un job que PINCH canceló. El `Job` no trae la hora de la cancelación: va la de esta lectura (S-9).
+          const job = await lectura.obtener("job", jobId);
+          if (job?.status === "cancelled") {
+            await registrar(
+              datos,
+              { bzzzbxJobId: jobId, tipo: TIPO_JOB_CANCELADO, bzzzbxEventId: idDeCancelacion(jobId), ocurridoEn: job.leido_en },
+              cuenta,
+            );
           }
         } catch (e) {
           // BzzzBX caído: se deja la vuelta para la próxima, sin escribir nada más.

@@ -11,7 +11,7 @@ import { obtenerBzzzbx } from "@/lib/bzzzbx";
 import { crearDatosDeEnlace } from "./datos-sql";
 import type { DependenciasDeEnlace } from "./enlace";
 
-export { confirmarEnlace, EnlaceInvalido, proponerEnlaces, rechazarEnlace } from "./enlace";
+export { cambiarEnlaceDeJob, confirmarEnlace, EnlaceInvalido, proponerEnlaces, rechazarEnlace } from "./enlace";
 export type { Candidato, Coincidencia, MotivoVacio, Propuesta } from "./enlace";
 
 export function dependenciasDeEnlace(): DependenciasDeEnlace {
