@@ -299,7 +299,7 @@ test("A7: las acciones que no corren no corren, ni forzando el disabled", async 
 test("A8: en cada etapa aparecen las acciones de esa etapa y ninguna de otra", async ({ page }) => {
   const casos: [string, string[]][] = [
     [R(2), ["Assign / Reassign", "Confirm details", "Confirm sender", "Confirm cleaner", "Ask cleaner", "Schedule"]],
-    [R(3), ["Reschedule", "Cancel job"]],
+    [R(3), ["Reschedule", "Cancel job", "Change linked job"]],
     [R(4), ["Clear alert", "End manually"]],
     [R(5), ["Approve & confirm", "Mark as OSS / Not OSS", "Reject · re-clean"]],
     [R(6), ["Enter PO", "Validate"]],

@@ -524,3 +524,72 @@ where a.bzzzbx_alert_id in ('bx-alert-0005', 'bx-alert-0006', 'bx-alert-0007', '
 insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, reason, alert_occurrence_id, details) values
   ('b0000000-0000-4000-8000-0000000000a4', 'alert_resolved', 'bzzzbx', null,
    now() - interval '1 day', null, 'a1000000-0000-4000-8000-0000000000a9', '{"resolution": "auto_cleared"}');
+
+-- R10 y R11 (OPR-29, P-9): dos requests en Scheduled, enlazadas a un job de PINCH.
+--   R10 → bx-job-0110 (EX-00110), hoy 09:00–12:00. Es la de Delayed: la OPS-010 (bx-alert-0011) no está en la seed ni
+--         en el falso; la prueba la pone con /api/falso, para que el registrador no la cree al arrancar.
+--   R11 → bx-job-0111 (EX-00111). Es la de Change linked job: se cambia a bx-job-0112 (EX-00112) y ese se reprograma y se
+--         cancela en PINCH. Los dos jobs son de la misma propiedad y cliente, en días distintos.
+-- Los dos con dueño (Ops Uno) y las tres confirmaciones, como si se hubieran enlazado en la Fase A (request_scheduled con
+-- mode linked). Ninguna alerta ni instrucción. Sus crosswalk IDs de correo (bx-msg-0010, bx-thread-0010, …) son explícitos:
+-- el id de estas dos termina en un número de dos dígitos.
+insert into opsrun.request (
+  id, received_at, owner_operator_id,
+  bzzzbx_customer_id, bzzzbx_contact_id, bzzzbx_property_id, bzzzbx_space_id,
+  unit, beds, bzzzbx_service_id, service_date, window_start, window_end,
+  access_notes, po_number, bzzzbx_team_id
+) values
+  ('b0000000-0000-4000-8000-000000000a10', now() - interval '1 day', '0a000000-0000-4000-8000-0000000000a1',
+   'bx-cust-0002', 'bx-cont-0002', 'bx-prop-0006', null,
+   null, 2, 'bx-svc-0001', current_date, '09:00', '12:00',
+   null, null, 'bx-team-0001'),
+  ('b0000000-0000-4000-8000-000000000a11', now() - interval '1 day', '0a000000-0000-4000-8000-0000000000a1',
+   'bx-cust-0002', 'bx-cont-0002', 'bx-prop-0006', null,
+   null, 2, 'bx-svc-0001', current_date + 1, '09:00', '12:00',
+   null, null, 'bx-team-0002');
+
+insert into opsrun.request_message (request_id, bzzzbx_message_id, bzzzbx_thread_id, channel, direction, is_original, actor_kind, linked_at)
+select r.id, 'bx-msg-00' || right(r.id::text, 2), 'bx-thread-00' || right(r.id::text, 2),
+       'email', 'inbound', true, 'system', r.received_at
+from opsrun.request as r
+where r.id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, occurred_at)
+select id, 'request_received', 'system', received_at from opsrun.request
+where id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select id, 'request_assigned', 'operator', owner_operator_id, received_at + interval '5 minutes',
+       jsonb_build_object('to_operator_id', owner_operator_id)
+from opsrun.request
+where id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+insert into opsrun.request_confirmation (request_id, kind, method, confirmed_value, actor_operator_id, confirmed_at)
+select r.id, k, case when k = 'cleaner' then 'phone'::opsrun.confirmation_method else 'operator' end,
+       '{}', r.owner_operator_id, r.received_at + interval '1 hour'
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select r.id, k::text || '_confirmed', 'operator', r.owner_operator_id, r.received_at + interval '1 hour',
+       jsonb_build_object('method', case when k = 'cleaner' then 'phone' else 'operator' end)
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
+
+update opsrun.request
+set status = 'scheduled', bzzzbx_job_id = 'bx-job-0110', job_number = 'EX-00110',
+    scheduled_at = received_at + interval '2 hours'
+where id = 'b0000000-0000-4000-8000-000000000a10';
+
+update opsrun.request
+set status = 'scheduled', bzzzbx_job_id = 'bx-job-0111', job_number = 'EX-00111',
+    scheduled_at = received_at + interval '2 hours'
+where id = 'b0000000-0000-4000-8000-000000000a11';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select id, 'request_scheduled', 'operator', owner_operator_id, scheduled_at,
+       jsonb_build_object('mode', 'linked', 'bzzzbx_job_id', bzzzbx_job_id, 'job_number', job_number)
+from opsrun.request
+where id in ('b0000000-0000-4000-8000-000000000a10', 'b0000000-0000-4000-8000-000000000a11');
