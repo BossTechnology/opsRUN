@@ -216,20 +216,41 @@ test("A5: el nombre de la pestaña de la propiedad", async ({ page }) => {
 
 test("A6: abre en Alerts si una alerta pide acción, y vuelve a la propiedad al resolverse", async ({ page }) => {
   test.setTimeout(120_000);
-  await page.goto(`/job/${R(1)}`);
-  await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("alerta")).toHaveCount(1);
-  await expect(page.getByTestId("alerta")).toContainText("Unassigned for 15 min.");
+  // Una alerta propia de la prueba, en R3: las de la seed (R1, R4, R8, R9) las necesita la pestaña Alerts de OPR-34 y, una
+  // vez resueltas en opsRUN por el registrador, no se reabren.
+  const alertaPropia = (id: string) =>
+    control(page, {
+      accion: "poner",
+      entidad: "alert_result",
+      valor: {
+        bzzzbx_alert_id: id,
+        sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0003" },
+        rule_id: "OPS-002",
+        rule_version: "1",
+        level: "amber",
+        reason_text: "Open for 2 days.",
+        opened_at: new Date().toISOString(),
+        cleared_at: null,
+      },
+    });
+  const filas = () => page.getByTestId("alertas-needs-action").getByTestId("alerta");
 
-  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-0001", parche: { cleared_at: new Date().toISOString() } });
+  await alertaPropia("bx-alert-a601");
+  await page.goto(`/job/${R(3)}`);
+  await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
+  await expect(filas()).toHaveCount(1);
+  await expect(filas()).toContainText("Open for 2 days.");
+
+  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-a601", parche: { cleared_at: new Date().toISOString() } });
   await expect(pestana(page, "property")).toHaveAttribute("aria-selected", "true", { timeout: 60_000 });
 
   // Elegida a mano con ?tab=alerts, se queda aunque ya no haya alertas.
   await control(page, { accion: "reiniciar" });
-  await page.goto(`/job/${R(1)}?tab=alerts`);
+  await alertaPropia("bx-alert-a602");
+  await page.goto(`/job/${R(3)}?tab=alerts`);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("conteo-alertas")).toHaveText("1");
-  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-0001", parche: { cleared_at: new Date().toISOString() } });
+  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-a602", parche: { cleared_at: new Date().toISOString() } });
   // La ventana se refrescó (el conteo se fue) y sigue en Alerts.
   await expect(page.getByTestId("conteo-alertas")).toHaveCount(0, { timeout: 60_000 });
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
