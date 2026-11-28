@@ -10,6 +10,7 @@
  */
 import { tareaEntradaCorreo } from "../entrada/servidor";
 import { tareaReconciliacionEnvios } from "../instrucciones/reconciliacion";
+import { tareaObservadorEtapas } from "../observados/tarea";
 
 import { crearCiclo, type Ciclo, type Tarea } from "./ciclo";
 
@@ -17,7 +18,7 @@ type Entorno = Record<string, string | undefined>;
 
 /** Las tareas de opsRUN. Aquí se suman el registrador de alertas (OPR-34) y las que vengan. */
 export function tareasDeOpsrun(): Tarea[] {
-  return [tareaEntradaCorreo(), tareaReconciliacionEnvios()];
+  return [tareaEntradaCorreo(), tareaReconciliacionEnvios(), tareaObservadorEtapas()];
 }
 
 /** Por qué no debe correr, o null si puede. */

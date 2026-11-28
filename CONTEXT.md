@@ -161,7 +161,7 @@ Términos de la entrada de correo y del ciclo de fondo. Detalle en `docs/spec/op
 | Término | Significado | Dónde aparece |
 |---|---|---|
 | Entrada de correo | El proceso de sistema `entrada_correo`: lee los correos entrantes nuevos del puerto de lectura de BzzzBX y le pide a la base (`opsrun.ingest_request_email`) que cree la request del hilo, vincule la respuesta o diga que ya estaba. Nunca lee Gmail ni guarda nada de PINCH: a la base solo viajan el ID del mensaje, el del hilo y la hora. | OPR-15, `src/lib/entrada/` |
-| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. La entrada de correo es la primera tarea; el registrador de alertas y el observador se suman. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
+| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. Sus tareas hoy: la entrada de correo, la reconciliación de envíos y el observador de etapas; el registrador de alertas se suma. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
 | Marca de agua | Desde dónde recupera la entrada al arrancar o tras `CursorCaducado`: la última `request.received_at` menos 24 h. Sin ninguna request, no recupera nada (la entrada empieza en "ahora"). | OPR-15 §4.3 |
 | Email received | Evento de Audit (`email_received`) cuando la entrada vincula una respuesta del cliente a la request de su hilo. El primer correo deja Request received. | OPR-15 P-4, OPR-35 |
 

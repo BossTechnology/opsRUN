@@ -20,7 +20,8 @@ import pg from "pg";
  *   queda en gris con "BzzzBX unavailable".
  * - E8 (cambio concurrente): en E5, con R5.
  * El observador de hechos de PINCH (Checked in, Started, Completed, Paid · Observed)
- * corre en el ciclo de fondo de OPR-15, que no es de este PR: aquí Audit trae solo lo de opsRUN.
+ * corre en el ciclo de fondo (tarea `observador_etapas`, cada 15 s): E1 espera a que
+ * escriba los de R8 y comprueba que Audit los trae marcados como observados.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -521,14 +522,14 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
     await expect(opcion(page, "record_validation")).toHaveText("Validate — Add PO");
     await expect(opcion(page, "record_validation")).toBeDisabled();
     const antes = await cursor(page);
-    const eventosAntes = await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1", [R(8)]);
+    const eventosAntes = await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and source <> 'bzzzbx_observed'", [R(8)]);
     await elegirAunqueEsteDeshabilitada(page, "record_validation");
     await expect(page.getByTestId("go")).toBeDisabled();
     await pulsarGoForzado(page);
     await expect(resultado(page)).toHaveText("Add PO");
     await expect(resultado(page)).toHaveAttribute("data-tipo", "rechazada");
     expect(await cursor(page)).toBe(antes);
-    expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1", [R(8)])).toBe(eventosAntes);
+    expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and source <> 'bzzzbx_observed'", [R(8)])).toBe(eventosAntes);
     expect((await estadoDe(R(8))).validated).toBe(false);
   });
 
@@ -582,10 +583,23 @@ test("E1: de Requests a Paid sobre el stand-in, con cada paso en Audit (R8)", as
   });
 
   await test.step("Audit cuenta la historia en orden, con su persona, y sin ids ni crosswalk", async () => {
+    // El observador (ciclo de fondo, cada 15 s) escribe check-in, inicio, fin y pago de R8, una vez cada uno.
+    await expect
+      .poll(() => contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and source = 'bzzzbx_observed'", [R(8)]), { timeout: 60_000 })
+      .toBe(4);
     await abrir(page, R(8), "audit");
     await expect(audit(page).getByRole("list", { name: "Audit" })).toBeVisible();
     const lista = await eventosDeAudit(page);
-    const desdeScheduled = lista.slice(lista.indexOf("Scheduled") + 1);
+    // Los hechos observados llevan la hora de PINCH (puesta con `hace(...)`), así que su sitio entre lo de opsRUN no se fija: se comprueban aparte.
+    const observados = ["Checked in", "Started", "Completed", "Paid"];
+    expect(lista.filter((e) => observados.includes(e)).sort()).toEqual([...observados].sort());
+    expect(lista.indexOf("Checked in")).toBeLessThan(lista.indexOf("Started"));
+    expect(lista.indexOf("Started")).toBeLessThan(lista.indexOf("Completed"));
+    for (const e of observados) await expect(filaDeAudit(page, e)).toContainText("Observed");
+    // exact: la fila de Scheduled dice "linked to observed job", que no es la marca.
+    await expect(audit(page).getByText("Observed", { exact: true })).toHaveCount(4);
+    expect(await contar("select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'job_paid'", [R(8)])).toBe(1);
+    const desdeScheduled = lista.slice(lista.indexOf("Scheduled") + 1).filter((e) => !observados.includes(e));
     expect(desdeScheduled).toEqual([
       "Alert cleared",
       "Marked as OSS / Not OSS",
