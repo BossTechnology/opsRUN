@@ -18,6 +18,9 @@ export { RanuraEnlace } from "./ranura-enlace";
 /** OPR-35: pestaña Audit, desde Scheduled. Ya está construida en `./ranura-audit`. */
 export { RanuraAudit } from "./ranura-audit";
 
+/** OPR-34: pestaña Alerts, en todas las etapas. Ya está construida en `./ranura-alertas`. */
+export { RanuraAlertas } from "./ranura-alertas";
+
 /** OPR-30: pestaña Job tracker, desde In Progress. */
 export { RanuraTracker } from "./ranura-tracker";
 

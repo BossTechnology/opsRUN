@@ -27,29 +27,3 @@ export function PanelPropiedad({ ventana }: { ventana: VentanaJob }) {
     </dl>
   );
 }
-
-/**
- * Alerts, de solo lectura (spec OPR-26 §4.3): las alertas abiertas del job
- * (regla, nivel y razón). Secciones, acciones y Resolved son de OPR-34; el
- * marcador `data-ranura="alertas"` es su lugar.
- */
-export function PanelAlertas({ ventana }: { ventana: VentanaJob }) {
-  return (
-    <section className="ranura" data-ranura="alertas" aria-label="Alerts">
-      {ventana.alertas.length === 0 ? (
-        <p data-testid="sin-alertas">No open alerts.</p>
-      ) : (
-        <ul className="lista-alertas" data-testid="lista-alertas">
-          {ventana.alertas.map((a) => (
-            <li key={a.id} data-testid="alerta" data-nivel={a.nivel} data-regla={a.regla}>
-              <span className="alerta-mini" data-nivel={a.nivel}>
-                {a.regla}
-              </span>{" "}
-              <span>{a.razon}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}

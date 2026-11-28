@@ -5,6 +5,7 @@ import { useCallback, useState, useTransition } from "react";
 import type { AccionVista, ResultadoAccion } from "@/lib/acciones/tipos";
 import type { VentanaJob } from "@/lib/ventana/tipos";
 
+import { useAccionDeLaVentana } from "./accion-de-la-ventana";
 import { ejecutarAccion } from "./acciones";
 import { PANELES_DE_ACCION } from "./paneles-accion";
 
@@ -49,6 +50,10 @@ export function BarraAcciones({ requestId, version, acciones, ventana, actorId =
   const [datos, setDatos] = useState<{ valores: Record<string, unknown>; completo: boolean }>({ valores: {}, completo: false });
   const [resultado, setResultado] = useState<ResultadoAccion | null>(null);
   const [enCurso, iniciar] = useTransition();
+  // Lo que pidió un botón de la pestaña Alerts (OPR-34 §5.3): la acción elegida y lo que se le prellena.
+  const { pedida } = useAccionDeLaVentana();
+  const [pedidaVista, setPedidaVista] = useState(pedida?.n ?? 0);
+  const [inicial, setInicial] = useState<Record<string, unknown> | null>(null);
 
   const accion = acciones.find((a) => a.codigo === codigo);
   const corre = accion?.disponibilidad.tipo === "disponible";
@@ -59,11 +64,19 @@ export function BarraAcciones({ requestId, version, acciones, ventana, actorId =
   const panelCompleto = !Panel || datos.completo;
   const puedeIr = Boolean(accion) && corre && motivoCompleto && panelCompleto && !enCurso && !enCamino;
 
-  function elegir(nuevo: string) {
+  function elegir(nuevo: string, prellenado: Record<string, unknown> | null = null) {
     setCodigo(nuevo);
     setMotivo("");
     setResultado(null);
     setDatos({ valores: {}, completo: false });
+    setInicial(prellenado);
+  }
+
+  // Un botón de una alerta pidió una acción: se abre elegida, con su panel prellenado. Se ajusta durante el render
+  // (el patrón de React para estado derivado), sin efectos. No ejecuta nada: corre solo con Go.
+  if (pedida && pedida.n !== pedidaVista) {
+    setPedidaVista(pedida.n);
+    elegir(pedida.codigo, pedida.datos);
   }
 
   // El panel avisa cada vez que cambia lo que eligió el operador.
@@ -139,12 +152,14 @@ export function BarraAcciones({ requestId, version, acciones, ventana, actorId =
           ) : null}
           {Panel && ventana ? (
             <Panel
+              key={pedidaVista}
               requestId={requestId}
               etapa={ventana.etapa}
               bzzzbx={ventana.bzzzbx}
               zona={ventana.zona}
               ventana={ventana}
               actorId={actorId}
+              inicial={inicial}
               onCambio={alCambiar}
             />
           ) : null}

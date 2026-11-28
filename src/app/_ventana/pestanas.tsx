@@ -4,6 +4,8 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import type { IdPestana, Pestana } from "@/lib/ventana/tipos";
 
+import { usePulso } from "../_alertas/usar-pulso";
+
 type Props = {
   pestanas: Pestana[];
   /** La pestaña que abre la ventana (§4.2) y si la eligió la regla de Alerts. */
@@ -20,6 +22,10 @@ type Props = {
  * uno. La pestaña activa va en la URL (`?tab=`) con `history.replaceState`,
  * que Next integra sin salir de la ruta interceptada.
  *
+ * La pestaña Alerts lleva su insignia (spec OPR-34 §5.2): roja o ámbar con el
+ * conteo de Needs action, o gris con el de Waiting. Late (`data-pulso="si"`) cuando
+ * aparece una roja nueva en esta misma ventana; el primer pintado fija la base.
+ *
  * $ y People se ven pero no se seleccionan, ni con clic ni con teclado. Su nombre
  * accesible es "$" o "People" y la nota ("Not available in this release") es su
  * descripción, no su nombre.
@@ -29,6 +35,7 @@ export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
   // Alerts la abrió la regla (no el operador): si ya no hay alertas que pidan acción, vuelve a la propiedad [S-9].
   const [porRegla, setPorRegla] = useState(inicial.porRegla);
   const refs = useRef(new Map<IdPestana, HTMLButtonElement>());
+  const pulso = usePulso(pestanas.find((p) => p.id === "alerts")?.idsRojos ?? []);
 
   // Se ajusta durante el render (patrón de React para estado derivado de props), sin pasar por un efecto.
   if (porRegla && elegida === "alerts" && pideAccion === 0) {
@@ -85,7 +92,7 @@ export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
             aria-controls={p.deshabilitada ? undefined : `panel-${p.id}`}
             aria-disabled={p.deshabilitada ? "true" : undefined}
             // El nombre es la pestaña ("$", "People"); la nota va de descripción, no de nombre.
-            aria-label={p.deshabilitada ? p.nombre : undefined}
+            aria-label={p.deshabilitada ? p.nombre : p.id === "alerts" && p.insignia ? p.insignia.nombreAccesible : undefined}
             aria-describedby={p.deshabilitada && p.titulo ? `pestana-${p.id}-nota` : undefined}
             title={p.titulo}
             tabIndex={!p.deshabilitada && p.id === activa ? 0 : -1}
@@ -103,9 +110,9 @@ export function Pestanas({ pestanas, inicial, pideAccion, paneles }: Props) {
             }}
           >
             {p.nombre}
-            {p.id === "alerts" && p.conteo ? (
-              <span className="alerta-mini" data-testid="conteo-alertas" data-nivel="amber">
-                {p.conteo}
+            {p.id === "alerts" && p.insignia ? (
+              <span className="alerta-mini" data-testid="conteo-alertas" data-nivel={p.insignia.nivel} data-pulso={pulso ? "si" : "no"}>
+                {p.insignia.conteo}
               </span>
             ) : null}
           </button>

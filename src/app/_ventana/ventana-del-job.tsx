@@ -11,13 +11,14 @@ import type { PropsRanuraBase } from "@/lib/ventana/ranuras";
 import { nombresDeEquipos, obtenerVentana, propuestaDeLaRequest } from "@/lib/ventana/servidor";
 import type { IdPestana, VentanaJob } from "@/lib/ventana/tipos";
 
+import { ProveedorDeAcciones } from "./accion-de-la-ventana";
 import { ActorDemo } from "./actor-demo";
 import { confirmarEnlace, rechazarEnlace } from "./acciones";
 import { BarraAcciones } from "./barra-acciones";
 import { Encabezado } from "./encabezado";
-import { PanelAlertas, PanelPropiedad } from "./paneles";
+import { PanelPropiedad } from "./paneles";
 import { Pestanas } from "./pestanas";
-import { RanuraAudit, RanuraBilling, RanuraConversacion, RanuraEnlace, RanuraTracker } from "./ranuras";
+import { RanuraAlertas, RanuraAudit, RanuraBilling, RanuraConversacion, RanuraEnlace, RanuraTracker } from "./ranuras";
 import { Sondeo } from "./sondeo";
 
 export type ModoVentana = "overlay" | "pagina";
@@ -77,7 +78,8 @@ function panelesDe(v: VentanaJob): Partial<Record<IdPestana, ReactNode>> {
         <PanelPropiedad ventana={v} />
       </>
     ),
-    alerts: <PanelAlertas ventana={v} />,
+    // Needs action ya leído y descontado (OPR-34 §5); la ranura lee Waiting y Resolved en su propia transacción.
+    alerts: <RanuraAlertas {...base} alertas={v.alertasLeidas} />,
   };
   if (v.pestanas.some((p) => p.id === "audit")) paneles.audit = <RanuraAudit {...base} />;
   if (v.pestanas.some((p) => p.id === "tracker")) paneles.tracker = <RanuraTracker {...base} />;
@@ -114,41 +116,45 @@ export async function VentanaDelJob({
 
   return (
     <article className="ventana" data-testid="ventana" data-etapa={ventana.etapa} data-request={ventana.requestId} data-modo={modo}>
-      {modo === "pagina" ? (
-        <nav className="ventana-nav">
-          <Link href="/">Board</Link>
-        </nav>
-      ) : null}
-
-      {bzzzbx.disponible ? null : (
-        <p className="franja-caida" role="status" data-testid="franja-bzzzbx">
-          BzzzBX unavailable · {bzzzbx.actualizadoEn ? `last update ${hora(bzzzbx.actualizadoEn, zona)}` : "no data yet"}
-        </p>
-      )}
-
-      <Encabezado ventana={ventana} />
-
-      <div className="ventana-acciones">
-        <BarraAcciones requestId={ventana.requestId} version={ventana.version} acciones={acciones} ventana={ventana} actorId={elegido} />
-        {operadores.length > 0 ? (
-          <ActorDemo operadores={operadores.map((o) => ({ id: o.id, nombre: o.nombre }))} elegido={elegido} />
+      {/* Los botones de las alertas abren acciones de la action bar (OPR-34 §5.3): comparten este contexto. */}
+      <ProveedorDeAcciones acciones={acciones}>
+        {modo === "pagina" ? (
+          <nav className="ventana-nav">
+            <Link href="/">Board</Link>
+          </nav>
         ) : null}
-      </div>
 
-      <div className="ventana-cuerpo">
-        <aside className="ventana-izquierda">
-          <Suspense fallback={<p aria-busy="true">Loading conversation…</p>}>
-            <RanuraConversacion
-              {...baseDe(ventana)}
-              hilos={ventana.hilos}
-              puedeEnviar={bzzzbx.disponible && ventana.etapa !== "cancelled"}
-            />
-          </Suspense>
-        </aside>
-        <section className="ventana-derecha">
-          <Pestanas pestanas={ventana.pestanas} inicial={ventana.inicial} pideAccion={pideAccion} paneles={panelesDe(ventana)} />
-        </section>
-      </div>
+        {bzzzbx.disponible ? null : (
+          <p className="franja-caida" role="status" data-testid="franja-bzzzbx">
+            BzzzBX unavailable · {bzzzbx.actualizadoEn ? `last update ${hora(bzzzbx.actualizadoEn, zona)}` : "no data yet"}
+          </p>
+        )}
+
+        <Encabezado ventana={ventana} />
+
+        <div className="ventana-acciones">
+          <BarraAcciones requestId={ventana.requestId} version={ventana.version} acciones={acciones} ventana={ventana} actorId={elegido} />
+          {operadores.length > 0 ? (
+            <ActorDemo operadores={operadores.map((o) => ({ id: o.id, nombre: o.nombre }))} elegido={elegido} />
+          ) : null}
+        </div>
+
+        <div className="ventana-cuerpo">
+          <aside className="ventana-izquierda">
+            <Suspense fallback={<p aria-busy="true">Loading conversation…</p>}>
+              <RanuraConversacion
+                {...baseDe(ventana)}
+                hilos={ventana.hilos}
+                puedeEnviar={bzzzbx.disponible && ventana.etapa !== "cancelled"}
+              />
+            </Suspense>
+          </aside>
+          <section className="ventana-derecha">
+            <Pestanas pestanas={ventana.pestanas} inicial={ventana.inicial} pideAccion={pideAccion} paneles={panelesDe(ventana)} />
+          </section>
+        </div>
+
+      </ProveedorDeAcciones>
 
       <Sondeo cursor={cursor} sondeoMs={SONDEO_MS} />
     </article>

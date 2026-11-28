@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { armarTablero } from "@/lib/tablero/armar";
 import { filasDeLaSeed, leidosDelFalso } from "@/lib/tablero/prueba-datos";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => "/" }));
 
 import { VistaTablero } from "./vista-tablero";
 
