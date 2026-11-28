@@ -118,6 +118,16 @@ describe("campos AI-marked (§10.2)", () => {
     expect(v.campos.property.abierta!.opciones.map((o) => o.origen)).toEqual(["ia", "alternativa"]);
   });
 
+  it("compara sin importar el orden de las claves: jsonb devuelve la ventana como {end, start}", () => {
+    const v = armarIa({
+      borrador: { ...VACIO, window_start: "09:00", window_end: "12:00" },
+      analisis: analisis("completed"),
+      sugerencias: [s("s1", "time_window", 1, { end: "12:00", start: "09:00" })],
+      nombres: {},
+    });
+    expect(v.campos.time_window.abierta?.igualAlBorrador).toBe(true);
+  });
+
   it("sin nombre (BzzzBX caído) el nombre sale `— —` y el ID como texto secundario", () => {
     const v = armarIa({ borrador, analisis: analisis("completed"), sugerencias: [s("s1", "property", 1, "bx-prop-0001")], nombres: {} });
     expect(v.campos.property.abierta).toMatchObject({ texto: "— —", secundario: "bx-prop-0001" });

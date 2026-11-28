@@ -102,7 +102,14 @@ function estaVacio(campo: CampoDeIa, b: BorradorLeido): boolean {
   }
 }
 
-const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Con las claves en orden: jsonb las devuelve ordenadas por largo, no como las armó el borrador. */
+const canonico = (v: unknown): string =>
+  JSON.stringify(v, (_clave, valor) =>
+    valor && typeof valor === "object" && !Array.isArray(valor)
+      ? Object.fromEntries(Object.entries(valor as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : 1)))
+      : valor,
+  );
+const igual = (a: unknown, b: unknown) => canonico(a) === canonico(b);
 
 /** El valor con palabras: el nombre que leyó BzzzBX, o `— —` y el ID como texto secundario. */
 function textoDe(campo: CampoDeIa, valor: unknown, nombres: Record<string, string>, espacios: { id: string; label: string }[]): { texto: string; secundario: string | null } {
