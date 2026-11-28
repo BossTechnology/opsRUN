@@ -83,13 +83,13 @@ $$;
 -- Permisos
 -- ---------------------------------------------------------------------------
 select ok(has_function_privilege('opsrun_app', 'opsrun.add_note(uuid, text)', 'execute'), 'opsrun_app ejecuta add_note');
-select ok(has_function_privilege('opsrun_app', 'opsrun.send_email(uuid, text, text, text, uuid)', 'execute'), 'opsrun_app ejecuta send_email');
-select ok(has_function_privilege('opsrun_app', 'opsrun.send_text(uuid, text, text, text, uuid)', 'execute'), 'opsrun_app ejecuta send_text');
+select ok(has_function_privilege('opsrun_app', 'opsrun.send_email(uuid, text, text, text, uuid, text, integer)', 'execute'), 'opsrun_app ejecuta send_email');
+select ok(has_function_privilege('opsrun_app', 'opsrun.send_text(uuid, text, text, text, uuid, text, integer)', 'execute'), 'opsrun_app ejecuta send_text');
 select ok(has_function_privilege('opsrun_app', 'opsrun.discard_ai_draft(uuid)', 'execute'), 'opsrun_app ejecuta discard_ai_draft');
 select ok(has_function_privilege('opsrun_app', 'opsrun.record_instruction_delivery(text, text)', 'execute'), 'opsrun_app ejecuta record_instruction_delivery');
 select ok(has_function_privilege('opsrun_app', 'opsrun.resolve_instruction(text, opsrun.instruction_status, text, text, text, text)', 'execute'),
   'opsrun_app ejecuta resolve_instruction');
-select ok(not has_function_privilege('authenticated', 'opsrun.send_email(uuid, text, text, text, uuid)', 'execute'),
+select ok(not has_function_privilege('authenticated', 'opsrun.send_email(uuid, text, text, text, uuid, text, integer)', 'execute'),
   'authenticated no ejecuta send_email');
 select ok(not has_function_privilege('public', 'opsrun.resolve_instruction(text, opsrun.instruction_status, text, text, text, text)', 'execute'),
   'PUBLIC no ejecuta resolve_instruction');

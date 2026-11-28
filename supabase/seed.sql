@@ -31,23 +31,6 @@ select 'operator_added', 'system', now() - interval '30 days', jsonb_build_objec
 from opsrun.operator;
 
 -- ---------------------------------------------------------------------------
--- Plantillas, versión 1 (OPR-18)
--- ---------------------------------------------------------------------------
-insert into opsrun.message_template (key, version, channel, subject, body, active) values
-  ('cleaner_confirmation_request', 1, 'text', null,
-   'New job: {{property}} {{space}} on {{date}}, {{window}}. Can you confirm?', true),
-  ('reschedule_request', 1, 'text', null,
-   'Can we move {{property}} {{space}} to {{date}}, {{window}}? Please confirm.', true),
-  ('cancellation_cleaner', 1, 'text', null,
-   'The job at {{property}} {{space}} on {{date}} is cancelled.', true),
-  ('cancellation_requester', 1, 'email', 'Cleaning cancelled',
-   'The cleaning at {{property}} {{space}} on {{date}} has been cancelled.', true),
-  ('requester_scheduled', 1, 'email', 'Cleaning scheduled',
-   'Your cleaning at {{property}} {{space}} is scheduled for {{date}}, {{window}}.', true),
-  ('requester_done', 1, 'email', 'Cleaning done',
-   'The cleaning at {{property}} {{space}} is done.', true);
-
--- ---------------------------------------------------------------------------
 -- Requests: una por etapa, más una en Requests sin dueño.
 --   Los crosswalk IDs que se arman (bx-job-000N, bx-msg-000N, bx-thread-000N,
 --   EX-0000N) salen del último dígito del id de la request, no del R number:
