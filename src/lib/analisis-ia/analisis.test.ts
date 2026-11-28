@@ -5,7 +5,7 @@
  * la clave, el ID del mensaje original, el del hilo y los campos; a la base, solo las
  * propuestas con las claves de §4.1.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import { BzzzbxNoDisponible, IaLimitada, IaRechazada } from "../bzzzbx/errores";
 import { crearFalso, RelojManual } from "../bzzzbx/falso";
@@ -37,7 +37,7 @@ const listo = (propuestas: unknown[] = [{ campo: "unit", rank: 1, valor: "4B", m
 type Montaje = {
   datos: DatosDeAnalisis & { llamadas: string[]; cierres: CierreDeAnalisis[] };
   ia: IaBzzzbx & { pedidos: PedidoDeAnalisis[]; resultados: Map<string, ResultadoDeAnalisis | null> };
-  log: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  log: { info: Mock<(...a: unknown[]) => void>; warn: Mock<(...a: unknown[]) => void>; error: Mock<(...a: unknown[]) => void> };
 };
 
 function montar(opciones: {
@@ -79,7 +79,7 @@ function montar(opciones: {
     },
     resultadoDeAnalisis: async (clave: string) => (opciones.resultado ? opciones.resultado(clave) : (resultados.get(clave) ?? null)),
   };
-  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const log = { info: vi.fn<(...a: unknown[]) => void>(), warn: vi.fn<(...a: unknown[]) => void>(), error: vi.fn<(...a: unknown[]) => void>() };
   return { datos, ia, log };
 }
 

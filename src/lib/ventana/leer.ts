@@ -31,14 +31,24 @@ export function conPresupuesto<T>(trabajo: Promise<T>, ms: number): Promise<T> {
   return Promise.race([trabajo, vencido]).finally(() => clearTimeout(temporizador));
 }
 
-async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzzbx): Promise<LeidosVentana> {
+/** Lo que la IA propuso (OPR-36 §7): sus nombres se leen junto a lo demás, dentro del mismo presupuesto, y nunca se guardan. */
+export type ExtrasDeLectura = { propiedades: string[]; servicios: string[]; clientes: string[]; contactos: string[] };
+
+/** Suma lo leído de los IDs propuestos a lo ya leído, sin repetir. */
+function sumar<T>(base: T[], extra: T[], id: (x: T) => string): T[] {
+  const vistos = new Set(base.map(id));
+  return [...base, ...extra.filter((x) => !vistos.has(id(x)))];
+}
+
+async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzzbx, extras?: ExtrasDeLectura): Promise<LeidosVentana> {
   // Una sola fila: el original va por `bzzzbx_thread_id`, como en el tablero.
-  const [base, contacto, equipo, fotos] = await Promise.all([
+  const [base, contacto, equipo, fotos, propuestas] = await Promise.all([
     leerDeBzzzbx([{ ...fila, bzzzbx_thread_id: hilos[0] ?? fila.bzzzbx_thread_id }], lectura),
     fila.bzzzbx_contact_id ? lectura.obtener("contact", fila.bzzzbx_contact_id) : null,
     fila.bzzzbx_team_id ? lectura.obtener("cleaner_team", fila.bzzzbx_team_id) : null,
     // La galería del Job tracker (OPR-30): solo la lista; la imagen llega por /api/fotos.
     fila.bzzzbx_job_id ? lectura.listarPor("photo", { bzzzbx_job_id: fila.bzzzbx_job_id }) : ([] as Photo[]),
+    leerPropuestas(lectura, extras),
   ]);
 
   // Los demás hilos de la request y las alertas de los mensajes de todos (S-8).
@@ -57,12 +67,27 @@ async function leerTodo(fila: FilaVentana, hilos: string[], lectura: LecturaBzzz
   // El puerto agrega `version` y `leido_en`; son parte del tipo `Leido`.
   return {
     ...base,
+    properties: sumar(base.properties, propuestas.propiedades, (p) => p.bzzzbx_property_id),
+    services: sumar(base.services, propuestas.servicios, (s) => s.bzzzbx_service_id),
+    customers: sumar(base.customers, propuestas.clientes, (c) => c.bzzzbx_customer_id),
     mensajes,
     alertas: [...alertas.values()],
-    contactos: contacto ? [contacto] : [],
+    contactos: sumar(contacto ? [contacto] : [], propuestas.contactos, (c) => c.bzzzbx_contact_id),
     equipos: equipo ? [equipo] : [],
     fotos,
   };
+}
+
+async function leerPropuestas(lectura: LecturaBzzzbx, extras?: ExtrasDeLectura) {
+  const pedir = <E extends "property" | "service" | "customer" | "contact">(entidad: E, ids: string[] | undefined) =>
+    ids && ids.length > 0 ? lectura.obtenerVarios(entidad, ids) : Promise.resolve([]);
+  const [propiedades, servicios, clientes, contactos] = await Promise.all([
+    pedir("property", extras?.propiedades),
+    pedir("service", extras?.servicios),
+    pedir("customer", extras?.clientes),
+    pedir("contact", extras?.contactos),
+  ]);
+  return { propiedades, servicios, clientes, contactos };
 }
 
 export type EntradaDeLectura = {
@@ -72,6 +97,8 @@ export type EntradaDeLectura = {
   ahora: Date;
   memoria: MemoriaVentana;
   presupuestoMs?: number;
+  /** Los IDs que propuso la IA, para leer también sus nombres (OPR-36). */
+  extras?: ExtrasDeLectura;
 };
 
 export async function leerVentanaDeBzzzbx({
@@ -81,9 +108,10 @@ export async function leerVentanaDeBzzzbx({
   ahora,
   memoria,
   presupuestoMs = PRESUPUESTO_BZZZBX_MS,
+  extras,
 }: EntradaDeLectura): Promise<{ leidos: LeidosVentana; bzzzbx: { disponible: boolean; actualizadoEn: string | null } }> {
   try {
-    const leidos = await conPresupuesto(leerTodo(fila, hilos, lectura), presupuestoMs);
+    const leidos = await conPresupuesto(leerTodo(fila, hilos, lectura, extras), presupuestoMs);
     const en = ahora.toISOString();
     memoria.delete(fila.id); // se vuelve a insertar al final: la más reciente
     memoria.set(fila.id, { leidos, en });

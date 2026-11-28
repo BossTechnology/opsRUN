@@ -7,6 +7,7 @@ import "server-only";
  */
 import { cache } from "react";
 
+import { armarIa } from "../analisis-ia/armar";
 import { armarBilling, type VistaBilling } from "../billing/armar";
 import { comoOpsrunApp } from "../db/servidor";
 import { crearDatosDeEnlace } from "../fase-a/datos-sql";
@@ -16,6 +17,7 @@ import { armarTracker, type VistaTracker } from "../tracker/armar";
 
 import { alertasAbiertas, armarVentana, type EntradaVentana } from "./armar";
 import { leerParaConfirmar } from "./confirmar";
+import { idsProponidos, leerIa, nombresParaIa } from "./ia";
 import { esIdDeRequest, leerDeOpsrun } from "./consultas";
 import { leerVentanaDeBzzzbx, type MemoriaVentana } from "./leer";
 import { candidatosParaElCambio, propuestaParaLaVentana, type PropuestaDeRanura } from "./propuesta";
@@ -37,10 +39,14 @@ async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab
   // Todo de opsRUN en una sola transacción de solo lectura: la ventana y lo que piden los paneles de Confirm (OPR-28).
   const leido = await comoOpsrunApp(async (db) => {
     const base = await leerDeOpsrun(db, requestId);
-    return base ? { base, confirmar: await leerParaConfirmar(db, requestId) } : null;
+    if (!base) return null;
+    const confirmar = await leerParaConfirmar(db, requestId);
+    // El análisis de IA (OPR-36) solo se ve en Requests: una lectura, nunca un pedido.
+    const ia = base.fila.status === "open" ? await leerIa(db, requestId) : null;
+    return { base, confirmar, ia };
   });
   if (!leido) return null;
-  const { base: deOpsrun, confirmar } = leido;
+  const { base: deOpsrun, confirmar, ia } = leido;
 
   const ahora = new Date();
   const { leidos, bzzzbx } = await leerVentanaDeBzzzbx({
@@ -49,7 +55,10 @@ async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab
     lectura: lecturaOAusente(),
     ahora,
     memoria: memoria(),
+    // Los nombres de lo que propuso la IA, dentro del mismo presupuesto (nunca se guardan).
+    extras: ia ? idsProponidos(ia.sugerencias) : undefined,
   });
+  const propiedad = leidos.properties.find((p) => p.bzzzbx_property_id === deOpsrun.fila.bzzzbx_property_id);
   return {
     fila: deOpsrun.fila,
     leidos,
@@ -63,6 +72,15 @@ async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab
     respuestaDelCleaner: confirmar.respuestaDelCleaner,
     sugerencias: confirmar.sugerencias,
     esperas: deOpsrun.esperas,
+    ia: ia
+      ? armarIa({
+          borrador: deOpsrun.fila,
+          analisis: ia.analisis,
+          sugerencias: ia.sugerencias,
+          nombres: nombresParaIa(leidos),
+          espacios: propiedad?.units.map((u) => ({ id: u.bzzzbx_space_id, label: u.label })),
+        })
+      : null,
   };
 }
 
