@@ -49,6 +49,10 @@ conBase("el análisis de IA contra la base", () => {
 
   /** Una request open con su correo original (lo que deja la entrada), como el administrador. */
   async function nuevaRequest(n: string, opciones: { recibidaHaceMin?: number; creadaHaceHoras?: number } = {}): Promise<string> {
+    // Como el dueño de las tablas (el administrador del CI no escribe en `opsrun`): solo dentro de esta transacción.
+    await admin.query("begin");
+    await admin.query("grant opsrun_migrador to current_user with inherit true, set true");
+    await admin.query("set local role opsrun_migrador");
     const { rows } = await admin.query<{ id: string }>(
       `insert into opsrun.request (received_at, created_at) values (now() - make_interval(mins => $1), now() - make_interval(hours => $2)) returning id::text`,
       [opciones.recibidaHaceMin ?? 1, opciones.creadaHaceHoras ?? 0],
@@ -60,6 +64,9 @@ conBase("el análisis de IA contra la base", () => {
        values ($1, $2, $3, 'email', 'inbound', true, 'system')`,
       [id, `bx-msg-${corrida}-${n}`, `bx-thread-${corrida}-${n}`],
     );
+    await admin.query("reset role");
+    await admin.query("revoke opsrun_migrador from current_user");
+    await admin.query("commit");
     return id;
   }
 
