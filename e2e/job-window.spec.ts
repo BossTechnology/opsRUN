@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { esperarVentanaLista } from "./ventana";
+
 /**
  * La Job window (OPR-26, criterios A1 a A16 del spec) contra el build de
  * producción, la seed y el stand-in de BzzzBX. Los estados que la seed no trae
@@ -569,6 +571,7 @@ test("OPR-28: rechazar un candidato con motivo lo saca de la lista y queda en Au
   });
 
   await page.goto(`/job/${R(7)}?tab=property`);
+  await esperarVentanaLista(page);
   await page.getByLabel("Acting as").selectOption(OPERADOR_A1);
   await expect(page.getByLabel("Acting as")).toHaveValue(OPERADOR_A1);
   const fila = page.locator(`${ENLACE} [data-testid="candidato-enlace"][data-job="${jobId}"]`);
@@ -603,6 +606,7 @@ test("OPR-28: de punta a punta, elegir actor, abrir R7 y confirmar bx-job-0107: 
     await (await tarjetaDelTablero(page, R(7))).click();
     await expect(page.getByTestId("encabezado")).toBeVisible();
     await expect(page.getByTestId("stage")).toHaveText("Requests");
+    await esperarVentanaLista(page);
     await page.getByLabel("Acting as").selectOption(OPERADOR_A1);
     await expect(page.getByLabel("Acting as")).toHaveValue(OPERADOR_A1);
     // La propuesta está en la pestaña de la propiedad, que es la inicial de R7.

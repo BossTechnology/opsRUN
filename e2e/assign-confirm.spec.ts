@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { actuarComo } from "./ventana";
+
 /**
  * Assign / Reassign y Confirm details, sender y cleaner (OPR-28, criterios D1 a
  * D5 del spec docs/spec/opr-28-assign-confirm.md §9.3) contra el build de
@@ -45,14 +47,6 @@ const contar = async (sql: string, parametros: unknown[]) => Number((await consu
 const pestana = (page: Page, id: string) => page.locator(`[data-testid="pestana"][data-pestana="${id}"]`);
 const ENLACE = '[data-ranura="enlace"]';
 const audit = (page: Page) => page.locator('[data-ranura="audit"]');
-
-async function actuarComo(page: Page, operadorId: string) {
-  const selector = page.getByLabel("Acting as");
-  await expect(async () => {
-    await selector.selectOption(operadorId);
-    await expect(selector).toHaveValue(operadorId, { timeout: 1000 });
-  }).toPass({ timeout: 10_000 });
-}
 
 /** Elige una acción en la action bar, esperando a que la página termine de hidratarse. */
 async function elegirAccion(page: Page, codigo: string) {

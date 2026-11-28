@@ -3,6 +3,7 @@
 Una línea por cambio entregado, en lenguaje de usuario.
 
 ## Sin publicar
+- E2E de Alerts y de la Job window estables: esperan a que la ventana termine de llegar antes de elegir "Acting as" (si no, React deja la ranura de Alerts un momento dos veces en el DOM), y un fallo en Alerts ya no arrastra a las demás al repetir el grupo. Sin cambios en la app.
 - OPR-34: la pestaña Alerts de la Job window y el panel de Alerts de la barra superior. La pestaña trae Needs action (regla, motivo, tiempo abierta y el botón que la arregla, que abre la acción en la action bar sin ejecutar nada), Waiting (preguntas abiertas al cleaner) y Resolved (quién la resolvió y cómo, repeticiones en el job), con una insignia roja, ámbar o gris que late con una roja nueva. El ícono de la barra abre el panel con las alertas de toda la operación y filtros por nivel, regla, etapa y operador. Un registrador en el ciclo de fondo anota cada apertura, cambio de nivel y resolución en el historial y en Audit.
 - OPR-30 a OPR-32: el observador de hechos de PINCH corre en el ciclo de fondo (tarea `observador_etapas`, cada 15 s): Audit trae Checked in, Started, Completed y Paid · Observed de un job sin que nadie abra la pantalla, y una lectura sigue sin poder llamarlo.
 - Una lectura nunca escribe: el sondeo del tablero (`/api/tablero/cambios`) ya no cierra los envíos de correo y texto; lo hace una tarea del ciclo de fondo cada 5 s, y un guard falla si alguna lectura la vuelve a llamar.
