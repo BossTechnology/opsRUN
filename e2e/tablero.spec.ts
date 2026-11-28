@@ -83,13 +83,14 @@ test("estados de color de la seed: borde rojo, verde pagada en la fila paid", as
 // Ninguna prueba de aquí cierra las alertas de la seed (R1, R4, R8, R9): el registrador de alertas (OPR-34) anota el cierre
 // en opsRUN y una alerta resuelta ahí no se reabre, así que ya no contaría en las pruebas que vienen. La tarjeta "oscura
 // sin dueño" la cubre `armar.test.ts`.
-test("sombreado rojo y Delayed", async ({ page }) => {
+test("sombreado rojo y Delayed", async ({ page }, testInfo) => {
   await control(page, { accion: "cambiar", entidad: "job_health", id: "bx-job-0003", parche: { status: "breached" } });
   await control(page, {
     accion: "poner",
     entidad: "alert_result",
     valor: {
-      bzzzbx_alert_id: "bx-alert-0100",
+      // Propio de cada intento: lo que el registrador ya resolvió no se reabre y el reintento del grupo serial lo reusaría.
+      bzzzbx_alert_id: `bx-alert-0100-${testInfo.retry}`,
       sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-0003" },
       rule_id: "OPS-010",
       rule_version: "1",

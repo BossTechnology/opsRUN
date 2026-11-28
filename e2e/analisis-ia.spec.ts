@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { actuarComo, esperarVentanaLista } from "./ventana";
+
 /**
  * El análisis de la request por IA (OPR-36, criterios I1 a I9 del spec
  * docs/spec/opr-36-analisis-ia.md §15.3) contra el build de producción, la seed y el
@@ -81,14 +83,6 @@ async function correoConIa(page: Page, ia: string): Promise<{ requestId: string;
   return { requestId, correo };
 }
 
-async function actuarComo(page: Page, operadorId: string) {
-  const selector = page.getByLabel("Acting as");
-  await expect(async () => {
-    await selector.selectOption(operadorId);
-    await expect(selector).toHaveValue(operadorId, { timeout: 1000 });
-  }).toPass({ timeout: 10_000 });
-}
-
 /** Elige una acción en la action bar, esperando a que la página termine de hidratarse. */
 async function elegirAccion(page: Page, codigo: string) {
   await expect(async () => {
@@ -105,6 +99,7 @@ const chip = (page: Page, clave: string, ia?: string) => (ia ? campo(page, clave
 async function esperarElAnalisis(page: Page, requestId: string, timeout = UN_MINUTO) {
   await expect(async () => {
     await page.goto(`/job/${requestId}`);
+    await esperarVentanaLista(page);
     await expect(chip(page, "property")).toBeVisible({ timeout: 3000 });
   }).toPass({ timeout, intervals: [3000] });
 }
@@ -238,7 +233,7 @@ test("I6: corregir queda registrado: Change de las camas a 2 y Save quitan el ch
   await actuarComo(page, OPS_UNO);
 
   await page.getByRole("button", { name: "Change AI beds" }).click();
-  await page.getByRole("spinbutton", { name: "Beds" }).fill("2");
+  await page.getByRole("spinbutton", { name: "Beds", exact: true }).fill("2");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(chip(page, "beds")).toHaveCount(0);
   await expect(campo(page, "beds")).toContainText("2");
