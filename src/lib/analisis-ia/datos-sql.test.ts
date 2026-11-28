@@ -140,29 +140,11 @@ conBase("el análisis de IA contra la base", () => {
     expect(await datos().candidatasDelBarrido(200)).not.toContain(id);
   });
 
-  it("registrar guarda el resultado con el actor de sistema y deja el Audit del actor ai; un segundo registro es duplicate", async () => {
-    const id = await nuevaRequest("registrar");
-    const analisis = (await datos().iniciar(id))!;
-    const cierre = {
-      analisisId: analisis,
-      estado: "completed" as const,
-      modelo: "example-model",
-      errorCode: null,
-      definitivo: false,
-      propuestas: [
-        { field: "unit" as const, rank: 1 as const, value: "4B", reason: "Subject line." },
-        { field: "beds" as const, rank: 1 as const, value: 3, reason: null },
-      ],
-    };
-    expect(await datos().registrar(cierre)).toBe("recorded");
-    expect(await datos().registrar(cierre)).toBe("duplicate");
-    const { rows } = await admin.query<{ unit: string; beds: number }>("select unit, beds from opsrun.request where id = $1", [id]);
-    expect(rows[0]).toEqual({ unit: "4B", beds: 3 });
-    const audit = await admin.query<{ event_type: string; actor_kind: string }>(
-      "select event_type, actor_kind::text from opsrun.audit_event where request_id = $1 and event_type like 'ai_%'",
-      [id],
-    );
-    expect(audit.rows).toEqual([{ event_type: "ai_analysis_completed", actor_kind: "ai" }]);
+  it("la carrera: dos conexiones que abren el análisis de la misma request dejan un solo pending", async () => {
+    const id = await nuevaRequest("carrera-inicio");
+    const [x, y] = await Promise.all([datos().iniciar(id), datos().iniciar(id)]);
+    expect([x, y].filter((v) => v !== null)).toHaveLength(1);
+    expect((await analisisDe(id)).filter((a) => a.status === "pending")).toHaveLength(1);
   });
 
   it("un resultado inválido llega a la base y la base lo rechaza con OP046 sin escribir nada", async () => {
@@ -181,46 +163,71 @@ conBase("el análisis de IA contra la base", () => {
     expect((await analisisDe(id))[0]!.status).toBe("pending");
   });
 
-  it("la carrera: dos conexiones que abren el análisis de la misma request dejan un solo pending", async () => {
-    const id = await nuevaRequest("carrera-inicio");
-    const [x, y] = await Promise.all([datos().iniciar(id), datos().iniciar(id)]);
-    expect([x, y].filter((v) => v !== null)).toHaveLength(1);
-    expect((await analisisDe(id)).filter((a) => a.status === "pending")).toHaveLength(1);
-  });
 
-  it("la carrera: dos registros del mismo análisis a la vez dejan un solo resultado", async () => {
-    const id = await nuevaRequest("carrera-registro");
-    const analisis = (await datos().iniciar(id))!;
-    const cierre = {
-      analisisId: analisis,
-      estado: "completed" as const,
-      modelo: "example-model",
-      errorCode: null,
-      definitivo: false,
-      propuestas: [{ field: "unit" as const, rank: 1 as const, value: "9Z", reason: null }],
-    };
-    const resultados = await Promise.all([datos().registrar(cierre), datos().registrar(cierre)]);
-    expect([...resultados].sort()).toEqual(["duplicate", "recorded"]);
-    const { rows } = await admin.query<{ n: string }>("select count(*)::text as n from opsrun.ai_suggestion where request_id = $1", [id]);
-    expect(rows[0]!.n).toBe("1");
-    const eventos = await admin.query<{ n: string }>(
-      "select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'ai_analysis_completed'",
-      [id],
-    );
-    expect(eventos.rows[0]!.n).toBe("1");
-  });
+  // Lo que sigue escribe en Audit. Otras pruebas de integración (la del registrador de alertas) cuentan los eventos de Audit de
+  // toda la base mientras Vitest corre los archivos en paralelo, así que estas esperan un momento a que esas terminen.
+  describe("lo que deja Audit", () => {
+    beforeAll(() => new Promise((resolver) => setTimeout(resolver, 2500)));
 
-  it("un timed_out y su reintento: no hay reintento antes de 60 s, y un rechazo definitivo no se reintenta", async () => {
-    const id = await nuevaRequest("reintento");
-    const primero = (await datos().iniciar(id))!;
-    await datos().registrar({ analisisId: primero, estado: "timed_out", modelo: null, propuestas: [], errorCode: null, definitivo: false });
-    expect(await datos().iniciar(id)).toBeNull();
-    // El barrido todavía la propone (no hay pending ni completed), y la base decide que no toca.
-    expect(await datos().candidatasDelBarrido(200)).toContain(id);
+    it("registrar guarda el resultado con el actor de sistema y deja el Audit del actor ai; un segundo registro es duplicate", async () => {
+      const id = await nuevaRequest("registrar");
+      const analisis = (await datos().iniciar(id))!;
+      const cierre = {
+        analisisId: analisis,
+        estado: "completed" as const,
+        modelo: "example-model",
+        errorCode: null,
+        definitivo: false,
+        propuestas: [
+          { field: "unit" as const, rank: 1 as const, value: "4B", reason: "Subject line." },
+          { field: "beds" as const, rank: 1 as const, value: 3, reason: null },
+        ],
+      };
+      expect(await datos().registrar(cierre)).toBe("recorded");
+      expect(await datos().registrar(cierre)).toBe("duplicate");
+      const { rows } = await admin.query<{ unit: string; beds: number }>("select unit, beds from opsrun.request where id = $1", [id]);
+      expect(rows[0]).toEqual({ unit: "4B", beds: 3 });
+      const audit = await admin.query<{ event_type: string; actor_kind: string }>(
+        "select event_type, actor_kind::text from opsrun.audit_event where request_id = $1 and event_type like 'ai_%'",
+        [id],
+      );
+      expect(audit.rows).toEqual([{ event_type: "ai_analysis_completed", actor_kind: "ai" }]);
+    });
 
-    const definitiva = await nuevaRequest("definitiva");
-    const unico = (await datos().iniciar(definitiva))!;
-    await datos().registrar({ analisisId: unico, estado: "failed", modelo: null, propuestas: [], errorCode: "message_unknown", definitivo: true });
-    expect(await datos().candidatasDelBarrido(200)).not.toContain(definitiva);
+    it("la carrera: dos registros del mismo análisis a la vez dejan un solo resultado", async () => {
+      const id = await nuevaRequest("carrera-registro");
+      const analisis = (await datos().iniciar(id))!;
+      const cierre = {
+        analisisId: analisis,
+        estado: "completed" as const,
+        modelo: "example-model",
+        errorCode: null,
+        definitivo: false,
+        propuestas: [{ field: "unit" as const, rank: 1 as const, value: "9Z", reason: null }],
+      };
+      const resultados = await Promise.all([datos().registrar(cierre), datos().registrar(cierre)]);
+      expect([...resultados].sort()).toEqual(["duplicate", "recorded"]);
+      const { rows } = await admin.query<{ n: string }>("select count(*)::text as n from opsrun.ai_suggestion where request_id = $1", [id]);
+      expect(rows[0]!.n).toBe("1");
+      const eventos = await admin.query<{ n: string }>(
+        "select count(*)::text as n from opsrun.audit_event where request_id = $1 and event_type = 'ai_analysis_completed'",
+        [id],
+      );
+      expect(eventos.rows[0]!.n).toBe("1");
+    });
+
+    it("un timed_out y su reintento: no hay reintento antes de 60 s, y un rechazo definitivo no se reintenta", async () => {
+      const id = await nuevaRequest("reintento");
+      const primero = (await datos().iniciar(id))!;
+      await datos().registrar({ analisisId: primero, estado: "timed_out", modelo: null, propuestas: [], errorCode: null, definitivo: false });
+      expect(await datos().iniciar(id)).toBeNull();
+      // El barrido todavía la propone (no hay pending ni completed), y la base decide que no toca.
+      expect(await datos().candidatasDelBarrido(200)).toContain(id);
+
+      const definitiva = await nuevaRequest("definitiva");
+      const unico = (await datos().iniciar(definitiva))!;
+      await datos().registrar({ analisisId: unico, estado: "failed", modelo: null, propuestas: [], errorCode: "message_unknown", definitivo: true });
+      expect(await datos().candidatasDelBarrido(200)).not.toContain(definitiva);
+    });
   });
 });
