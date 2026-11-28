@@ -214,8 +214,11 @@ test("A5: el nombre de la pestaña de la propiedad", async ({ page }) => {
   await expect(pestana(page, "property")).toHaveText("Placeholder House");
 });
 
-test("A6: abre en Alerts si una alerta pide acción, y vuelve a la propiedad al resolverse", async ({ page }) => {
+test("A6: abre en Alerts si una alerta pide acción, y vuelve a la propiedad al resolverse", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
+  // Una alerta que el registrador vio y resolvió no se reabre: con el mismo id, el reintento del grupo (serial) no vería nada.
+  const a1 = `bx-alert-a601-${testInfo.retry}`;
+  const a2 = `bx-alert-a602-${testInfo.retry}`;
   // Una alerta propia de la prueba, en R3: las de la seed (R1, R4, R8, R9) las necesita la pestaña Alerts de OPR-34 y, una
   // vez resueltas en opsRUN por el registrador, no se reabren.
   const alertaPropia = (id: string) =>
@@ -235,22 +238,22 @@ test("A6: abre en Alerts si una alerta pide acción, y vuelve a la propiedad al 
     });
   const filas = () => page.getByTestId("alertas-needs-action").getByTestId("alerta");
 
-  await alertaPropia("bx-alert-a601");
+  await alertaPropia(a1);
   await page.goto(`/job/${R(3)}`);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
   await expect(filas()).toHaveCount(1);
   await expect(filas()).toContainText("Open for 2 days.");
 
-  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-a601", parche: { cleared_at: new Date().toISOString() } });
+  await control(page, { accion: "cambiar", entidad: "alert_result", id: a1, parche: { cleared_at: new Date().toISOString() } });
   await expect(pestana(page, "property")).toHaveAttribute("aria-selected", "true", { timeout: 60_000 });
 
   // Elegida a mano con ?tab=alerts, se queda aunque ya no haya alertas.
   await control(page, { accion: "reiniciar" });
-  await alertaPropia("bx-alert-a602");
+  await alertaPropia(a2);
   await page.goto(`/job/${R(3)}?tab=alerts`);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("conteo-alertas")).toHaveText("1");
-  await control(page, { accion: "cambiar", entidad: "alert_result", id: "bx-alert-a602", parche: { cleared_at: new Date().toISOString() } });
+  await control(page, { accion: "cambiar", entidad: "alert_result", id: a2, parche: { cleared_at: new Date().toISOString() } });
   // La ventana se refrescó (el conteo se fue) y sigue en Alerts.
   await expect(page.getByTestId("conteo-alertas")).toHaveCount(0, { timeout: 60_000 });
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
@@ -435,9 +438,10 @@ test("A14: las ranuras en su lugar", async ({ page }) => {
   await page.goto(`/job/${R(3)}`);
   await expect(page.locator('[data-ranura="enlace"]')).toHaveCount(0); // solo en Requests
   await pestana(page, "audit").click();
-  await expect(page.locator('[data-ranura="audit"]')).toBeVisible();
+  // Mientras llega la lista, el marcador "Loading audit…" lleva el mismo `data-ranura`: se espera la sección ya llena (`data-testid`).
+  await expect(page.locator('[data-ranura="audit"][data-testid="audit"]')).toBeVisible();
   // OPR-35 la llenó: ya no es el marcador, es la lista de Audit.
-  await expect(page.locator('[data-ranura="audit"]').getByRole("list", { name: "Audit" })).toBeVisible();
+  await expect(page.locator('[data-ranura="audit"][data-testid="audit"]').getByRole("list", { name: "Audit" })).toBeVisible();
 
   // OPR-30 y OPR-32 las llenaron: ya no es el marcador, es la sección con su contenido (el marcador "Loading…" del Suspense lleva el mismo `data-ranura`).
   await page.goto(`/job/${R(4)}?tab=tracker`);

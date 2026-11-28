@@ -187,8 +187,11 @@ test("L2: con prefers-reduced-motion el color cambia y no hay animación", async
   await expect(insignia(page)).toHaveCSS("animation-name", "none");
 });
 
-test("L3: abre en Alerts con algo en Needs action, vuelve a la propiedad al resolverse, y Waiting solo no la abre", async ({ page }) => {
+test("L3: abre en Alerts con algo en Needs action, vuelve a la propiedad al resolverse, y Waiting solo no la abre", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
+  // Una alerta que el registrador vio y resolvió no se reabre: con el mismo id, el reintento del grupo (serial) no vería nada.
+  const a1 = `bx-alert-0301-${testInfo.retry}`;
+  const a2 = `bx-alert-0302-${testInfo.retry}`;
   // R1 abre en Alerts; R2 (solo Waiting) abre en la propiedad.
   await page.goto(`/job/${R(1)}`);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
@@ -197,19 +200,19 @@ test("L3: abre en Alerts con algo en Needs action, vuelve a la propiedad al reso
   await expect(waiting(page)).toBeHidden(); // la pestaña Alerts no es la elegida
 
   // Una alerta propia en R3 (las de la seed las usan otras pruebas): abre en Alerts y, al cerrarla, vuelve sola en menos de 1 minuto.
-  await poner(page, "bx-alert-0301", { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
+  await poner(page, a1, { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
   await page.goto(`/job/${R(3)}`);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
-  await expect(deAlerta(needs(page), "bx-alert-0301")).toBeVisible();
-  await cerrar(page, "bx-alert-0301");
+  await expect(deAlerta(needs(page), a1)).toBeVisible();
+  await cerrar(page, a1);
   await expect(pestana(page, "property")).toHaveAttribute("aria-selected", "true", UNA_VUELTA);
 
   // Elegida a mano con ?tab=alerts, se queda aunque ya no haya nada (OPR-26 A6).
   await control(page, { accion: "reiniciar" });
-  await poner(page, "bx-alert-0302", { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
+  await poner(page, a2, { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
   await page.goto(`/job/${R(3)}?tab=alerts`);
   await expect(insignia(page)).toHaveText("1");
-  await cerrar(page, "bx-alert-0302");
+  await cerrar(page, a2);
   await expect(insignia(page)).toHaveCount(0, UNA_VUELTA);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
   await expect(needs(page).getByTestId("sin-alertas")).toBeVisible();
@@ -335,10 +338,14 @@ test("L11: el botón no corre lo que no está disponible: Go lo rechaza el servi
   await poner(page, "bx-alert-1101", { tipo: "request", request_id: R(1) }, "OPS-002", "amber", "Open for 2 days.");
   await abrir(page, R(1), "alerts");
   await actuarComo(page, OPS_UNO);
-  const boton = deRegla(needs(page), "OPS-002").getByTestId("alerta-boton");
+  // En CI el selector y el sondeo de 15 s refrescan la ventana y el DOM llega a tener dos copias de Needs action (el
+  // error de la corrida fue "resolved to 2 elements": los botones nth(1) y nth(3) de dos copias con OPS-001 y OPS-002).
+  // Solo cuenta la copia que se ve, y se lee una vez.
+  const necesitan = needs(page).filter({ visible: true }).first();
+  const boton = deRegla(necesitan, "OPS-002").getByTestId("alerta-boton");
   await expect(boton).toHaveText("Schedule");
   await expect(boton).toBeDisabled();
-  await expect(deRegla(needs(page), "OPS-002").getByTestId("alerta-boton-nota")).toHaveText("Confirm who it is from first");
+  await expect(deRegla(necesitan, "OPS-002").getByTestId("alerta-boton-nota")).toHaveText("Confirm who it is from first");
 
   // Lo que la base tiene de R1 que no son las alertas del registrador (esas llegan solas).
   const propias = () =>
