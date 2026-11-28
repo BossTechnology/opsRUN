@@ -86,7 +86,8 @@ async function recargarHasta<T>(page: Page, leer: () => Promise<T>, esperado: T,
     .poll(
       async () => {
         await page.reload();
-        return await leer().catch(() => null);
+        // Una lectura que no responde en 5 s cuenta como "todavía no": la siguiente vuelta recarga y vuelve a mirar.
+        return await Promise.race([leer().catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
       },
       { timeout: tiempo, intervals: [2000] },
     )
@@ -315,12 +316,14 @@ test("D8: el arreglo desde la alerta: Edit and resend lleva el foco al mensaje y
 test("D9: un envío que BzzzBX rechaza se ve 'Failed · …' con Edit and resend, y no abre ninguna alerta", async ({ page }) => {
   test.setTimeout(150_000);
   const antes = await consultar<{ n: string }>("select count(*)::text as n from opsrun.alert_occurrence where rule_id = 'MSG-001'");
+  // Un cuerpo propio de cada intento: un reintento de Playwright no debe encontrar el envío del anterior.
+  const cuerpo = `This one is rejected. (D9 ${Date.now()})`;
   await control(page, { accion: "forzar_error", tipo: "send_text", cuando: "al_entregar" });
   await abrir(page);
   await elegirModo(page, "cleaner");
-  await escribir(page, "This one is rejected. (D9)");
+  await escribir(page, cuerpo);
   await enviar(page).click();
-  const fallida = burbuja(page, "This one is rejected. (D9)");
+  const fallida = burbuja(page, cuerpo);
   await expect(fallida).toHaveCount(1);
   await recargarHasta(page, () => fallida.getByTestId("estado-entrega").textContent().then((t) => (t ?? "").startsWith("Failed · ")), true);
   await expect(fallida.getByTestId("reenviar")).toBeEnabled();
@@ -340,8 +343,10 @@ test("D10: con BzzzBX caído la burbuja conserva 'Failed', la fila conserva lo �
   await recargarHasta(page, () => entrada(page, id).getByTestId("estado-entrega").textContent(), "Failed · Invalid number.");
   await esperarCierre(page);
   // La pestaña Alerts lee la conversación una vez con BzzzBX arriba: lo último leído.
+  // Un texto no tiene hilo: su alerta llega a Needs action cuando el registrador la anota (una vuelta del ciclo).
+  await expect.poll(async () => (await ocurrencia(alertaDe(id)))?.bzzzbx_message_id ?? null, UNA_VUELTA).toBe(id);
   await abrir(page, "alerts");
-  await expect(filaDeMensaje(page, id)).toBeVisible();
+  await expect(filaDeMensaje(page, id)).toBeVisible(UNA_VUELTA);
 
   await control(page, { accion: "no_disponible", valor: true });
   try {
