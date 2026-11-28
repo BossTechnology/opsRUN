@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { duracion, fechaYVentana, hora, horaConFecha, iniciales, horaOFecha } from "./formato";
+import { duracion, fechaCorta, fechaYVentana, hora, horaConFecha, iniciales, horaOFecha, ventanaCorta } from "./formato";
 
 const UTC = "UTC";
 
@@ -21,6 +21,19 @@ describe("formato del tablero", () => {
     expect(horaConFecha("2026-11-27T09:30:00Z", ahora, UTC)).toBe("Nov 27, 9:30 AM");
     expect(horaConFecha("2026-11-25T14:30:00Z", ahora, "America/New_York")).toBe("Nov 25, 9:30 AM");
     expect(horaConFecha("2025-11-25T14:30:00Z", ahora, UTC)).toBe("Nov 25, 2025, 2:30 PM");
+  });
+
+  it("fechaCorta y ventanaCorta (OPR-18): las dos mitades de fechaYVentana, y fechaYVentana no cambia", () => {
+    expect(fechaCorta("2026-11-25")).toBe("Wed, Nov 25");
+    expect(fechaCorta("2026-01-01")).toBe("Thu, Jan 1");
+    expect(ventanaCorta("09:00", "12:00")).toBe("9:00 AM–12:00 PM");
+    expect(ventanaCorta("09:00:00", "16:30:00")).toBe("9:00 AM–4:30 PM");
+    // Con otro separador (el guion ASCII de un SMS, OPR-18 S-11) solo cambia la raya.
+    expect(ventanaCorta("09:00", "12:00", "-")).toBe("9:00 AM-12:00 PM");
+    expect(ventanaCorta(null, "12:00")).toBeNull();
+    expect(ventanaCorta("09:00", null)).toBeNull();
+    expect(fechaCorta(null)).toBeNull();
+    expect(`${fechaCorta("2026-11-25")} · ${ventanaCorta("09:00", "12:00")}`).toBe(fechaYVentana("2026-11-25", "09:00", "12:00"));
   });
 
   it("fecha de servicio con su ventana", () => {

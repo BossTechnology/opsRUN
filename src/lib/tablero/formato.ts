@@ -62,17 +62,30 @@ function horaDeReloj(hhmm: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${sufijo}`;
 }
 
-/** "Wed, Nov 25 · 9:00 AM–12:00 PM". La fecha es de calendario: se formatea en UTC para no correrla. */
-export function fechaYVentana(fecha: string | null, inicio: string | null, fin: string | null): string {
-  if (!fecha) return SIN_VALOR;
-  const dia = new Intl.DateTimeFormat("en-US", {
+/** "Wed, Nov 25". La fecha es de calendario: se formatea en UTC para no correrla. Null si no hay fecha. */
+export function fechaCorta(fecha: string | null): string | null {
+  if (!fecha) return null;
+  return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${fecha}T00:00:00Z`));
-  const ventana = inicio && fin ? `${horaDeReloj(inicio)}–${horaDeReloj(fin)}` : SIN_VALOR;
-  return `${dia} · ${ventana}`;
+}
+
+/**
+ * "9:00 AM–12:00 PM". Null si falta el inicio o el fin. `separador` es la raya entre las dos horas: la del tablero
+ * es la media raya; un texto SMS usa el guion ASCII para no salir de GSM-7 (OPR-18 §4.4, S-11).
+ */
+export function ventanaCorta(inicio: string | null, fin: string | null, separador = "–"): string | null {
+  return inicio && fin ? `${horaDeReloj(inicio)}${separador}${horaDeReloj(fin)}` : null;
+}
+
+/** "Wed, Nov 25 · 9:00 AM–12:00 PM". */
+export function fechaYVentana(fecha: string | null, inicio: string | null, fin: string | null): string {
+  const dia = fechaCorta(fecha);
+  if (!dia) return SIN_VALOR;
+  return `${dia} · ${ventanaCorta(inicio, fin) ?? SIN_VALOR}`;
 }
 
 /**

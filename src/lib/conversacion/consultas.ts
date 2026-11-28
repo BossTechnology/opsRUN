@@ -5,15 +5,30 @@
  */
 import type { Tx } from "../db/pool";
 
+import type { FilaDePlantilla } from "../plantillas/disponibles";
+import type { BorradorDePlantilla } from "../plantillas/valores";
+
 import type { BorradorDeIA, EnvioDeOpsrun, NotaDeOpsrun, OperadorDeHilo, Vinculo } from "./tipos";
 
 /** Un instante como ISO 8601 UTC con milisegundos. */
 const ISO = (columna: string) => `to_char(${columna} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
+/** Además del job y el equipo, las columnas del borrador que llenan una plantilla (OPR-18 §5.1). */
 export const CONSULTA_REQUEST = `
-select r.bzzzbx_job_id, r.bzzzbx_team_id, r.change_seq::text as change_seq
+select r.bzzzbx_job_id, r.bzzzbx_team_id, r.change_seq::text as change_seq,
+       r.bzzzbx_property_id, r.bzzzbx_space_id, r.unit,
+       to_char(r.service_date, 'YYYY-MM-DD') as service_date,
+       to_char(r.window_start, 'HH24:MI') as window_start,
+       to_char(r.window_end, 'HH24:MI') as window_end
 from opsrun.request as r
 where r.id = $1::uuid`;
+
+/** Las plantillas activas (OPR-18 §5): una por clave. Solo lectura; el catálogo de código decide cuáles se ofrecen. */
+export const CONSULTA_PLANTILLAS = `
+select t.key, t.version, t.channel::text as channel, t.subject, t.body
+from opsrun.message_template as t
+where t.active
+order by t.key, t.version`;
 
 /** Los vínculos de la request, el original primero. */
 export const CONSULTA_VINCULOS = `
@@ -59,13 +74,15 @@ order by s.created_at desc, s.id`;
 
 export type LecturaDeConversacion = {
   /** El job y el equipo del borrador de la request, para elegir el cleaner. */
-  request: { bzzzbx_job_id: string | null; bzzzbx_team_id: string | null; change_seq: string };
+  request: { bzzzbx_job_id: string | null; bzzzbx_team_id: string | null; change_seq: string } & BorradorDePlantilla;
   vinculos: Vinculo[];
   envios: EnvioDeOpsrun[];
   notas: NotaDeOpsrun[];
   operadores: OperadorDeHilo[];
   /** A lo sumo uno por campo: el más reciente. */
   borradores: { customer: BorradorDeIA | null; cleaner: BorradorDeIA | null };
+  /** Las plantillas activas de `message_template` (OPR-18). */
+  plantillas: FilaDePlantilla[];
 };
 
 /** Todo lo de opsRUN que pide la conversación; null si la request no existe. */
@@ -77,6 +94,7 @@ export async function leerConversacionDeOpsrun(db: Tx, requestId: string): Promi
   const notas = await db.query<NotaDeOpsrun>(CONSULTA_NOTAS, [requestId]);
   const operadores = await db.query<OperadorDeHilo>(CONSULTA_OPERADORES);
   const borradores = await db.query<BorradorDeIA & { field: BorradorDeIA["field"] }>(CONSULTA_BORRADORES, [requestId]);
+  const plantillas = await db.query<FilaDePlantilla>(CONSULTA_PLANTILLAS);
   const fila = request.rows[0];
   if (!fila) return null;
   return {
@@ -89,5 +107,6 @@ export async function leerConversacionDeOpsrun(db: Tx, requestId: string): Promi
       customer: borradores.rows.find((b) => b.field === "draft_customer_reply") ?? null,
       cleaner: borradores.rows.find((b) => b.field === "draft_cleaner_text") ?? null,
     },
+    plantillas: plantillas.rows,
   };
 }

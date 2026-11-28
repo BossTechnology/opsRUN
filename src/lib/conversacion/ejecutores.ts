@@ -21,6 +21,7 @@ import { esNoDisponible } from "../bzzzbx/errores";
 import type { CleanerTeam } from "../bzzzbx/tipos";
 import type { Actor, Tx } from "../db/pool";
 import type { ContextoAccion, EntradaAccion, ResultadoAccion } from "../acciones/tipos";
+import { plantillaPermitida } from "../plantillas/catalogo";
 
 import { validarCuerpo } from "./composer";
 import type { ModoComposer } from "./tipos";
@@ -45,6 +46,9 @@ export type EjecutoresDeConversacion = {
 
 const rechazada = (codigo: string, mensaje: string): ResultadoAccion => ({ tipo: "rechazada", codigo, mensaje });
 
+/** OPR-18 §8.3: la plantilla no es del catálogo, del modo o de la etapa. */
+const MENSAJE_PLANTILLA = "That template is not available here.";
+
 const CLAVE = /^[A-Za-z0-9_-]{8,100}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,6 +66,10 @@ function traducir(e: unknown): ResultadoAccion {
       return rechazada("borrador_invalido", "That AI draft is no longer available.");
     case "OP012":
       return rechazada("clave_repetida", "That message was already sent. Reload and try again.");
+    case "OP055":
+      return rechazada("plantilla_invalida", MENSAJE_PLANTILLA);
+    case "OP056":
+      return rechazada("faltan_datos", "Fill in the highlighted fields before sending.");
     case "42501":
       return rechazada("sin_actor", "Choose who is acting first.");
     default:
@@ -69,11 +77,14 @@ function traducir(e: unknown): ResultadoAccion {
   }
 }
 
+/** La plantilla con que partió el mensaje (OPR-18): la clave y la versión usadas, solo para el Audit. */
+type PlantillaUsada = { clave: string; version: number };
+
 /** Lo que `datos` trae de un envío, ya revisado. */
 function leerEnvio(
   modo: ModoComposer,
   datos: Record<string, unknown>,
-): { cuerpo: string; clave: string; borradorId: string | null } | ResultadoAccion {
+): { cuerpo: string; clave: string; borradorId: string | null; plantilla: PlantillaUsada | null } | ResultadoAccion {
   const cuerpo = validarCuerpo(modo, datos.body);
   if (!cuerpo.ok) return rechazada("cuerpo_invalido", cuerpo.razon);
   const clave = datos.idempotency_key;
@@ -82,7 +93,27 @@ function leerEnvio(
   if (borrador !== null && (typeof borrador !== "string" || !UUID.test(borrador))) {
     return rechazada("entrada_invalida", "That request is not valid.");
   }
-  return { cuerpo: cuerpo.cuerpo, clave, borradorId: borrador };
+  // OPR-18: la clave y la versión de la plantilla van juntas; sin ninguna de las dos, es un envío sin plantilla.
+  const claveDePlantilla = datos.template_key ?? null;
+  const versionDePlantilla = datos.template_version ?? null;
+  let plantilla: PlantillaUsada | null = null;
+  if (claveDePlantilla === null && versionDePlantilla !== null) return rechazada("entrada_invalida", "That request is not valid.");
+  if (claveDePlantilla !== null) {
+    if (typeof claveDePlantilla !== "string" || !Number.isInteger(versionDePlantilla) || (versionDePlantilla as number) < 1) {
+      return rechazada("plantilla_no_disponible", MENSAJE_PLANTILLA);
+    }
+    plantilla = { clave: claveDePlantilla, version: versionDePlantilla as number };
+  }
+  return { cuerpo: cuerpo.cuerpo, clave, borradorId: borrador, plantilla };
+}
+
+/**
+ * El servidor vuelve a comprobar la plantilla antes de tocar la base o el puerto (§8.3): es del catálogo, del modo y
+ * de la etapa. El picker no es la defensa. Null si sirve (o si no hay plantilla).
+ */
+function plantillaNoDisponible(modo: ModoComposer, etapa: string, plantilla: PlantillaUsada | null): ResultadoAccion | null {
+  if (plantilla === null || plantillaPermitida(plantilla.clave, modo, etapa)) return null;
+  return rechazada("plantilla_no_disponible", MENSAJE_PLANTILLA);
 }
 
 const esRechazo = (valor: unknown): valor is ResultadoAccion => typeof valor === "object" && valor !== null && "tipo" in valor;
@@ -111,18 +142,30 @@ export function crearEjecutoresDeConversacion(deps: DependenciasDeEnvio): Ejecut
       if (!operador(ctx)) return sinOperador();
       const envio = leerEnvio("customer", entrada.datos);
       if (esRechazo(envio)) return envio;
+      const sinPlantilla = plantillaNoDisponible("customer", ctx.ventana.etapa, envio.plantilla);
+      if (sinPlantilla) return sinPlantilla;
       // La respuesta va en el hilo del original (S-11); BzzzBX pone asunto y destinatarios.
       const hilo = ctx.ventana.hilos[0];
       if (!hilo) return rechazada("no_disponible", "No email thread for this request");
       try {
         await deps.escribir(ctx.actor, (db) =>
-          db.query("select opsrun.send_email($1::uuid, $2::text, $3::text, $4::text, $5::uuid)", [
-            entrada.requestId,
-            hilo,
-            envio.cuerpo,
-            envio.clave,
-            envio.borradorId,
-          ]),
+          envio.plantilla
+            ? db.query("select opsrun.send_email($1::uuid, $2::text, $3::text, $4::text, $5::uuid, $6::text, $7::integer)", [
+                entrada.requestId,
+                hilo,
+                envio.cuerpo,
+                envio.clave,
+                envio.borradorId,
+                envio.plantilla.clave,
+                envio.plantilla.version,
+              ])
+            : db.query("select opsrun.send_email($1::uuid, $2::text, $3::text, $4::text, $5::uuid)", [
+                entrada.requestId,
+                hilo,
+                envio.cuerpo,
+                envio.clave,
+                envio.borradorId,
+              ]),
         );
       } catch (e) {
         return traducir(e);
@@ -135,6 +178,8 @@ export function crearEjecutoresDeConversacion(deps: DependenciasDeEnvio): Ejecut
       if (!operador(ctx)) return sinOperador();
       const envio = leerEnvio("cleaner", entrada.datos);
       if (esRechazo(envio)) return envio;
+      const sinPlantilla = plantillaNoDisponible("cleaner", ctx.ventana.etapa, envio.plantilla);
+      if (sinPlantilla) return sinPlantilla;
       const equipoId = ctx.ventana.equipoId;
       if (!equipoId) return rechazada("no_disponible", "Choose a cleaner first");
       // Que el equipo sea el del job lo valida el servidor con el puerto: la base no lee BzzzBX.
@@ -146,13 +191,23 @@ export function crearEjecutoresDeConversacion(deps: DependenciasDeEnvio): Ejecut
       }
       try {
         await deps.escribir(ctx.actor, (db) =>
-          db.query("select opsrun.send_text($1::uuid, $2::text, $3::text, $4::text, $5::uuid)", [
-            entrada.requestId,
-            equipoId,
-            envio.cuerpo,
-            envio.clave,
-            envio.borradorId,
-          ]),
+          envio.plantilla
+            ? db.query("select opsrun.send_text($1::uuid, $2::text, $3::text, $4::text, $5::uuid, $6::text, $7::integer)", [
+                entrada.requestId,
+                equipoId,
+                envio.cuerpo,
+                envio.clave,
+                envio.borradorId,
+                envio.plantilla.clave,
+                envio.plantilla.version,
+              ])
+            : db.query("select opsrun.send_text($1::uuid, $2::text, $3::text, $4::text, $5::uuid)", [
+                entrada.requestId,
+                equipoId,
+                envio.cuerpo,
+                envio.clave,
+                envio.borradorId,
+              ]),
         );
       } catch (e) {
         return traducir(e);
