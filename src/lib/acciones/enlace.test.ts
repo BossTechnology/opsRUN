@@ -29,8 +29,10 @@ function preparar() {
     leerRequest: vi.fn(async () => null),
     jobsEnlazadosAOtra: vi.fn(async () => new Set<string>()),
     jobsRechazados: vi.fn(async () => new Set<string>()),
+    jobsReenlazados: vi.fn(async () => new Set<string>()),
     enlazar: vi.fn(async () => {}),
     rechazar: vi.fn(async () => {}),
+    cambiar: vi.fn(async () => {}),
   } satisfies DatosDeEnlace;
   const ejecutores = crearEjecutoresDeEnlace(async () => ({ lectura: falso.lectura, datos }));
   return { falso, datos, ...ejecutores };
@@ -226,5 +228,122 @@ describe("BzzzbxNoDisponible de la clase real también se reconoce", () => {
     expect(await schedule(ctx, entrada("schedule", { bzzzbx_job_id: "bx-job-0107" }))).toMatchObject({
       codigo: "bzzzbx_no_disponible",
     });
+  });
+});
+
+describe("relink_job: Change linked job (OPR-29)", () => {
+  const R11 = "b0000000-0000-4000-8000-000000000a11";
+  const conRequest = () => {
+    const base = preparar();
+    base.datos.leerRequest.mockResolvedValue({
+      id: R11,
+      status: "scheduled",
+      bzzzbx_job_id: "bx-job-0103",
+      change_seq: "211",
+      received_at: AHORA.toISOString(),
+      bzzzbx_customer_id: "bx-cust-0001",
+      bzzzbx_property_id: "bx-prop-0002",
+      service_date: "2026-11-26",
+      window_start: null,
+      window_end: null,
+      bzzzbx_team_id: null,
+    } as never);
+    return base;
+  };
+  const entradaRelink = (datos: Record<string, unknown>, motivo: string | null = "PINCH replaced the job.") => ({
+    ...entrada("relink_job", datos, motivo),
+    requestId: R11,
+    version: "211",
+  });
+
+  it("cambia el enlace con el actor de la transacción, la versión y el motivo", async () => {
+    const { relink_job, datos } = conRequest();
+    expect(await relink_job(ctx, entradaRelink({ bzzzbx_job_id: "bx-job-0102" }))).toEqual({ tipo: "guardada" });
+    expect(datos.cambiar).toHaveBeenCalledWith(
+      { requestId: R11, version: "211", bzzzbxJobId: "bx-job-0102", jobNumber: "EX-00102", motivo: "PINCH replaced the job." },
+      ACTOR,
+    );
+  });
+
+  it.each([[{}], [{ bzzzbx_job_id: "" }], [{ bzzzbx_job_id: 7 }]])("sin un job elegido (%j) no llama a la base ni a BzzzBX", async (datosDeEntrada) => {
+    const { relink_job, datos, falso } = conRequest();
+    const leer = vi.spyOn(falso.lectura, "obtener");
+    expect(await relink_job(ctx, entradaRelink(datosDeEntrada))).toEqual({ tipo: "rechazada", codigo: "job_no_elegido", mensaje: MENSAJE_SIN_JOB });
+    expect(datos.cambiar).not.toHaveBeenCalled();
+    expect(leer).not.toHaveBeenCalled();
+  });
+
+  it("sin motivo no llama a la base", async () => {
+    const { relink_job, datos } = conRequest();
+    expect(await relink_job(ctx, entradaRelink({ bzzzbx_job_id: "bx-job-0102" }, null))).toMatchObject({ tipo: "rechazada", codigo: "motivo_requerido" });
+    expect(datos.cambiar).not.toHaveBeenCalled();
+  });
+
+  it("cada error del operador sale como su rechazada, con su mensaje", async () => {
+    for (const codigo of ["con_hechos_del_job", "mismo_job", "cambio_concurrente", "job_ya_enlazado", "request_no_programada"] as const) {
+      const { relink_job, datos } = conRequest();
+      datos.cambiar.mockRejectedValueOnce(deOtraCopia("EnlaceInvalido", { codigo }));
+      expect(await relink_job(ctx, entradaRelink({ bzzzbx_job_id: "bx-job-0102" })), codigo).toEqual({
+        tipo: "rechazada",
+        codigo,
+        mensaje: MENSAJES_DE_ENLACE[codigo],
+      });
+    }
+  });
+
+  it("con BzzzBX caído a mitad de la acción dice BzzzBX unavailable y no escribe", async () => {
+    const { relink_job, datos, falso } = conRequest();
+    vi.spyOn(falso.lectura, "obtener").mockRejectedValue(deOtraCopia("BzzzbxNoDisponible"));
+    expect(await relink_job(ctx, entradaRelink({ bzzzbx_job_id: "bx-job-0102" }))).toEqual({
+      tipo: "rechazada",
+      codigo: "bzzzbx_no_disponible",
+      mensaje: MENSAJE_BZZZBX_CAIDO,
+    });
+    expect(datos.cambiar).not.toHaveBeenCalled();
+  });
+
+  it("un 42501 (sin operador) sube: ejecutarAccion lo registra", async () => {
+    const { relink_job, datos } = conRequest();
+    datos.cambiar.mockRejectedValueOnce(Object.assign(new Error("sin operador"), { code: "42501" }));
+    await expect(relink_job(ctx, entradaRelink({ bzzzbx_job_id: "bx-job-0102" }))).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("el registro real la tiene registrada: Scheduled y con el job cancelado, motivo obligatorio, necesita BzzzBX", () => {
+    const def = REGISTRO_DE_ACCIONES.find((d) => d.codigo === "relink_job")!;
+    expect(def).toMatchObject({ etiqueta: "Change linked job", etapas: ["scheduled"], conJobCancelado: true, motivo: "obligatorio", necesitaBzzzbx: true });
+    expect(def.faseB).toBeUndefined();
+    expect(def.ejecutor).toBeTypeOf("function");
+  });
+
+  it("pasa por ejecutarAccion: sin motivo no llega al ejecutor, y sin candidatos ni siquiera se elige", async () => {
+    const llamado = vi.fn();
+    const conCandidato = {
+      ...ventanaR2,
+      etapa: "scheduled" as const,
+      datos: {
+        ...ventanaR2.datos,
+        candidatosDeCambio: [
+          { bzzzbxJobId: "bx-job-0102", jobNumber: "EX-00102", fecha: "Nov 28", cleaner: "— —", coincide: ["misma_propiedad" as const], sugerido: false },
+        ],
+      },
+    };
+    const def = { ...REGISTRO_DE_ACCIONES.find((d) => d.codigo === "relink_job")!, ejecutor: llamado };
+    const deps = (v: typeof conCandidato) => ({
+      registro: [def],
+      leerVentana: vi.fn(async () => v),
+      actor: vi.fn(async () => ACTOR),
+      refrescar: vi.fn(async () => {}),
+    });
+    const sinMotivo = await ejecutar(deps(conCandidato), { requestId: R11, codigo: "relink_job", motivo: "  ", datos: { bzzzbx_job_id: "bx-job-0102" }, version: conCandidato.version });
+    expect(sinMotivo).toMatchObject({ tipo: "rechazada", codigo: "motivo_requerido" });
+    const sinCandidatos = await ejecutar(deps({ ...conCandidato, datos: { ...conCandidato.datos, candidatosDeCambio: [] } }), {
+      requestId: R11,
+      codigo: "relink_job",
+      motivo: "Because.",
+      datos: { bzzzbx_job_id: "bx-job-0102" },
+      version: conCandidato.version,
+    });
+    expect(sinCandidatos).toMatchObject({ tipo: "rechazada", codigo: "no_disponible", mensaje: "No other job to link" });
+    expect(llamado).not.toHaveBeenCalled();
   });
 });

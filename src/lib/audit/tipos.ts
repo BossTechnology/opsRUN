@@ -38,6 +38,9 @@ export type FilaDeAudit = {
   po_numero: string | null;
   /** `details.job_number` (un valor de opsRUN). */
   job_number: string | null;
+  /** `details.from_job_number` y `to_job_number` de job_relinked (valores de opsRUN, OPR-29). */
+  job_anterior_number: string | null;
+  job_nuevo_number: string | null;
   /** `details.bzzzbx_job_id`: solo para pedir el nombre al puerto. */
   bzzzbx_job_id: string | null;
   /** Sugerencias de `details.ai_analysis_id`; null si el evento no lo trae. */

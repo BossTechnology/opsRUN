@@ -41,6 +41,8 @@ select a.id::text as id,
        case when a.event_type = 'oss_marked' then a.details ->> 'mark' end as marca_oss,
        case when a.event_type = 'po_entered' then a.details ->> 'po_number' end as po_numero,
        a.details ->> 'job_number' as job_number,
+       case when a.event_type = 'job_relinked' then a.details ->> 'from_job_number' end as job_anterior_number,
+       case when a.event_type = 'job_relinked' then a.details ->> 'to_job_number' end as job_nuevo_number,
        a.details ->> 'bzzzbx_job_id' as bzzzbx_job_id,
        case when a.details ->> 'ai_analysis_id' ~* ${UUID_SQL}
             then (select count(*)::int from opsrun.ai_suggestion as sa

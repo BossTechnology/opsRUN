@@ -20,7 +20,14 @@ const app = spawn(`${raiz}node_modules/.bin/${next}`, ["dev", ...process.argv.sl
   shell: process.platform === "win32",
   // La demo local: el stand-in de BzzzBX y el selector "Acting as" de la Job
   // window (OPR-26, P-2), que solo existe con las dos variables y sin OPSRUN_SERVIDOR.
-  env: { ...process.env, ...entornoSupabaseLocal(), BZZZBX_MODO: "falso", OPSRUN_ACTOR_DEMO: "1" },
+  // La zona de la operación (OPR-29, P-6): provisional hasta OPR-4; Delayed ("1:00 PM") se lee en ella.
+  env: {
+    ...process.env,
+    ...entornoSupabaseLocal(),
+    BZZZBX_MODO: "falso",
+    OPSRUN_ACTOR_DEMO: "1",
+    OPSRUN_ZONA_HORARIA: "America/New_York",
+  },
 });
 
 for (const senal of ["SIGINT", "SIGTERM"]) {

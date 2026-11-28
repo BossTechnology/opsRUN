@@ -45,3 +45,55 @@ describe("datos-sql: errores de la base", () => {
     await expect(datos.enlazar(ENLACE, OPERADOR)).rejects.toMatchObject({ codigo });
   });
 });
+
+describe("datos-sql: Change linked job (OPR-29)", () => {
+  const CAMBIO = { requestId: ENLACE.requestId, version: "211", bzzzbxJobId: "bx-job-0112", jobNumber: "EX-00112", motivo: "PINCH replaced it." };
+
+  it.each([
+    ["OP006", "request_no_encontrada"],
+    ["OP008", "job_ya_enlazado"],
+    ["OP013", "cambio_concurrente"],
+    ["OP019", "request_no_programada"],
+    ["OP040", "con_hechos_del_job"],
+    ["OP041", "mismo_job"],
+    ["22023", "dato_invalido"],
+  ])("el código %s de relink_observed_job es %s", async (code, codigo) => {
+    const datos = crearDatosDeEnlace(fallaCon({ code }));
+    await expect(datos.cambiar(CAMBIO, OPERADOR)).rejects.toMatchObject({ name: "EnlaceInvalido", codigo });
+  });
+
+  it("un 23505 del job en una carrera es job_ya_enlazado, como el enlace", async () => {
+    const datos = crearDatosDeEnlace(fallaCon({ code: "23505", constraint: "request_job_number_key" }));
+    await expect(datos.cambiar(CAMBIO, OPERADOR)).rejects.toMatchObject({ codigo: "job_ya_enlazado" });
+  });
+
+  it("el 42501 (sin operador) y los demás errores suben tal cual", async () => {
+    const datos = crearDatosDeEnlace(fallaCon({ code: "42501" }));
+    await expect(datos.cambiar(CAMBIO, OPERADOR)).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("llama a relink_observed_job como escritura del operador, con la versión y el motivo", async () => {
+    const llamadas: { sql: string; params: unknown[]; opciones: unknown }[] = [];
+    const ejecutar: Ejecutar = async (fn, opciones) => {
+      const db = { query: async (sql: string, params: unknown[]) => (llamadas.push({ sql, params, opciones }), { rows: [] }) };
+      return fn(db as never);
+    };
+    await crearDatosDeEnlace(ejecutar).cambiar(CAMBIO, OPERADOR);
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]!.sql).toMatch(/opsrun\.relink_observed_job/);
+    expect(llamadas[0]!.params).toEqual([CAMBIO.requestId, "211", "bx-job-0112", "EX-00112", "PINCH replaced it."]);
+    expect(llamadas[0]!.opciones).toEqual({ escritura: true, actor: OPERADOR });
+  });
+
+  it("jobsReenlazados lee los from_bzzzbx_job_id de job_relinked, sin escribir", async () => {
+    const llamadas: { sql: string; opciones: unknown }[] = [];
+    const ejecutar: Ejecutar = async (fn, opciones) => {
+      const db = { query: async (sql: string) => (llamadas.push({ sql, opciones }), { rows: [{ id: "bx-job-0111" }] }) };
+      return fn(db as never);
+    };
+    const ids = await crearDatosDeEnlace(ejecutar).jobsReenlazados(ENLACE.requestId);
+    expect([...ids]).toEqual(["bx-job-0111"]);
+    expect(llamadas[0]!.sql).toMatch(/job_relinked/);
+    expect(llamadas[0]!.opciones).toBeUndefined();
+  });
+});

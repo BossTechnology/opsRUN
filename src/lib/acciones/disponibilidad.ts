@@ -21,7 +21,8 @@ export const FASE_B = "Available when actions are switched on";
  * le gana a "Not built yet" porque le dice algo más útil al operador.
  */
 export function disponibilidadDe(def: DefinicionAccion, v: VentanaJob): Disponibilidad {
-  if (v.etapa === "cancelled" || !def.etapas.includes(v.etapa)) return { tipo: "no_aplica" };
+  // Con el job cancelado solo aplica lo que lo pide (Change linked job, OPR-29); si no, solo las etapas de la acción.
+  if (v.etapa === "cancelled" ? !def.conJobCancelado : !def.etapas.includes(v.etapa)) return { tipo: "no_aplica" };
   if (def.faseB) return { tipo: "fuera_de_release", fase: "b" };
   if (!def.enRelease) return { tipo: "fuera_de_release" };
   if (def.necesitaBzzzbx) {

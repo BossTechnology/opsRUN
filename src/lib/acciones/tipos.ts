@@ -68,6 +68,11 @@ export type DefinicionAccion = {
    * `fuera_de_release` y nunca corre, aunque tuviera ejecutor.
    */
   faseB?: boolean;
+  /**
+   * La acción también aplica con el job cancelado en PINCH (etapa `cancelled`), además de sus `etapas`.
+   * Solo Change linked job (OPR-29): es la salida de un job que PINCH canceló y reemplazó.
+   */
+  conJobCancelado?: true;
   motivo: Motivo;
   /** Si necesita BzzzBX para correr (lectura o instrucción). Sin BzzzBX → bloqueada. */
   necesitaBzzzbx: boolean;

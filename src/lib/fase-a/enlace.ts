@@ -16,6 +16,10 @@ import type { Actor } from "@/lib/db/pool";
 export type RequestParaEnlace = {
   id: string;
   status: "open" | "scheduled";
+  /** El job enlazado hoy; null si todavía no hay (OPR-29: Change linked job lo descarta de las propuestas). */
+  bzzzbx_job_id: string | null;
+  /** `change_seq` de la request, texto (es un bigint). */
+  change_seq: string;
   /** ISO 8601. */
   received_at: string;
   bzzzbx_customer_id: string | null;
@@ -35,8 +39,15 @@ export interface DatosDeEnlace {
   jobsEnlazadosAOtra(requestId: string, bzzzbxJobIds: string[]): Promise<Set<string>>;
   /** Los jobs que un operador rechazó para esta request. */
   jobsRechazados(requestId: string): Promise<Set<string>>;
+  /** Los jobs que dejaron de ser de esta request por un Change linked job (`from_bzzzbx_job_id`, OPR-29). */
+  jobsReenlazados(requestId: string): Promise<Set<string>>;
   enlazar(enlace: { requestId: string; bzzzbxJobId: string; jobNumber: string }, actor: Actor): Promise<void>;
   rechazar(rechazo: { requestId: string; bzzzbxJobId: string; motivo: string | null }, actor: Actor): Promise<void>;
+  /** Change linked job (OPR-29): `opsrun.relink_observed_job`, con la versión que vio el operador. */
+  cambiar(
+    cambio: { requestId: string; version: string; bzzzbxJobId: string; jobNumber: string; motivo: string },
+    actor: Actor,
+  ): Promise<void>;
 }
 
 export type DependenciasDeEnlace = { lectura: LecturaBzzzbx; datos: DatosDeEnlace };
@@ -69,7 +80,15 @@ export type CodigoEnlaceInvalido =
   | "gate_incompleto"
   | "job_no_encontrado"
   | "job_cancelado"
-  | "job_ya_enlazado";
+  | "job_ya_enlazado"
+  // Change linked job (OPR-29)
+  | "request_no_programada"
+  | "cambio_concurrente"
+  | "con_hechos_del_job"
+  | "mismo_job"
+  | "job_actual_con_checkin"
+  | "motivo_requerido"
+  | "dato_invalido";
 
 /** El enlace no se puede hacer con esos datos. No se escribió nada. */
 export class EnlaceInvalido extends Error {
@@ -153,23 +172,35 @@ async function leerRequest(datos: DatosDeEnlace, requestId: string): Promise<Req
  * Los jobs de BzzzBX que pueden ser el de la request, del más probable al
  * menos. Puede lanzar `BzzzbxNoDisponible`: sin BzzzBX no se propone nada.
  */
-export async function proponerEnlaces({ lectura, datos }: DependenciasDeEnlace, requestId: string): Promise<Propuesta> {
+export async function proponerEnlaces(
+  { lectura, datos }: DependenciasDeEnlace,
+  requestId: string,
+  { paraCambio = false }: { paraCambio?: boolean } = {},
+): Promise<Propuesta> {
   const request = await leerRequest(datos, requestId);
-  if (request.status !== "open") return { candidatos: [], truncado: false, motivo_vacio: "request_no_abierta" };
+  // Enlazar es de una request abierta; Change linked job (OPR-29, `paraCambio`) es de una ya programada.
+  if (request.status !== (paraCambio ? "scheduled" : "open")) {
+    return { candidatos: [], truncado: false, motivo_vacio: "request_no_abierta" };
+  }
   const filtro = filtroDesdeBorrador(request);
   if (!filtro) return { candidatos: [], truncado: false, motivo_vacio: "sin_cliente_ni_propiedad" };
 
   const devueltos = await lectura.buscarJobs(filtro);
   const truncado = devueltos.length >= BUSCAR_JOBS_MAX;
   const encontrados = devueltos.filter((job) => job.status !== "cancelled");
-  const [enlazados, rechazados] = await Promise.all([
-    datos.jobsEnlazadosAOtra(request.id, encontrados.map((job) => job.bzzzbx_job_id)),
-    datos.jobsRechazados(request.id),
-  ]);
+  // Una tras otra: comparten el pool de la base.
+  const enlazados = await datos.jobsEnlazadosAOtra(request.id, encontrados.map((job) => job.bzzzbx_job_id));
+  const rechazados = await datos.jobsRechazados(request.id);
+  // Para un cambio, el job actual y los que ya dejaron de ser de la request tampoco se proponen (OPR-29 §8.1).
+  const descartados = new Set(rechazados);
+  if (paraCambio) {
+    for (const id of await datos.jobsReenlazados(request.id)) descartados.add(id);
+    if (request.bzzzbx_job_id) descartados.add(request.bzzzbx_job_id);
+  }
   const referencia = request.service_date ?? request.received_at.slice(0, 10);
 
   const candidatos = encontrados
-    .filter((job) => !enlazados.has(job.bzzzbx_job_id) && !rechazados.has(job.bzzzbx_job_id))
+    .filter((job) => !enlazados.has(job.bzzzbx_job_id) && !descartados.has(job.bzzzbx_job_id))
     .map((job) => ({ job, coincide: coincidencias(request, job), sugerido: false }))
     .sort(
       (a, b) =>
@@ -203,6 +234,35 @@ export async function confirmarEnlace(
   if (!job) throw new EnlaceInvalido("job_no_encontrado");
   if (job.status === "cancelled") throw new EnlaceInvalido("job_cancelado");
   await datos.enlazar({ requestId, bzzzbxJobId, jobNumber: job.job_number }, actor);
+}
+
+/**
+ * Change linked job (OPR-29, P-2): el operador cambia el job enlazado de una request que sigue Scheduled, por un
+ * enlace equivocado o porque PINCH canceló el job y creó otro. Se releen los dos jobs en BzzzBX: el nuevo tiene que
+ * existir, no estar cancelado ni ser el actual, y el actual no puede tener check-in (el job ya tiene hechos, S-11).
+ * Lo de opsRUN lo comprueba la función SQL (hechos del job, `OP040`). Solo cambia el crosswalk; el borrador y las
+ * confirmaciones no.
+ */
+export async function cambiarEnlaceDeJob(
+  { lectura, datos }: DependenciasDeEnlace,
+  { requestId, version, bzzzbxJobId, motivo }: { requestId: string; version: string; bzzzbxJobId: string; motivo: string },
+  actor: Actor,
+): Promise<void> {
+  const limpio = motivo.trim();
+  if (!limpio) throw new EnlaceInvalido("motivo_requerido");
+  const request = await leerRequest(datos, requestId);
+  if (request.status !== "scheduled" || !request.bzzzbx_job_id) throw new EnlaceInvalido("request_no_programada");
+  if (request.bzzzbx_job_id === bzzzbxJobId) throw new EnlaceInvalido("mismo_job");
+
+  const nuevo = await lectura.obtener("job", bzzzbxJobId);
+  if (!nuevo) throw new EnlaceInvalido("job_no_encontrado");
+  if (nuevo.status === "cancelled") throw new EnlaceInvalido("job_cancelado");
+
+  // El actual: con check-in ya tiene hechos en PINCH y no se cambia. Se lee fresco, no de la ventana.
+  const eventos = await lectura.listarPor("jobtracker_event", { bzzzbx_job_id: request.bzzzbx_job_id });
+  if (eventos.some((e) => e.kind === "checked_in")) throw new EnlaceInvalido("job_actual_con_checkin");
+
+  await datos.cambiar({ requestId, version, bzzzbxJobId, jobNumber: nuevo.job_number, motivo: limpio }, actor);
 }
 
 /** El operador dice que ese job no es el de la request. No se le vuelve a proponer para ella. */
