@@ -334,13 +334,16 @@ insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operat
 select a.request_id, 'alert_opened', 'bzzzbx', null, a.opened_at, null, a.id
 from opsrun.alert_occurrence as a;
 
-insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, reason, alert_occurrence_id) values
+-- Los alert_resolved llevan en su `details` lo que escribe opsrun.upsert_alert_occurrence (OPR-34 §8.2): la
+-- resolución y el tipo del evento que la arregló, con lo que la pestaña Alerts dice "Fixed by … · PO entered".
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, reason, alert_occurrence_id, details) values
   ('b0000000-0000-4000-8000-0000000000a4', 'alert_resolved', 'bzzzbx', null,
-   now() - interval '1 hour', null, 'a1000000-0000-4000-8000-0000000000a2'),
+   now() - interval '1 hour', null, 'a1000000-0000-4000-8000-0000000000a2', '{"resolution": "auto_cleared"}'),
   ('b0000000-0000-4000-8000-0000000000a6', 'alert_resolved', 'operator', '0a000000-0000-4000-8000-0000000000b1',
-   now() - interval '3 days', null, 'a1000000-0000-4000-8000-0000000000a3'),
+   now() - interval '3 days', null, 'a1000000-0000-4000-8000-0000000000a3',
+   '{"resolution": "fixed_by_action", "fixing_event_type": "po_entered"}'),
   ('b0000000-0000-4000-8000-0000000000a5', 'alert_cleared', 'operator', '0a000000-0000-4000-8000-0000000000a2',
-   now() - interval '21 hours', 'Large unit, cleaner called ahead.', 'a1000000-0000-4000-8000-0000000000a4');
+   now() - interval '21 hours', 'Large unit, cleaner called ahead.', 'a1000000-0000-4000-8000-0000000000a4', '{}');
 
 -- ---------------------------------------------------------------------------
 -- Audit de las confirmaciones de R3 a R6 (OPR-35, P-5). Van al final para no
@@ -405,3 +408,119 @@ where id = 'b0000000-0000-4000-8000-0000000000a6';
 insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details) values
   ('b0000000-0000-4000-8000-0000000000a6', 'job_validated', 'operator', '0a000000-0000-4000-8000-0000000000b1',
    now() - interval '2 days 22 hours', '{"po_required": true, "po_source": "pinch", "po_number": null}');
+
+-- ---------------------------------------------------------------------------
+-- Alertas de OPR-34 (spec §9, P-9). Va al final del archivo para no mover los
+-- `id` de los eventos que ya estaban. Todo inventado.
+--
+-- El registrador de alertas (la tarea `registrador_alertas` del ciclo de fondo)
+-- anota en `alert_occurrence` lo que lee de BzzzBX. Para que al arrancar no escriba
+-- nada, todo `bzzzbx_alert_id` de esta seed existe en el falso con el mismo estado
+-- (abierta en los dos o cerrada en los dos): `seed-y-falso.test.ts` lo comprueba.
+-- ---------------------------------------------------------------------------
+
+-- R9 (P-9): en Validation, aprobada y sin validar, con un cliente que exige PO
+-- (bx-cust-0003), sin PO en el borrador ni en el job, enlazada a bx-job-0109
+-- (EX-00109) y con su TRN-005 PO missing abierta. Es el caso de E2E-7 sin tocar R6
+-- (validada) ni R8 (que recorre E2E-1). Sus crosswalk IDs bx-msg-0009 y
+-- bx-thread-0009 salen del último dígito del id, como los de las demás.
+insert into opsrun.request (
+  id, received_at, owner_operator_id,
+  bzzzbx_customer_id, bzzzbx_contact_id, bzzzbx_property_id, bzzzbx_space_id,
+  unit, beds, bzzzbx_service_id, service_date, window_start, window_end,
+  access_notes, po_number, bzzzbx_team_id
+) values
+  ('b0000000-0000-4000-8000-0000000000a9', now() - interval '6 days', '0a000000-0000-4000-8000-0000000000a2',
+   'bx-cust-0003', 'bx-cont-0004', 'bx-prop-0006', null,
+   '3F', 2, 'bx-svc-0002', current_date - 3, '09:00', '12:00',
+   null, null, 'bx-team-0002');
+
+insert into opsrun.request_message (request_id, bzzzbx_message_id, bzzzbx_thread_id, channel, direction, is_original, actor_kind, linked_at)
+select r.id, 'bx-msg-000' || right(r.id::text, 1), 'bx-thread-000' || right(r.id::text, 1),
+       'email', 'inbound', true, 'system', r.received_at
+from opsrun.request as r
+where r.id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, occurred_at)
+select id, 'request_received', 'system', received_at from opsrun.request
+where id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select id, 'request_assigned', 'operator', owner_operator_id, received_at + interval '5 minutes',
+       jsonb_build_object('to_operator_id', owner_operator_id)
+from opsrun.request
+where id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.request_confirmation (request_id, kind, method, confirmed_value, actor_operator_id, confirmed_at)
+select r.id, k, case when k = 'cleaner' then 'phone'::opsrun.confirmation_method else 'operator' end,
+       '{}', r.owner_operator_id, r.received_at + interval '1 hour'
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select r.id, k::text || '_confirmed', 'operator', r.owner_operator_id, r.received_at + interval '1 hour',
+       jsonb_build_object('method', case when k = 'cleaner' then 'phone' else 'operator' end)
+from opsrun.request as r
+cross join unnest(enum_range(null::opsrun.confirmation_kind)) as k
+where r.id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.instruction (request_id, type, idempotency_key, payload, actor_kind, actor_operator_id,
+                                status, sent_at, resolved_at, attempts, bzzzbx_reference)
+select r.id, 'create_job', 'seed-job-0109', '{}', 'operator', r.owner_operator_id,
+       'confirmed', r.received_at + interval '2 hours', r.received_at + interval '2 hours', 1, 'bx-ref-job-0109'
+from opsrun.request as r
+where r.id = 'b0000000-0000-4000-8000-0000000000a9';
+
+update opsrun.request
+set status = 'scheduled', bzzzbx_job_id = 'bx-job-0109', job_number = 'EX-00109',
+    scheduled_at = received_at + interval '2 hours'
+where id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, details)
+select id, 'request_scheduled', 'operator', owner_operator_id, scheduled_at,
+       jsonb_build_object('bzzzbx_job_id', bzzzbx_job_id, 'job_number', job_number)
+from opsrun.request
+where id = 'b0000000-0000-4000-8000-0000000000a9';
+
+-- Terminada y aprobada (el OSS lo marcó Finance Uno al aprobar); falta el PO para validar.
+insert into opsrun.audit_event (request_id, event_type, actor_kind, occurred_at, source, bzzzbx_event_id) values
+  ('b0000000-0000-4000-8000-0000000000a9', 'job_checked_in', 'bzzzbx', now() - interval '3 days 6 hours', 'bzzzbx_observed', 'bx-evt-0101'),
+  ('b0000000-0000-4000-8000-0000000000a9', 'job_completed',  'bzzzbx', now() - interval '3 days 1 hour',  'bzzzbx_observed', 'bx-evt-0102');
+
+update opsrun.request
+set oss_mark = 'not_oss', oss_marked_at = now() - interval '2 days', oss_marked_by = '0a000000-0000-4000-8000-0000000000b1',
+    oss_source = 'operator',
+    approved_at = now() - interval '2 days', approved_by = '0a000000-0000-4000-8000-0000000000b1'
+where id = 'b0000000-0000-4000-8000-0000000000a9';
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at) values
+  ('b0000000-0000-4000-8000-0000000000a9', 'oss_marked',   'operator', '0a000000-0000-4000-8000-0000000000b1', now() - interval '2 days'),
+  ('b0000000-0000-4000-8000-0000000000a9', 'job_approved', 'operator', '0a000000-0000-4000-8000-0000000000b1', now() - interval '2 days');
+
+-- Las ocurrencias que el registrador habría anotado de las alertas del falso que la seed todavía no tenía.
+insert into opsrun.alert_occurrence (id, bzzzbx_alert_id, request_id, rule_id, rule_version, level, reason_text,
+                                     opened_at, resolved_at, resolution) values
+  -- R8, sin dueño: OPS-001 abierta (bx-alert-0005 en el falso).
+  ('a1000000-0000-4000-8000-0000000000a5', 'bx-alert-0005', 'b0000000-0000-4000-8000-0000000000a8',
+   'OPS-001', '1', 'amber', 'Unassigned for 15 min.', now() - interval '10 minutes', null, null),
+  -- R4: la MEC-003 abierta para Clear alert (bx-alert-0006 en el falso).
+  ('a1000000-0000-4000-8000-0000000000a6', 'bx-alert-0006', 'b0000000-0000-4000-8000-0000000000a4',
+   'MEC-003', '1', 'amber', 'Running 45 min over the window.', now() - interval '10 minutes', null, null),
+  -- R9: TRN-005 PO missing abierta (bx-alert-0007).
+  ('a1000000-0000-4000-8000-0000000000a7', 'bx-alert-0007', 'b0000000-0000-4000-8000-0000000000a9',
+   'TRN-005', '1', 'amber', 'Customer requires a PO.', now() - interval '2 hours', null, null),
+  -- R4, una segunda Delayed de hace un día, cerrada sola: "Repeats on this job: 2" (bx-alert-0009; la 0006 ya es
+  -- la MEC-003 de las etapas).
+  ('a1000000-0000-4000-8000-0000000000a9', 'bx-alert-0009', 'b0000000-0000-4000-8000-0000000000a4',
+   'OPS-010', '1', 'red', 'Not started by 1:00 PM.', now() - interval '27 hours', now() - interval '1 day', 'auto_cleared');
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, reason, alert_occurrence_id, details)
+select a.request_id, 'alert_opened', 'bzzzbx', null, a.opened_at, null, a.id,
+       jsonb_build_object('bzzzbx_alert_id', a.bzzzbx_alert_id, 'rule_id', a.rule_id, 'level', a.level)
+from opsrun.alert_occurrence as a
+where a.bzzzbx_alert_id in ('bx-alert-0005', 'bx-alert-0006', 'bx-alert-0007', 'bx-alert-0009');
+
+insert into opsrun.audit_event (request_id, event_type, actor_kind, actor_operator_id, occurred_at, reason, alert_occurrence_id, details) values
+  ('b0000000-0000-4000-8000-0000000000a4', 'alert_resolved', 'bzzzbx', null,
+   now() - interval '1 day', null, 'a1000000-0000-4000-8000-0000000000a9', '{"resolution": "auto_cleared"}');
