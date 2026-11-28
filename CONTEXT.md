@@ -150,6 +150,21 @@ Términos de la conversación del job. Detalle en `docs/spec/opr-27-conversacion
 | Edit and resend | Botón de un envío Failed o de un mensaje saliente Failed o Bounced: copia su cuerpo al Composer en el modo de su canal, y solo se puede pulsar si el Composer puede enviar (si no, en gris con el mismo motivo). Enviar crea una instrucción nueva; no reintenta la fallida. | OPR-27 S-6, OPR-19 §6.1 |
 | AI draft | Borrador de respuesta (al cliente o al cleaner) que escribió la IA, sin decidir. Aparece en el Composer marcado "AI draft" y solo sale si el operador pulsa Send: se decide accepted (igual) o corrected (editado). Discard lo rechaza. Si la IA no produce borradores, el Composer funciona igual. | OPR-27 §5.5 |
 | Despacho de instrucciones | Entrega a BzzzBX las instrucciones `send_email` y `send_text` que ya existen en la base y las reconcilia con su estado (confirmed, failed, timed out). No crea instrucciones. Mínimo y provisional hasta OPR-23. | OPR-27 §7, `src/lib/instrucciones/` |
+## Plantillas y avisos (OPR-18)
+
+Términos de las plantillas de mensajes y del panel Notices. Detalle en `docs/spec/opr-18-plantillas.md`.
+
+| Término | Significado | Dónde aparece |
+|---|---|---|
+| Plantilla (message template) | Texto estándar con placeholders, versionado, en `opsrun.message_template` (una versión activa por clave). Son seis: `cleaner_confirmation_request`, `reschedule_request`, `cancellation_cleaner`, `cancellation_requester`, `requester_scheduled` y `requester_done`. Se cambian por migración. Una plantilla nunca sale sola: es un punto de partida que el operador edita y envía con Send. | OPR-18 |
+| Catálogo de plantillas | `src/lib/plantillas/catalogo.ts`: nombre visible, canal, modo y etapas del Composer, etapas del panel y placeholders "a mano" de cada clave. Decide qué se ofrece; la base solo dice qué existe. Una prueba exige que sean las mismas claves. | OPR-18 |
+| Placeholder | Uno de cuatro: `{{property}}`, `{{space}}`, `{{date}}`, `{{window}}`. Se llenan en el servidor, en una pasada y como texto plano, con la propiedad, el espacio, la fecha y la ventana del job (Scheduled en adelante) o del borrador (Requests). Sin dato, queda literal. En `reschedule_request`, `date` y `window` son siempre "a mano". | OPR-18 |
+| Templates (picker) | Botón del Composer en Customer y Cleaner, con las plantillas del modo y la etapa. Elegir una llena la caja y deja la marca "Template · …"; con texto del operador pregunta "Replace what you wrote?". | OPR-18 |
+| Fill in | "Fill in: {{date}}, {{window}}" bajo la caja: los `{{…}}` sin llenar. Send queda deshabilitado mientras haya uno, y `send_email` y `send_text` con plantilla lo rechazan con `OP056`. | OPR-18 |
+| Notices | Panel plegable de la conversación (solo lectura) con la vista previa de los avisos al requester (Scheduled notice, Done notice) y de las dos cancelaciones, cada uno con Copy y "Not sent · Available when actions are switched on". En la Fase A el aviso lo manda el operador desde las herramientas de PINCH; opsRUN no lo manda ni lo registra. | OPR-18 |
+| Copy | Botón del Composer y de cada aviso que copia el texto al portapapeles del navegador. No llama al servidor ni escribe nada. | OPR-18 |
+| Un solo SMS | Un texto de plantilla cabe en 160 caracteres GSM-7 (70 en UCS-2). Las plantillas de texto son GSM-7 y su `{{window}}` lleva guion ASCII; el Composer cuenta "1 SMS" o "2 SMS" en modo Cleaner, solo informativo. | OPR-18 |
+
 ## Audit (OPR-35)
 
 Términos de la pestaña Audit. Detalle en `docs/spec/opr-35-audit.md`.

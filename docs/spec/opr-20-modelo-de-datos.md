@@ -335,7 +335,7 @@ Reglas:
 | `body` | text not null | Con placeholders (`{{property}}`, `{{space}}`, `{{date}}`, `{{window}}`). Los placeholders son los que se llenan del job al momento de enviar, no se guardan llenos. |
 | `active` | boolean | Una versión activa por `key` (índice único parcial). |
 
-En V1.1 beta solo se cambian por migración (por confirmar, §11). Las instrucciones `send_*` guardan en su `payload` el `key` y la `version` usados.
+En V1.1 beta solo se cambian por migración (por confirmar, §11). Las instrucciones `send_*` guardan en su `payload` el `key` y la `version` usados. **Ajustado por OPR-18 (P-4, aprobado el 2026-11-27):** la plantilla usada queda en el `details` del Audit del envío (`template_key` y `template_version`), no en el `payload`, que sigue siendo el crosswalk ID y el cuerpo: la plantilla no viaja a BzzzBX. (La instrucción que trae la seed de R2 conserva el `payload` anterior.)
 
 ### 3.11 `audit_event` — Audit, append-only (OPR-21, OPR-29, OPR-30, OPR-35)
 

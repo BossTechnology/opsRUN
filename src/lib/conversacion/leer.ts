@@ -8,7 +8,8 @@
  */
 import { BzzzbxNoDisponible, esNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
-import type { CleanerTeam, Message } from "../bzzzbx/tipos";
+import type { CleanerTeam, Job, Message, Property } from "../bzzzbx/tipos";
+import { plantillasDelJob, type PlantillasDelJob } from "../plantillas/disponibles";
 
 import { armarHilo } from "./armar-hilo";
 import { disponibilidadDelComposer, type DisponibilidadDelModo } from "./composer";
@@ -30,6 +31,9 @@ export type LeidosDeConversacion = {
   equipo: CleanerTeam | null;
   /** El remitente del original del hilo: el "To" de Customer. */
   remitente: string | null;
+  /** El job de la request (null en Requests o si BzzzBX no lo conoce) y la propiedad que llena las plantillas (OPR-18 §5). */
+  job: Job | null;
+  propiedad: Property | null;
 };
 
 export type DatosDeConversacion = {
@@ -44,6 +48,8 @@ export type DatosDeConversacion = {
   /** Lo que se ve en To y Cc (solo lectura, §5.2). Nada de esto viaja en una instrucción. */
   para: { customer: { to: string | null; cc: string }; cleaner: { nombre: string | null; telefono: string | null } };
   borradores: { customer: BorradorDeIA | null; cleaner: BorradorDeIA | null };
+  /** Las plantillas que se ofrecen por modo y los avisos del panel Notices (OPR-18): ya llenas; nada de esto se guarda. */
+  plantillas: PlantillasDelJob;
   /** Envíos de correo o texto sin cerrar (pending o sent): lo que espera el reconciliador. */
   abiertos: number;
 };
@@ -70,14 +76,19 @@ async function leerDeBzzzbx(opsrun: LecturaDeConversacion, lectura: LecturaBzzzb
 
   // Desde Scheduled manda el cleaner del job; en Requests, el del borrador (§5.1).
   const equipoId = jobId ? (job?.bzzzbx_team_id ?? null) : equipoDelBorrador;
-  const equipo = equipoId ? await lectura.obtener("cleaner_team", equipoId) : null;
+  // Desde Scheduled la propiedad es la del job; en Requests, la del borrador. Se lee junto al equipo.
+  const propiedadId = jobId ? (job?.bzzzbx_property_id ?? null) : opsrun.request.bzzzbx_property_id;
+  const [equipo, propiedad] = await Promise.all([
+    equipoId ? lectura.obtener("cleaner_team", equipoId) : null,
+    propiedadId ? lectura.obtener("property", propiedadId) : null,
+  ]);
 
   const porId = new Map<string, Message>();
   for (const m of [...vinculados, ...delHilo.flat()]) porId.set(m.bzzzbx_message_id, m);
 
   const original = opsrun.vinculos.find((v) => v.is_original);
   const mensajeOriginal = original ? porId.get(original.bzzzbx_message_id) : undefined;
-  return { mensajes: [...porId.values()], equipoId, equipo, remitente: mensajeOriginal?.from ?? null };
+  return { mensajes: [...porId.values()], equipoId, equipo, remitente: mensajeOriginal?.from ?? null, job, propiedad };
 }
 
 export type EntradaDeLeer = {
@@ -145,6 +156,19 @@ export async function leerConversacion(e: EntradaDeLeer): Promise<DatosDeConvers
       cleaner: { nombre: leidos?.equipo?.name ?? null, telefono: leidos?.equipo?.phone ?? null },
     },
     borradores: opsrun.borradores,
+    plantillas: plantillasDelJob({
+      filas: opsrun.plantillas,
+      etapa: e.etapa,
+      modos,
+      fuente: leidos
+        ? {
+            fuente: opsrun.request.bzzzbx_job_id ? "job" : "borrador",
+            borrador: opsrun.request,
+            job: leidos.job,
+            propiedad: leidos.propiedad,
+          }
+        : null,
+    }),
     abiertos: opsrun.envios.filter((x) => x.status === "pending" || x.status === "sent").length,
   };
 }

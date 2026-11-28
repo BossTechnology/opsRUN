@@ -1,7 +1,7 @@
 # OPR-18 — Plantillas de mensajes y avisos
 
 - **Tarjeta:** OPR-18 (C · Message templates and notices). Leída en Relevo el 2026-11-27. Depende, según la tarjeta, de C · Email sending (OPR-16) y C · Texting both ways (OPR-17); `PLAN.md` §5 ya anota que OPR-16 y OPR-18 se piden entre sí. La tarjeta es información; este spec manda sobre la construcción cuando Henry lo apruebe.
-- **Estado:** borrador para Henry. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§13).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-10 según las recomendaciones (§14). En construcción en la rama `opr-18-plantillas` (Fase A). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§13).
 - **Hecho cuando (tarjeta):** cada plantilla se usa en E2E-1 y E2E-9 con el contenido correcto. Qué parte se acepta en la Fase A y qué parte espera la Fase B está en §3.3.
 - **Construye sobre (en `main`):** el modelo de datos, que ya trae la tabla `message_template` y las seis claves de la tarjeta (`docs/spec/opr-20-modelo-de-datos.md` §3.10; migración `20261124130000_modelo_de_datos.sql`), la conversación y su Composer (`docs/spec/opr-27-conversacion.md`, `src/lib/conversacion/`, `src/app/_conversacion/`), el despacho de envíos como tarea del ciclo de fondo (`src/lib/instrucciones/`, ADR 0006), el registro de acciones (`src/lib/acciones/registro.ts`) y los avisos que las etapas dejaron esperando (`docs/spec/opr-30-31-32-etapas.md` S-9, `docs/spec/opr-28-assign-confirm.md`).
 - **Specs abiertos que tocan lo mismo, sin redefinirlos:** #33 (OPR-19, estado de entrega: cambia las burbujas y el Edit and resend del hilo, no el Composer) y #35 (OPR-36, análisis de IA: no produce borradores de respuesta; esos son de OPR-37). #34 (OPR-29) ya reserva las plantillas `reschedule_request`, `cancellation_cleaner` y `cancellation_requester` para la Fase B y no las cambia.
@@ -359,6 +359,7 @@ Contra el build de producción, la seed y el falso, con `OPSRUN_ACTOR_DEMO=1` y 
 | S-8 | En la Fase A el aviso al requester lo manda el operador a mano desde las herramientas de PINCH, con Copy. opsRUN no lo registra (no sale por opsRUN). |
 | S-9 | Los placeholders que `reschedule_request` deja "a mano" (`date`, `window`) se llenan con la fecha y la ventana nuevas cuando la Fase B traiga la acción. |
 | S-10 | Cambiar las versiones activas por migración mientras un operador tiene el picker abierto no rompe nada: el envío con la versión anterior se acepta (§6). |
+| S-11 | **Añadido al construir.** `{{window}}` en una plantilla **de texto** lleva guion ASCII ("9:00 AM-12:00 PM"), no la media raya del tablero ("9:00 AM–12:00 PM"): la media raya no está en GSM-7 y con ella un SMS cabría en 70 caracteres, no en 160, y T1 ("1 SMS") sería falso. Las plantillas de correo conservan la media raya del tablero. Pregunta abierta para Henry en el PR. |
 
 ## 13. Preguntas para Henry (mi recomendación primero)
 
@@ -373,3 +374,21 @@ Contra el build de producción, la seed y el falso, con `OPSRUN_ACTOR_DEMO=1` y 
 - **P-8. ¿SMS: contar o bloquear?** **Recomiendo solo contar** ("1 SMS", "2 SMS") y vigilar los textos fijos con el guard de §4.4. Alternativa: bloquear el envío pasados 160 caracteres, que impide mensajes legítimos con nombres largos y no es lo que pide la tarjeta ("where possible").
 - **P-9. ¿Un `{{…}}` sin llenar bloquea el envío?** **Recomiendo sí**, en el Composer y en la base (`OP056`), porque mandar "to {{date}}" a un cleaner es peor que no mandar. Alternativa: solo una advertencia en el Composer.
 - **P-10. ¿El cuerpo enviado puede llevar el nombre de la propiedad?** **Recomiendo sí**: es texto escrito por el operador (la plantilla solo se lo llena), ya se guarda así en `instruction.payload.body` desde OPR-27, y no es una columna propia de datos de PINCH. Alternativa: guardar el cuerpo con los placeholders sin llenar y que BzzzBX los llene al enviar; eso cambia el contrato de OPR-6 y no deja editar el texto antes de enviarlo.
+
+## 14. Decisiones de Henry (2026-11-27)
+
+Henry aprobó el spec con **todas las recomendaciones**, P-0 a P-10:
+
+| # | Decisión |
+|---|---|
+| P-0 | Con migración (`20261209120000_plantillas.sql`): las seis plantillas v1 como catálogo y `send_email`/`send_text` con `p_template_key` y `p_template_version`; `OP055` y `OP056`. Se quita el bloque de plantillas de la seed |
+| P-1 | OPR-18 entrega en la Fase A lo de §3.1: plantillas en la base, picker y Copy en el Composer y el panel Notices de solo lectura |
+| P-2 | Los textos viven en `message_template`, cambiados por migración, con el texto neutro de §4.1 como v1. Editar desde opsRUN, en un release posterior |
+| P-3 | El aviso "automático" de la Fase B sale como consecuencia de la acción del operador, dentro de su transacción. Se decide el detalle en el spec de la Fase B; aquí no cambia nada |
+| P-4 | La plantilla usada queda en el `details` del Audit (`template_key`, `template_version`), no en el payload de la instrucción |
+| P-5 | Copy en la Fase A |
+| P-6 | Los avisos de correo son respuesta en el hilo de la request; `subject` queda sin usar |
+| P-7 | `cleaner_confirmation_request` se ofrece en Requests mientras no exista Ask cleaner |
+| P-8 | SMS: solo contar ("1 SMS", "2 SMS"); no se bloquea el envío |
+| P-9 | Un `{{…}}` sin llenar bloquea el envío, en el Composer y en la base (`OP056`) |
+| P-10 | El cuerpo enviado puede llevar el nombre de la propiedad |
