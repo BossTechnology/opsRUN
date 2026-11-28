@@ -8,6 +8,7 @@
  * arranca explícitamente con `crearCiclo()` y sus propias tareas. Se apaga con
  * `OPSRUN_CICLO_DE_FONDO=0`.
  */
+import { tareaAnalisisIa } from "../analisis-ia/tarea";
 import { tareaRegistradorAlertas } from "../alertas/tarea";
 import { tareaEntradaCorreo } from "../entrada/servidor";
 import { tareaReconciliacionEnvios } from "../instrucciones/reconciliacion";
@@ -19,7 +20,15 @@ type Entorno = Record<string, string | undefined>;
 
 /** Las tareas de opsRUN. Una tarjeta que necesite trabajo de fondo suma la suya aquí. */
 export function tareasDeOpsrun(): Tarea[] {
-  return [tareaEntradaCorreo(), tareaReconciliacionEnvios(), tareaObservadorEtapas(), tareaRegistradorAlertas()];
+  // El análisis de IA primero: la entrada le pasa su `despertar` al crear una request (OPR-36 §9.3).
+  const analisis = tareaAnalisisIa();
+  return [
+    tareaEntradaCorreo({ alCrearRequest: analisis.despertar }),
+    tareaReconciliacionEnvios(),
+    tareaObservadorEtapas(),
+    tareaRegistradorAlertas(),
+    analisis,
+  ];
 }
 
 /** Por qué no debe correr, o null si puede. */

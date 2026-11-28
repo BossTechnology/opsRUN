@@ -10,7 +10,7 @@ import { modoBzzzbx, problemasBzzzbx } from "./modo";
 import type { Bzzzbx } from "./puertos";
 
 export { modoBzzzbx, problemasBzzzbx, type ModoBzzzbx } from "./modo";
-export type { Bzzzbx, InstruccionesBzzzbx, LecturaBzzzbx } from "./puertos";
+export type { Bzzzbx, IaBzzzbx, InstruccionesBzzzbx, LecturaBzzzbx } from "./puertos";
 
 type Entorno = Record<string, string | undefined>;
 
@@ -39,6 +39,9 @@ export function obtenerBzzzbx(env: Entorno = process.env): Bzzzbx {
         },
         get instrucciones() {
           return global.__opsrunFalso!.instrucciones;
+        },
+        get ia() {
+          return global.__opsrunFalso!.ia;
         },
       };
     } else {

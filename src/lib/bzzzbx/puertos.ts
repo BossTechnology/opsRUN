@@ -21,6 +21,7 @@ import type {
   LoteDeResultados,
   Resultado,
 } from "./tipos";
+import type { PedidoDeAnalisis, ResultadoDeAnalisis } from "./tipos-ia";
 
 /**
  * Lectura de las proyecciones. Puede lanzar `BzzzbxNoDisponible` en cualquier
@@ -67,4 +68,21 @@ export interface InstruccionesBzzzbx {
   estado(idempotency_key: string): Promise<Resultado | null>;
 }
 
-export type Bzzzbx = { lectura: LecturaBzzzbx; instrucciones: InstruccionesBzzzbx };
+/**
+ * La capa de IA de BzzzBX (spec OPR-36 §12). PROVISIONAL hasta OPR-6. opsRUN nunca
+ * llama a Claude ni manda el cuerpo del correo: pide el análisis con crosswalk IDs
+ * y BzzzBX lee el correo y llama a Claude. Asíncrono: pedir y consultar, para que
+ * una IA lenta no ocupe la vuelta del ciclo y la clave sobreviva a un reinicio.
+ */
+export interface IaBzzzbx {
+  /**
+   * Pide el análisis de una request. Idempotente por `clave` (el ai_analysis.id): la
+   * misma clave no repite el trabajo. Puede lanzar BzzzbxNoDisponible, IaRechazada
+   * o IaLimitada.
+   */
+  pedirAnalisis(pedido: PedidoDeAnalisis): Promise<{ recibido_at: string }>;
+  /** El estado del análisis de esa clave; null si BzzzBX no la conoce. Un resultado terminado no cambia. */
+  resultadoDeAnalisis(clave: string): Promise<ResultadoDeAnalisis | null>;
+}
+
+export type Bzzzbx = { lectura: LecturaBzzzbx; instrucciones: InstruccionesBzzzbx; ia: IaBzzzbx };

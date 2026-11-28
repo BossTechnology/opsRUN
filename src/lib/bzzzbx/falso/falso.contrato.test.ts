@@ -3,6 +3,7 @@
  * El falso en memoria cumple los contratos de lectura y de instrucciones, los
  * mismos que correrá el real de OPR-6 (`../real.contrato.test.ts`).
  */
+import { probarContratoDeIa } from "../contrato/ia.contrato";
 import { probarContratoDeInstrucciones } from "../contrato/instrucciones.contrato";
 import { probarContratoDeLectura } from "../contrato/lectura.contrato";
 
@@ -58,5 +59,19 @@ probarContratoDeInstrucciones("falso en memoria", async () => {
       sujeto: { bzzzbx_job_id: "bx-job-0003" },
     }),
     esperar: async () => reloj.adelantar(falso.instrucciones.pasoMs),
+  };
+});
+
+probarContratoDeIa("falso en memoria", async () => {
+  const reloj = new RelojManual();
+  const falso = crearFalso({ reloj });
+  return {
+    ia: falso.ia,
+    pedidoValido: (clave, campos) => {
+      // El falso solo analiza los mensajes con guion (spec OPR-36 §13): este lo pone el contrato.
+      falso.ia.ponerGuion(`bx-msg-${clave}`, "normal");
+      return { clave, bzzzbx_message_id: `bx-msg-${clave}`, bzzzbx_thread_id: `bx-thread-${clave}`, campos };
+    },
+    esperar: async () => reloj.adelantar(1000),
   };
 });

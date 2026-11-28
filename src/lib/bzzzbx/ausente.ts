@@ -8,7 +8,7 @@
 import { obtenerBzzzbx } from ".";
 
 import { BzzzbxNoDisponible } from "./errores";
-import type { LecturaBzzzbx } from "./puertos";
+import type { IaBzzzbx, LecturaBzzzbx } from "./puertos";
 
 export function lecturaOAusente(crear: () => LecturaBzzzbx = () => obtenerBzzzbx().lectura): LecturaBzzzbx {
   try {
@@ -25,5 +25,20 @@ export function lecturaOAusente(crear: () => LecturaBzzzbx = () => obtenerBzzzbx
       leerFoto: ausente,
       cambiosDesde: ausente,
     };
+  }
+}
+
+/**
+ * El puerto de IA, o uno que siempre responde "no disponible" si BzzzBX no se pudo
+ * crear (hoy, el real en el servidor hasta OPR-6): el servidor arranca y todo
+ * queda en "AI pending", que es el fallback (spec OPR-36 §12.3). Sin log por
+ * llamada: la tarea de análisis avisa una vez al caer y una al volver.
+ */
+export function iaOAusente(crear: () => IaBzzzbx = () => obtenerBzzzbx().ia): IaBzzzbx {
+  try {
+    return crear();
+  } catch {
+    const ausente = () => Promise.reject(new BzzzbxNoDisponible());
+    return { pedirAnalisis: ausente, resultadoDeAnalisis: ausente };
   }
 }

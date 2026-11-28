@@ -49,3 +49,29 @@ export const esNoDisponible = (e: unknown): boolean => conNombre(e, "BzzzbxNoDis
 export const esCursorCaducado = (e: unknown): boolean => conNombre(e, "CursorCaducado");
 export const esInstruccionRechazada = (e: unknown): boolean => conNombre(e, "InstruccionRechazada");
 export const esFiltroInvalido = (e: unknown): boolean => conNombre(e, "FiltroInvalido");
+
+/**
+ * BzzzBX rechazó el pedido de análisis al recibirlo (spec OPR-36 §12.2): mensaje
+ * desconocido, campo no soportado. `definitivo` dice si reintentar sirve de algo
+ * (S-8: sin el dato, no es definitivo).
+ */
+export class IaRechazada extends Error {
+  constructor(
+    readonly error_code: string,
+    readonly definitivo: boolean = false,
+  ) {
+    super(`IA rechazada: ${error_code}`);
+    this.name = "IaRechazada";
+  }
+}
+
+/** Límite de uso o de concurrencia del servicio de Claude (OPR-11): no es un fallo del análisis, se espera. */
+export class IaLimitada extends Error {
+  constructor(readonly reintentar_despues_ms?: number) {
+    super("La IA está limitada por ahora");
+    this.name = "IaLimitada";
+  }
+}
+
+export const esIaRechazada = (e: unknown): boolean => conNombre(e, "IaRechazada");
+export const esIaLimitada = (e: unknown): boolean => conNombre(e, "IaLimitada");
