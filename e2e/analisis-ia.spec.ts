@@ -282,7 +282,7 @@ test("I8: si el correo pide varios jobs sale el aviso; Not multiple lo quita y d
 });
 
 test("I9: un resultado tardío no pisa lo ya firmado: el sender confirmado a mano no cambia y no sale su chip", async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const { requestId, correo } = await correoConIa(page, "lenta");
   // El cliente lo pone el fixture (ninguna acción del operador lo escribe todavía; la búsqueda libre es de update_request_detail).
   await comoDueno("update opsrun.request set bzzzbx_customer_id = 'bx-cust-0002' where id = $1", [requestId]);
@@ -294,8 +294,16 @@ test("I9: un resultado tardío no pisa lo ya firmado: el sender confirmado a man
   await expect(page.getByTestId("resultado-accion")).toHaveText("Saved");
 
   // La IA responde tarde, con otro cliente: la tarea guarda el resultado y la base lo deja superseded.
-  await control(page, { accion: "ia_terminar", bzzzbx_message_id: correo.bzzzbx_message_id });
-  await expect.poll(async () => (await eventos(requestId, "ai_analysis_completed")).length, { timeout: UN_MINUTO, intervals: [2000] }).toBe(1);
+  // Si el primer análisis ya venció, el reintento (a los 60 s) también es lento: se libera cada vez hasta que llegue.
+  await expect
+    .poll(
+      async () => {
+        await control(page, { accion: "ia_terminar", bzzzbx_message_id: correo.bzzzbx_message_id });
+        return (await eventos(requestId, "ai_analysis_completed")).length;
+      },
+      { timeout: 2 * UN_MINUTO, intervals: [3000] },
+    )
+    .toBe(1);
 
   const sender = await consultar<{ decision: string | null }>("select decision::text as decision from opsrun.ai_suggestion where request_id = $1 and field = 'sender' and rank = 1", [requestId]);
   expect(sender).toEqual([{ decision: "superseded" }]);
