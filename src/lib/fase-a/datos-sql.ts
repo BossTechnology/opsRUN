@@ -19,6 +19,12 @@ const CODIGOS_SQL: Record<string, CodigoEnlaceInvalido> = {
   OP006: "request_no_encontrada",
   OP007: "request_no_abierta",
   OP008: "job_ya_enlazado",
+  // Change linked job (OPR-29): `lock_scheduled_request` y `relink_observed_job`.
+  OP013: "cambio_concurrente",
+  OP019: "request_no_programada",
+  OP040: "con_hechos_del_job",
+  OP041: "mismo_job",
+  "22023": "dato_invalido",
 };
 
 /**
@@ -47,6 +53,8 @@ export function crearDatosDeEnlace(ejecutar: Ejecutar = (fn, opciones) => comoOp
         db.query<RequestParaEnlace>(
           `select r.id,
                   r.status::text as status,
+                  r.bzzzbx_job_id,
+                  r.change_seq::text as change_seq,
                   to_char(r.received_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as received_at,
                   r.bzzzbx_customer_id,
                   r.bzzzbx_property_id,
@@ -85,6 +93,17 @@ export function crearDatosDeEnlace(ejecutar: Ejecutar = (fn, opciones) => comoOp
       return new Set(rows.map((r) => r.id));
     },
 
+    async jobsReenlazados(requestId) {
+      const { rows } = await ejecutar((db) =>
+        db.query<{ id: string }>(
+          `select distinct a.details ->> 'from_bzzzbx_job_id' as id from opsrun.audit_event as a
+            where a.request_id = $1 and a.event_type = 'job_relinked' and a.details ->> 'from_bzzzbx_job_id' is not null`,
+          [requestId],
+        ),
+      );
+      return new Set(rows.map((r) => r.id));
+    },
+
     async enlazar({ requestId, bzzzbxJobId, jobNumber }, actor) {
       await traducirErrores(
         ejecutar((db) => db.query("select opsrun.link_observed_job($1, $2, $3)", [requestId, bzzzbxJobId, jobNumber]), {
@@ -100,6 +119,22 @@ export function crearDatosDeEnlace(ejecutar: Ejecutar = (fn, opciones) => comoOp
           escritura: true,
           actor,
         }),
+      );
+    },
+
+    async cambiar({ requestId, version, bzzzbxJobId, jobNumber, motivo }, actor) {
+      await traducirErrores(
+        ejecutar(
+          (db) =>
+            db.query("select opsrun.relink_observed_job($1::uuid, $2::bigint, $3, $4, $5)", [
+              requestId,
+              version,
+              bzzzbxJobId,
+              jobNumber,
+              motivo,
+            ]),
+          { escritura: true, actor },
+        ),
       );
     },
   };

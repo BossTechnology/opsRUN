@@ -53,7 +53,10 @@ OPSRUN_DB_HOST=db.caja.ejemplo.test
 OPSRUN_DB_PORT=5432
 OPSRUN_DB_NAME=postgres
 OPSRUN_GOTRUE_URL=https://auth.caja.ejemplo.test
+OPSRUN_ZONA_HORARIA=America/New_York
 ```
+
+`OPSRUN_ZONA_HORARIA` es obligatoria en el servidor (OPR-29): una zona IANA válida, la misma que usa Signal Maker para Delayed. Sin ella, o con una inválida, el servidor no arranca y el deploy lo rechaza antes de tocar la base. El valor de ejemplo es provisional hasta OPR-4.
 
 `OPSRUN_SERVIDOR=1` ya viene en la imagen. `OPSRUN_SECRETS_FILE` no hace falta: el deploy monta el secreto en la ruta por defecto, `/run/secrets/opsrun/app.env`.
 

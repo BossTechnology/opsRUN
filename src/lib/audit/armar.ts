@@ -10,7 +10,7 @@
 import { horaConFecha } from "../tablero/formato";
 import { SIN_VALOR } from "../tablero/tipos";
 
-import { reglaConNombre } from "../alertas/reglas";
+import { AUDIT_DELAYED_ABRE, AUDIT_DELAYED_SE_LIMPIA, REGLA_DELAYED, reglaConNombre } from "../alertas/reglas";
 import {
   ENTIDADES_CON_NOMBRE,
   type EntidadConNombre,
@@ -83,6 +83,26 @@ function complementoDeIA(f: FilaDeAudit, nombres: Nombres): string | null {
   return `· ${campo}: ${propuesto}`;
 }
 
+/**
+ * Las dos líneas de Delayed (OPR-29, §5.3): el `alert_opened` y el `alert_resolved` automático de OPS-010
+ * se leen "Delayed · <texto de Signal Maker>" y "Started · Delayed cleared". Solo cambia cómo se muestran;
+ * el evento sigue siendo el de alertas. Una resolución distinta de la automática se ve como las demás.
+ */
+function lineaDeDelayed(f: FilaDeAudit): { evento: string; complemento: string | null } | null {
+  if (f.alerta_regla !== REGLA_DELAYED) return null;
+  if (f.event_type === "alert_opened") {
+    const texto = f.alerta_texto?.trim();
+    return { evento: AUDIT_DELAYED_ABRE, complemento: texto ? `· ${texto}` : null };
+  }
+  if (f.event_type === "alert_resolved" && f.alerta_resolucion === "auto_cleared") return { ...AUDIT_DELAYED_SE_LIMPIA };
+  return null;
+}
+
+/** Cómo se ve el job enlazado en una línea: el número si se sabe, si no "a job". */
+function complementoDeCambioDeJob(f: FilaDeAudit): string | null {
+  return f.job_anterior_number && f.job_nuevo_number ? `from ${f.job_anterior_number} to ${f.job_nuevo_number}` : null;
+}
+
 /** El complemento de §2.4 para un tipo, o null (la regla general: solo label, persona y motivo). */
 function complemento(f: FilaDeAudit, nombres: Nombres): string | null {
   switch (f.event_type) {
@@ -106,6 +126,8 @@ function complemento(f: FilaDeAudit, nombres: Nombres): string | null {
     case "request_scheduled":
       if (!f.job_number) return null;
       return f.modo === "linked" ? `· linked to observed job ${f.job_number}` : `· job ${f.job_number}`;
+    case "job_relinked":
+      return complementoDeCambioDeJob(f);
     case "job_link_rejected": {
       if (!nombres.disponible) return `· job ${SIN_VALOR}`;
       const numero = f.bzzzbx_job_id ? nombres.job[f.bzzzbx_job_id] : undefined;
@@ -172,15 +194,18 @@ export function armarAudit({ filas, identificadores, nombres, zona, ahora }: Ent
 
   const vista: FilaDeVista[] = ordenadas.map((f) => {
     const original = f === primeraAsignacion;
+    const delayed = lineaDeDelayed(f);
     return {
       id: f.id,
       instante: new Date(f.occurred_at).toISOString(),
       hora: horaConFecha(f.occurred_at, ahora, zona),
       tipo: f.event_type,
-      evento: f.label,
-      complemento: complemento(f, nombres),
+      evento: delayed?.evento ?? f.label,
+      complemento: delayed ? delayed.complemento : complemento(f, nombres),
       original,
-      observado: f.source === "bzzzbx_observed",
+      // Las dos líneas de Delayed son un hecho de BzzzBX (OPR-29 §5.3): llevan la marca aunque el evento de alerta
+      // lo escriba el registrador con el origen de opsRUN; las demás alertas se ven como hasta ahora.
+      observado: f.source === "bzzzbx_observed" || delayed !== null,
       persona: persona(f),
       motivo: f.reason?.trim() || null,
     };

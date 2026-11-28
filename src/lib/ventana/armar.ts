@@ -11,13 +11,14 @@ import { poVigente } from "../billing/po";
 import type { AlertResult, Job } from "../bzzzbx/tipos";
 import { esReglaLimpiable } from "../etapas/reglas";
 import { armarTablero } from "../tablero/armar";
-import { fechaYVentana, hace, horaConFecha } from "../tablero/formato";
+import { diaCorto, fechaYVentana, hace, horaConFecha } from "../tablero/formato";
 import { SIN_VALOR, TITULOS, type Tablero, type Tarjeta } from "../tablero/tipos";
 
 import {
   PESTANAS_EN_URL,
   type AlertaVista,
   type CampoPropiedad,
+  type CandidatoDeCambio,
   type Confirmaciones,
   type EtapaVentana,
   type FilaVentana,
@@ -49,6 +50,9 @@ export type EntradaVentana = {
   respuestaDelCleaner?: RespuestaDelCleaner | null;
   /** Sugerencias de IA abiertas de los campos del borrador (OPR-28): las que marcan AI en los paneles. */
   sugerencias?: SugerenciaAbierta[];
+  /** Los jobs a los que Change linked job puede cambiar el enlace (OPR-29); el servidor los lee solo en Scheduled o con el job cancelado. */
+  candidatosDeCambio?: CandidatoDeCambio[];
+  candidatosTruncado?: boolean;
   /** Las preguntas abiertas al cleaner (Waiting): dan la insignia gris de Alerts, no abren la ventana en Alerts (OPR-34, P-4 y P-5). */
   esperas?: EsperaDeOpsrun[];
 };
@@ -133,6 +137,11 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
     { clave: "po", etiqueta: "PO", valor: vigente?.valor ?? SIN_VALOR, noEncontrado: false },
     { clave: "access", etiqueta: "Access notes", valor: fila.access_notes?.trim() || SIN_VALOR, noEncontrado: false },
   ];
+  // OPR-29: el job enlazado y quién lo enlazó o lo cambió por última vez (de Audit), desde Scheduled.
+  if (fila.job_number) {
+    const cuando = fila.linked_at ? ` · Linked ${diaCorto(fila.linked_at, zona)}${fila.linked_by_nombre ? ` by ${fila.linked_by_nombre}` : ""}` : "";
+    campos.push({ clave: "linked", etiqueta: "Linked job", valor: `${fila.job_number}${cuando}`, noEncontrado: false });
+  }
 
   return {
     requestId: fila.id,
@@ -147,6 +156,8 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
         pagada: !cancelado && tarjeta.color === "pagada",
       },
       oss: fila.oss_mark === "oss",
+      // La misma condición que la tarjeta (S-6, S-10): solo en Scheduled; con el check-in sale aunque la alerta siga abierta.
+      delayed: !cancelado && tarjeta.etapa === "scheduled" && tarjeta.estado.tipo === "delayed",
       nombre: tarjeta.nombre,
       linea: {
         numero: tarjeta.numero,
@@ -189,6 +200,8 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
       tieneEquipo: Boolean(fila.bzzzbx_team_id),
       respuestaDelCleaner: entrada.respuestaDelCleaner ?? null,
       sugerencias: entrada.sugerencias ?? [],
+      candidatosDeCambio: entrada.candidatosDeCambio ?? [],
+      candidatosTruncado: entrada.candidatosTruncado ?? false,
     },
     instruccionAbierta: entrada.instruccionAbierta,
   };

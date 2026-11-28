@@ -7,6 +7,7 @@ import {
   destinoBase,
   leerArchivoEnv,
   problemasDeEntorno,
+  problemasDeZona,
   PROHIBIDAS_EN_SERVIDOR,
   urlGoTrue,
 } from "./entorno";
@@ -24,6 +25,7 @@ const SERVIDOR_COMPLETO = {
   OPSRUN_SERVIDOR: "1",
   OPSRUN_DB_HOST: "db.ejemplo.test",
   OPSRUN_GOTRUE_URL: "http://auth.ejemplo.test:9999/",
+  OPSRUN_ZONA_HORARIA: "America/New_York",
 };
 
 describe("destinoBase fuera del servidor", () => {
@@ -157,9 +159,28 @@ describe("asegurarEntorno", () => {
     expect(problemas).toEqual(["BZZZBX_MODO=falso no se permite en el servidor"]);
   });
 
+  it("no deja arrancar sin OPSRUN_ZONA_HORARIA ni con una zona inválida (OPR-29, P-6)", () => {
+    const sinZona: Record<string, string> = { ...SERVIDOR_COMPLETO };
+    delete sinZona.OPSRUN_ZONA_HORARIA;
+    expect(problemasDeEntorno(sinZona, lectorCon(SECRETOS))).toEqual(["OPSRUN_ZONA_HORARIA no está definida"]);
+    expect(problemasDeEntorno({ ...sinZona, OPSRUN_ZONA_HORARIA: "  " }, lectorCon(SECRETOS))).toEqual([
+      "OPSRUN_ZONA_HORARIA no está definida",
+    ]);
+    expect(problemasDeEntorno({ ...sinZona, OPSRUN_ZONA_HORARIA: "Marte/Olympus" }, lectorCon(SECRETOS))).toEqual([
+      "OPSRUN_ZONA_HORARIA no es una zona válida",
+    ]);
+    expect(() => asegurarEntorno(sinZona, lectorCon(SECRETOS))).toThrow("OPSRUN_ZONA_HORARIA no está definida");
+    expect(problemasDeEntorno(SERVIDOR_COMPLETO, lectorCon(SECRETOS))).toEqual([]);
+  });
+
+  it("fuera del servidor la zona no se exige: sigue cayendo a UTC con aviso (OPR-29, P-6)", () => {
+    expect(problemasDeZona({})).toEqual([]);
+    expect(problemasDeZona({ OPSRUN_ZONA_HORARIA: "Marte/Olympus" })).toEqual([]);
+  });
+
   it("junta todos los problemas en un solo error", () => {
     expect(() => asegurarEntorno({ OPSRUN_SERVIDOR: "1" }, sinArchivo)).toThrow(
-      /OPSRUN_DB_HOST no está definida; OPSRUN_GOTRUE_URL no está definida/,
+      /OPSRUN_DB_HOST no está definida; OPSRUN_GOTRUE_URL no está definida; OPSRUN_ZONA_HORARIA no está definida/,
     );
   });
 });

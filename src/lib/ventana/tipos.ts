@@ -4,6 +4,7 @@
  * guarda ni se escribe: la ventana solo lee.
  */
 import type { Insignia } from "../alertas/tipos";
+import type { Coincidencia } from "../fase-a/enlace";
 import type { AlertResult, CleanerTeam, Contact, Photo } from "../bzzzbx/tipos";
 import type { PoVigente } from "../billing/po";
 import type { Etapa, FilaRequest, Leidos } from "../tablero/tipos";
@@ -25,6 +26,25 @@ export type FilaVentana = FilaRequest & {
   approved_by_nombre: string | null;
   /** Nombre de quien validó. */
   validated_by_nombre: string | null;
+  /** Cuándo se enlazó (o se cambió) el job por última vez, de `request_scheduled` o `job_relinked` en Audit (OPR-29). */
+  linked_at: string | null;
+  /** Quién lo enlazó o lo cambió. */
+  linked_by_nombre: string | null;
+};
+
+/**
+ * Un job al que Change linked job puede cambiar el enlace (OPR-29): lo que el panel pinta de un candidato de
+ * `proponerEnlaces`, ya como texto. Los lee el servidor al armar la ventana; nunca se guardan.
+ */
+export type CandidatoDeCambio = {
+  bzzzbxJobId: string;
+  jobNumber: string;
+  /** "Nov 28 · 10:00 AM–2:00 PM". */
+  fecha: string;
+  /** Nombre del cleaner; "— —" si no se pudo leer. */
+  cleaner: string;
+  coincide: Coincidencia[];
+  sugerido: boolean;
 };
 
 /** Lo leído de BzzzBX para la ventana: lo del tablero y los dos `obtener` de §8.2. */
@@ -71,7 +91,7 @@ export type Pestana = {
 };
 
 export type CampoPropiedad = {
-  clave: "customer" | "contact" | "property" | "space" | "service" | "date" | "cleaner" | "po" | "access";
+  clave: "customer" | "contact" | "property" | "space" | "service" | "date" | "cleaner" | "po" | "access" | "linked";
   etiqueta: string;
   valor: string;
   /** BzzzBX respondió, pero no conoce esa entidad (§6.3). */
@@ -98,6 +118,8 @@ export type Encabezado = {
   stage: { etapa: EtapaVentana; texto: string; pagada: boolean };
   /** Chip OSS junto a Stage (OPR-31): solo con la marca OSS. */
   oss: boolean;
+  /** Chip gris Delayed junto a Stage (OPR-29): Scheduled con OPS-010 abierta, la misma condición que la tarjeta. */
+  delayed: boolean;
   /** "Demo Lofts 7C": propiedad y espacio, como el nombre de la tarjeta. */
   nombre: string;
   linea: { numero: string; fecha: string; servicio: string; cleaner: string };
@@ -157,6 +179,10 @@ export type VentanaJob = {
     tieneEquipo: boolean;
     respuestaDelCleaner: RespuestaDelCleaner | null;
     sugerencias: SugerenciaAbierta[];
+    /** Los jobs a los que Change linked job puede cambiar el enlace (OPR-29); vacío si no hay o no se pudieron leer. */
+    candidatosDeCambio: CandidatoDeCambio[];
+    /** BzzzBX devolvió el máximo de `buscarJobs`: puede haber más candidatos que no llegaron. */
+    candidatosTruncado: boolean;
   };
   /** Hay una instrucción de la request sin cerrar. */
   instruccionAbierta: boolean;

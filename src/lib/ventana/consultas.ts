@@ -22,10 +22,21 @@ select ${COLUMNAS_FILA},
        to_char(r.entered_po_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as entered_po_at,
        r.oss_source::text as oss_source,
        ap.display_name as approved_by_nombre,
-       va.display_name as validated_by_nombre
+       va.display_name as validated_by_nombre,
+       to_char(ult.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as linked_at,
+       en.display_name as linked_by_nombre
 ${DESDE_FILA}
 left join opsrun.operator as ap on ap.id = r.approved_by
 left join opsrun.operator as va on va.id = r.validated_by
+-- OPR-29: el último enlace del job (el primero o un Change linked job), de Audit.
+left join lateral (
+  select e.occurred_at, e.actor_operator_id
+  from opsrun.audit_event as e
+  where e.request_id = r.id and e.event_type in ('request_scheduled', 'job_relinked')
+  order by e.occurred_at desc, e.id desc
+  limit 1
+) as ult on true
+left join opsrun.operator as en on en.id = ult.actor_operator_id
 where r.id = $1::uuid`;
 
 /** Los hilos de la request, el original primero. */

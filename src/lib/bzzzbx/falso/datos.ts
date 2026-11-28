@@ -15,6 +15,8 @@
  *   R8  Requests, nueva y sin dueño (OPR-28, P-7)       correo bx-msg-0008, alerta OPS-001 abierta, job de PINCH bx-job-0108
  *                                                       (su cliente bx-cust-0003 exige PO y no hay: Add PO, OPR-32)
  *   R9  Validation, aprobada y sin PO (OPR-34, P-9)      correo bx-msg-0009, bx-job-0109 (TRN-005 PO missing abierta, bx-alert-0007)
+ *   R10 Scheduled, hoy 09:00-12:00 (OPR-29, P-9)         correo bx-msg-0010, bx-job-0110 (Delayed: bx-alert-0011 la pone el E2E)
+ *   R11 Scheduled, mañana (OPR-29, P-9)                   correo bx-msg-0011, bx-job-0111; Change linked job la pasa a bx-job-0112
  * Y jobs de la Fase A, creados en las herramientas de PINCH y sin request
  * (spec Fase A §3): bx-job-0102 encaja con R2 (cliente, propiedad, fecha y
  * ventana), bx-job-0103 es de la misma propiedad otro día, bx-job-0104 está
@@ -78,6 +80,11 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0108", job_number: "EX-00108", bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0005", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(4), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0003", po_number: null, price: { amount_cents: 21_000, currency: "USD" } },
       // R9 (OPR-34, P-9): en Validation, aprobada y sin PO, con el cliente que lo exige.
       { bzzzbx_job_id: "bx-job-0109", job_number: "EX-00109", bzzzbx_customer_id: "bx-cust-0003", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(-3), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 26_500, currency: "USD" } },
+      // R10 (OPR-29, P-9): Scheduled y de hoy, sin eventos; su OPS-010 Delayed la pone el E2E (bx-alert-0011).
+      { bzzzbx_job_id: "bx-job-0110", job_number: "EX-00110", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(0), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null, price: { amount_cents: 17_000, currency: "USD" } },
+      // R11 (OPR-29, P-9): el job enlazado (0111) y otro de la misma propiedad y cliente en otro día (0112), al que Change linked job lo cambia.
+      { bzzzbx_job_id: "bx-job-0111", job_number: "EX-00111", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(1), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 17_000, currency: "USD" } },
+      { bzzzbx_job_id: "bx-job-0112", job_number: "EX-00112", bzzzbx_customer_id: "bx-cust-0002", bzzzbx_property_id: "bx-prop-0006", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(2), window_start: "13:00", window_end: "16:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 17_000, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0102", job_number: "EX-00102", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: "bx-space-0002", bzzzbx_service_id: "bx-svc-0001", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "scheduled", bzzzbx_team_id: "bx-team-0001", po_number: null, price: { amount_cents: 15_500, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0103", job_number: "EX-00103", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0002", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0001", service_date: dia(4), window_start: "13:00", window_end: "16:00", status: "scheduled", bzzzbx_team_id: "bx-team-0002", po_number: null, price: { amount_cents: 15_500, currency: "USD" } },
       { bzzzbx_job_id: "bx-job-0104", job_number: "EX-00104", bzzzbx_customer_id: "bx-cust-0001", bzzzbx_property_id: "bx-prop-0001", bzzzbx_space_id: null, bzzzbx_service_id: "bx-svc-0002", service_date: dia(2), window_start: "09:00", window_end: "12:00", status: "cancelled", bzzzbx_team_id: null, po_number: null, price: { amount_cents: 20_000, currency: "USD" } },
@@ -89,6 +96,9 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_assignment_id: "bx-asg-0005", bzzzbx_job_id: "bx-job-0005", bzzzbx_team_id: "bx-team-0003", status: "confirmed" },
       { bzzzbx_assignment_id: "bx-asg-0006", bzzzbx_job_id: "bx-job-0006", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
       { bzzzbx_assignment_id: "bx-asg-0109", bzzzbx_job_id: "bx-job-0109", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
+      { bzzzbx_assignment_id: "bx-asg-0110", bzzzbx_job_id: "bx-job-0110", bzzzbx_team_id: "bx-team-0001", status: "confirmed" },
+      { bzzzbx_assignment_id: "bx-asg-0111", bzzzbx_job_id: "bx-job-0111", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
+      { bzzzbx_assignment_id: "bx-asg-0112", bzzzbx_job_id: "bx-job-0112", bzzzbx_team_id: "bx-team-0002", status: "confirmed" },
     ],
     jobtracker_event: [
       { bzzzbx_event_id: "bx-evt-0001", bzzzbx_job_id: "bx-job-0004", kind: "checked_in", occurred_at: hace(HORA) },
@@ -112,6 +122,8 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       correoOriginal(7, "contact.two@example.test", "Clean for Placeholder House", hace(4 * HORA)),
       correoOriginal(8, "contact.three@example.test", "Deep clean at Mock Gardens 5D", hace(25 * MIN)),
       correoOriginal(9, "contact.four@example.test", "Deep clean at Test Terrace 3F", hace(6 * DIA)),
+      correoOriginal(10, "contact.two@example.test", "Standard clean at Test Terrace today", hace(DIA)),
+      correoOriginal(11, "contact.two@example.test", "Standard clean at Test Terrace tomorrow", hace(DIA)),
       {
         bzzzbx_message_id: "bx-msg-0102",
         bzzzbx_thread_id: null,
@@ -134,6 +146,10 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0108", paid: false, paid_at: null, bzzzbx_event_id: null },
       // R9 (OPR-34): sin pagar.
       { bzzzbx_job_id: "bx-job-0109", paid: false, paid_at: null, bzzzbx_event_id: null },
+      // R10 y R11 (OPR-29): sin pagar.
+      { bzzzbx_job_id: "bx-job-0110", paid: false, paid_at: null, bzzzbx_event_id: null },
+      { bzzzbx_job_id: "bx-job-0111", paid: false, paid_at: null, bzzzbx_event_id: null },
+      { bzzzbx_job_id: "bx-job-0112", paid: false, paid_at: null, bzzzbx_event_id: null },
     ],
     alert_result: [
       { bzzzbx_alert_id: "bx-alert-0001", sujeto: { tipo: "request", request_id: "b0000000-0000-4000-8000-0000000000a1" }, rule_id: "OPS-001", rule_version: "1", level: "amber", reason_text: "Unassigned for 15 min.", opened_at: hace(5 * MIN), cleared_at: null },
@@ -157,6 +173,9 @@ export function datosIniciales(ahora: Date): DatosIniciales {
       { bzzzbx_job_id: "bx-job-0006", status: "on_track" },
       { bzzzbx_job_id: "bx-job-0108", status: "on_track" },
       { bzzzbx_job_id: "bx-job-0109", status: "on_track" },
+      { bzzzbx_job_id: "bx-job-0110", status: "on_track" },
+      { bzzzbx_job_id: "bx-job-0111", status: "on_track" },
+      { bzzzbx_job_id: "bx-job-0112", status: "on_track" },
     ],
   };
 }
