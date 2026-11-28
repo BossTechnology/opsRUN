@@ -37,6 +37,18 @@ where rm.bzzzbx_thread_id is not null
   )
 order by rm.bzzzbx_thread_id`;
 
+/** Los mensajes salientes vinculados a esas requests: de ahí salen las alertas de un texto que falló (OPR-19, P-5). */
+export const CONSULTA_MENSAJES_SALIENTES_ACTIVOS = `
+select distinct rm.bzzzbx_message_id
+from opsrun.request_message as rm
+join opsrun.request as r on r.id = rm.request_id
+where rm.direction = 'outbound'
+  and not exists (
+    select 1 from opsrun.audit_event as e
+    where e.request_id = r.id and e.event_type in ('job_paid', 'job_cancelled')
+  )
+order by rm.bzzzbx_message_id`;
+
 export const CONSULTA_ALERTAS_ABIERTAS = `
 select a.bzzzbx_alert_id
 from opsrun.alert_occurrence as a
@@ -78,6 +90,11 @@ export function crearDatosDelRegistrador(ejecutar: Ejecutar = (fn, opciones) => 
     async hilosActivos() {
       const { rows } = await ejecutar((db) => db.query<{ bzzzbx_thread_id: string }>(CONSULTA_HILOS_ACTIVOS));
       return rows.map((r) => r.bzzzbx_thread_id);
+    },
+
+    async mensajesSalientesActivos() {
+      const { rows } = await ejecutar((db) => db.query<{ bzzzbx_message_id: string }>(CONSULTA_MENSAJES_SALIENTES_ACTIVOS));
+      return rows.map((r) => r.bzzzbx_message_id);
     },
 
     async alertasAbiertas() {

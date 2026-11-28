@@ -73,12 +73,13 @@ describe("datos del registrador: quién escribe", () => {
     const { datos, llamadas } = espia();
     await datos.requestsActivas();
     await datos.hilosActivos();
+    await datos.mensajesSalientesActivos();
     await datos.alertasAbiertas();
     await datos.requestsExistentes([R(1)]);
     await datos.requestsDeJobs(["bx-job-0003"]);
     await datos.requestsDeMensajes(["bx-msg-0001"]);
     await datos.requestsDeHilos(["bx-thread-0001"]);
-    expect(llamadas.length).toBe(7);
+    expect(llamadas.length).toBe(8);
     for (const l of llamadas) {
       expect(l.escritura).toBeUndefined();
       expect(l.actor).toBeUndefined();
@@ -188,6 +189,23 @@ conBase("el registrador contra la base con la seed", () => {
     const datos = crearDatosDelRegistrador(ejecutar);
     return { falso, log, registrador: crearRegistrador(() => ({ lectura: falso.lectura, datos, log })) };
   };
+
+  it("mensajesSalientesActivos trae los salientes vinculados de las requests activas (el texto de R2), y no los entrantes", async () => {
+    const ids = await crearDatosDelRegistrador(ejecutar).mensajesSalientesActivos();
+    expect(ids).toContain("bx-msg-0102");
+    expect(ids).not.toContain("bx-msg-0002");
+  });
+
+  it("OPR-19: la pasada completa encuentra la alerta de un texto saliente que falló, sin hilo, y la anota con su request y su mensaje", async () => {
+    const { falso, registrador } = preparar();
+    // El falso abre la alerta Message not delivered al pasar el saliente a failed (P-4); sin cursor, solo la pasada por mensaje la ve.
+    falso.lectura.cambiar("message", "bx-msg-0102", { delivery: "failed", delivery_detail: "Invalid number." });
+    const r = await registrador.vuelta();
+    expect(r).toMatchObject({ estado: "ok", completa: true });
+    const o = await ocurrencia("bx-alert-msg-0102");
+    expect(o).toMatchObject({ level: "red", resolved_at: null, bzzzbx_message_id: "bx-msg-0102" });
+    expect((await eventos("bx-alert-msg-0102")).map((e) => e.event_type)).toEqual(["alert_opened"]);
+  });
 
   it("al arrancar, contra la seed y el falso, la pasada completa no escribe nada (la seed y el falso coinciden)", async () => {
     const antes = await marca();

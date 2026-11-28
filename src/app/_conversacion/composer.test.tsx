@@ -34,6 +34,8 @@ const ORIGINAL: EntradaDeHilo = {
   cuerpo: "Please let us know the window.",
   noEncontrado: false,
   estado: { texto: "Received", tono: "normal" },
+  entrega: null,
+  destinatario: null,
   reenviar: null,
 };
 
@@ -367,8 +369,84 @@ describe("Hilo: Edit and resend y lo que se ve (§4)", () => {
     cuerpo: "We can do Friday.",
     noEncontrado: false,
     estado: { texto: "Failed · Forced error (stand-in).", tono: "error" },
+    entrega: null,
+    destinatario: null,
     reenviar: { modo: "customer", cuerpo: "We can do Friday." },
   };
+  const REBOTADO: EntradaDeHilo = {
+    ...FALLIDO,
+    id: "msg:bx-msg-019a",
+    instante: "2026-11-24T17:50:00Z",
+    estado: { texto: "Bounced · Mailbox does not exist.", tono: "error" },
+    entrega: "bounced",
+    destinatario: "contact.one@example.test",
+  };
+  const FALLO_DE_TEXTO: EntradaDeHilo = {
+    ...REBOTADO,
+    id: "msg:bx-msg-019c",
+    tipo: "text",
+    etiqueta: "Text",
+    estado: { texto: "Failed · Invalid number.", tono: "error" },
+    entrega: "failed",
+    cuerpo: "Ready?",
+    reenviar: { modo: "cleaner", cuerpo: "Ready?" },
+  };
+
+  it("data-entrega, el texto en rojo con role=status y el ancla enfocable de un mensaje que rebotó o falló", () => {
+    pintar(datos({ entradas: [ORIGINAL, REBOTADO, FALLO_DE_TEXTO] }));
+    const [original, rebotado, fallo] = screen.getAllByTestId("entrada");
+    expect(original!.getAttribute("data-entrega")).toBeNull();
+    expect(rebotado!.getAttribute("data-entrega")).toBe("bounced");
+    expect(fallo!.getAttribute("data-entrega")).toBe("failed");
+    for (const e of [rebotado!, fallo!]) {
+      const estado = within(e).getByTestId("estado-entrega");
+      expect(estado.getAttribute("role")).toBe("status");
+      expect(estado.className).toContain("entrada-error");
+      expect(e.getAttribute("tabindex")).toBe("-1");
+    }
+    expect(within(rebotado!).getByTestId("estado-entrega").textContent).toBe("Bounced · Mailbox does not exist.");
+    expect(rebotado!.getAttribute("data-entrada")).toBe("msg:bx-msg-019a");
+  });
+
+  it("Edit and resend de un mensaje que rebotó o falló copia su cuerpo al modo de su canal, y no envía", async () => {
+    const ejecutar = pintar(datos({ entradas: [ORIGINAL, REBOTADO, FALLO_DE_TEXTO] }));
+    const botones = screen.getAllByTestId("reenviar");
+    expect(botones).toHaveLength(2);
+    fireEvent.click(botones[1]!);
+    expect(modo("cleaner").getAttribute("aria-checked")).toBe("true");
+    expect(caja().value).toBe("Ready?");
+    fireEvent.click(botones[0]!);
+    expect(modo("customer").getAttribute("aria-checked")).toBe("true");
+    expect(caja().value).toBe("We can do Friday.");
+    expect(ejecutar).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["BzzzBX caído", { etapa: "requests", bzzzbxDisponible: false, hilos: ["h"], equipoId: "e" }, "BzzzBX unavailable"],
+    ["sin hilo", { etapa: "requests", bzzzbxDisponible: true, hilos: [], equipoId: "e" }, "No email thread for this request"],
+    ["job cancelado", { etapa: "cancelled", bzzzbxDisponible: true, hilos: ["h"], equipoId: "e" }, "Job cancelled"],
+  ])("con el modo Customer apagado (%s) Edit and resend queda en gris con el mismo motivo y no copia nada", (_caso, entrada, razon) => {
+    pintar(datos({ entradas: [ORIGINAL, REBOTADO], modos: disponibilidadDelComposer(entrada) }));
+    const boton = screen.getByTestId("reenviar") as HTMLButtonElement;
+    expect(boton.disabled).toBe(true);
+    expect(screen.getByTestId("reenviar-razon").textContent).toBe(razon);
+    expect(boton.getAttribute("aria-describedby")).toBe(screen.getByTestId("reenviar-razon").id);
+    fireEvent.click(boton);
+    expect(caja().value).toBe("");
+  });
+
+  it("sin cleaner, Edit and resend de un texto queda en gris con 'Choose a cleaner first', y el de un correo sigue habilitado", () => {
+    pintar(
+      datos({
+        entradas: [ORIGINAL, REBOTADO, FALLO_DE_TEXTO],
+        modos: disponibilidadDelComposer({ etapa: "requests", bzzzbxDisponible: true, hilos: ["h"], equipoId: null }),
+      }),
+    );
+    const [correo, texto] = screen.getAllByTestId("reenviar") as HTMLButtonElement[];
+    expect(correo!.disabled).toBe(false);
+    expect(texto!.disabled).toBe(true);
+    expect(screen.getAllByTestId("reenviar-razon").map((r) => r.textContent)).toEqual(["Choose a cleaner first"]);
+  });
 
   it("cada entrada lleva data-tipo y data-direccion, y el fallo se ve en rojo con role=status", () => {
     pintar(datos({ entradas: [ORIGINAL, FALLIDO] }));

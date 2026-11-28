@@ -16,7 +16,9 @@ export const TEXTO_NO_APLICA = "Not available at this stage";
  * defensa: quitarle el `disabled` solo abre el panel, y Go lo rechaza el servidor.
  *
  * Message not delivered no es una acción de la barra: lleva el foco al mensaje en
- * la conversación, cuyo botón Edit and resend ya existe (OPR-27, S-6).
+ * la conversación, cuyo botón Edit and resend ya existe (OPR-27, S-6). Ese botón
+ * nunca envía ni llama a `ejecutarAccion`: solo mueve el foco (OPR-19 §6.3), y
+ * hereda la disponibilidad del Composer (`estado`).
  */
 export function BotonDeAlerta({ boton }: { boton: ModeloDeBoton }) {
   const { acciones, elegir } = useAccionDeLaVentana();
@@ -30,16 +32,27 @@ export function BotonDeAlerta({ boton }: { boton: ModeloDeBoton }) {
   }
 
   if (boton.tipo === "reenviar") {
+    // Hereda la disponibilidad del modo del canal del Composer (OPR-19 §6.3): en gris con el mismo motivo.
+    const razon = boton.estado.disponible ? null : boton.estado.razon;
     return (
-      <button
-        type="button"
-        className="alerta-boton"
-        data-testid="alerta-boton"
-        data-accion="edit_and_resend"
-        onClick={() => enfocarElMensaje(boton.mensajeId)}
-      >
-        Edit and resend
-      </button>
+      <span className="alerta-accion">
+        <button
+          type="button"
+          className="alerta-boton"
+          data-testid="alerta-boton"
+          data-accion="edit_and_resend"
+          disabled={razon !== null}
+          aria-describedby={razon ? `nota-reenviar-${boton.mensajeId}` : undefined}
+          onClick={() => enfocarElMensaje(boton.mensajeId)}
+        >
+          Edit and resend
+        </button>
+        {razon ? (
+          <span className="nota-gris" id={`nota-reenviar-${boton.mensajeId}`} data-testid="alerta-boton-nota">
+            {razon}
+          </span>
+        ) : null}
+      </span>
     );
   }
 
@@ -73,7 +86,9 @@ function enfocarElMensaje(mensajeId: string | null) {
   if (!mensajeId) return;
   const entrada = [...document.querySelectorAll<HTMLElement>("[data-entrada]")].find((e) => e.dataset.entrada === `msg:${mensajeId}`);
   if (!entrada) return;
-  const destino = entrada.querySelector<HTMLElement>('[data-testid="reenviar"]') ?? entrada;
+  const reenviar = entrada.querySelector<HTMLButtonElement>('[data-testid="reenviar"]');
+  // Un botón en gris no recibe el foco: entonces, la entrada (el ancla).
+  const destino = reenviar && !reenviar.disabled ? reenviar : entrada;
   destino.focus();
   destino.scrollIntoView?.({ block: "nearest" });
 }

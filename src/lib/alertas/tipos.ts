@@ -48,8 +48,27 @@ export type EsperaDeOpsrun = {
 /** Lo que hace el botón de una alerta (§5.3). Nunca ejecuta nada: abre una acción de la barra. */
 export type BotonDeAlerta =
   | { tipo: "accion"; codigo: string; prellenado: Record<string, unknown> | null }
-  | { tipo: "reenviar"; mensajeId: string | null }
+  /**
+   * Edit and resend (OPR-19 §6.3): lleva el foco al mensaje. `estado` hereda la disponibilidad del modo del canal del
+   * Composer, o dice "Message not found in BzzzBX"; en gris nunca lleva a ninguna parte desde aquí.
+   */
+  | { tipo: "reenviar"; mensajeId: string | null; estado: DisponibilidadDelBoton }
   | { tipo: "texto"; texto: string };
+
+export type DisponibilidadDelBoton = { disponible: true } | { disponible: false; razon: string };
+
+/**
+ * Lo que la pestaña sabe del mensaje de una alerta de mensaje (OPR-19 §6.2 y §6.3), leído de BzzzBX al pintar por la
+ * misma lectura que la conversación. Nada de esto se guarda.
+ */
+export type MensajeDeAlerta = {
+  /** BzzzBX respondió y no conoce el mensaje: el botón dice "Message not found in BzzzBX". */
+  encontrado: boolean;
+  /** El correo, o el equipo y su teléfono; null si no se sabe (se ve "— —"). */
+  destinatario: string | null;
+  /** Lo que puede hacer el Composer en el modo del canal del mensaje. */
+  modo: DisponibilidadDelBoton;
+};
 
 export type FilaNeedsAction = {
   id: string;
@@ -65,6 +84,10 @@ export type FilaNeedsAction = {
   duracion: string;
   /** Veces que se abrió esta regla en la request, contando esta; null si fue una sola. */
   repeticiones: number | null;
+  /** Solo en una regla de mensaje y solo en la pestaña (OPR-19 §6.2): "To: …", de solo lectura. */
+  destinatario: string | null;
+  /** El texto fijo del arreglo de la regla, si lo tiene (OPR-19 §6.2). */
+  arreglo: string | null;
   boton: BotonDeAlerta;
 };
 

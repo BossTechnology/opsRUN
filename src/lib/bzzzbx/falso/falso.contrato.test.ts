@@ -11,8 +11,38 @@ import { crearFalso, RelojManual } from ".";
 
 probarContratoDeLectura("falso en memoria", async () => {
   const falso = crearFalso();
+  falso.lectura.poner("message", {
+    bzzzbx_message_id: "bx-msg-019a",
+    bzzzbx_thread_id: "bx-thread-0002",
+    channel: "email",
+    direction: "outbound",
+    from: "requests@example.test",
+    to: ["contact.one@example.test"],
+    subject: "Re: Clean for Sample Court unit 12",
+    body: "Hello, confirming the window.",
+    sent_at: "2026-11-27T15:00:00.000Z",
+    delivery: "bounced",
+    delivery_detail: "Mailbox does not exist.",
+  });
+  falso.lectura.poner("message", {
+    bzzzbx_message_id: "bx-msg-019b",
+    bzzzbx_thread_id: "bx-thread-0002",
+    channel: "email",
+    direction: "outbound",
+    from: "requests@example.test",
+    to: ["contact.one@example.test"],
+    subject: "Re: Clean for Sample Court unit 12",
+    body: "Second note.",
+    sent_at: "2026-11-27T15:01:00.000Z",
+    delivery: "sent",
+  });
   return {
     lectura: falso.lectura,
+    correoRebotado: { bzzzbx_message_id: "bx-msg-019a", bzzzbx_thread_id: "bx-thread-0002", delivery_detail: "Mailbox does not exist." },
+    cambioDeEntrega: {
+      bzzzbx_message_id: "bx-msg-019b",
+      provocar: async () => falso.lectura.cambiar("message", "bx-msg-019b", { delivery: "bounced", delivery_detail: "Mailbox full." }),
+    },
     conocidos: {
       job: "bx-job-0004",
       assignment: "bx-asg-0004",

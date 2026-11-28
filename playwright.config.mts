@@ -28,7 +28,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "chromium", testIgnore: /(audit|assign-confirm|entrada-correo|etapas|alertas|scheduled|analisis-ia)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", testIgnore: /(audit|assign-confirm|entrada-correo|etapas|alertas|entrega|scheduled|analisis-ia)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     // La pestaña Audit enlaza R7 (una vez por base): corre después del resto, no a la vez (OPR-35).
     { name: "chromium-audit", testMatch: /audit\.spec\.ts/, dependencies: ["chromium"], use: { ...devices["Desktop Chrome"] } },
     // Assign y Confirm enlazan R8 (una vez por base) y mueven el dueño de R2: también después del resto (OPR-28).
@@ -59,11 +59,18 @@ export default defineConfig({
       dependencies: ["chromium-etapas"],
       use: { ...devices["Desktop Chrome"] },
     },
+    // El estado de entrega cambia R2 (OPR-19): sus mensajes, el cleaner Team Alpha y las alertas de mensaje que el registrador anota. Después de la conversación y de Alerts.
+    {
+      name: "chromium-entrega",
+      testMatch: /entrega\.spec\.ts/,
+      dependencies: ["chromium-alertas"],
+      use: { ...devices["Desktop Chrome"] },
+    },
     // Scheduled lleva R10 a In Progress en Audit (F3) y cambia el job de R11 (F6), una vez por base (OPR-29): al final, después de todo lo demás.
     {
       name: "chromium-scheduled",
       testMatch: /scheduled\.spec\.ts/,
-      dependencies: ["chromium-alertas"],
+      dependencies: ["chromium-entrega"],
       use: { ...devices["Desktop Chrome"] },
     },
     // El análisis de IA crea requests de verdad (OPR-36): al final, después de todo lo demás.

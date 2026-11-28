@@ -5,6 +5,7 @@
  */
 import { ENTIDADES, TIPOS_INSTRUCCION, type Entidad, type Entidades, type TipoInstruccion } from "../tipos";
 
+import { aplicarForzarEntrega } from "./controles-entrega";
 import { VALORES_DE_CUANDO, type CuandoFalla } from "./instrucciones-falsas";
 
 import type { Falso } from "./index";
@@ -48,6 +49,8 @@ export function aplicarControl(falso: Falso, pedido: unknown): Resultado {
         if (pedido.respuesta_a !== undefined && (typeof pedido.respuesta_a !== "string" || pedido.respuesta_a.trim() === "")) break;
         return { ok: true, ...falso.lectura.correoNuevo(pedido.respuesta_a) };
       }
+      case "forzar_entrega":
+        return aplicarForzarEntrega(falso, pedido);
       case "no_disponible":
         if (typeof pedido.valor !== "boolean") break;
         falso.lectura.noDisponible(pedido.valor);

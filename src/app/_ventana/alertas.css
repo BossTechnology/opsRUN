@@ -51,6 +51,8 @@
 }
 
 .alerta-motivo,
+.alerta-destinatario,
+.alerta-arreglo,
 .alerta-tiempo,
 .alerta-quien,
 .alerta-razon {
@@ -58,6 +60,7 @@
 }
 
 .alerta-tiempo,
+.alerta-destinatario,
 .alerta-razon,
 .alertas-ninguna {
   color: var(--tenue);
