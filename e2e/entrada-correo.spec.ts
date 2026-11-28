@@ -77,7 +77,8 @@ test("E1: llega un correo y aparece la request en el tablero en menos de 1 minut
   const antes = await idsDeRequests(page);
 
   const inicio = Date.now();
-  const correo = await control(page, { accion: "correo_nuevo" });
+  // La IA lenta (OPR-36): el borrador de esta request se queda vacío y su tarjeta sigue como la dejó la entrada.
+  const correo = await control(page, { accion: "correo_nuevo", ia: "lenta" });
   mensaje = correo.bzzzbx_message_id!;
   hilo = correo.bzzzbx_thread_id!;
   requestId = await esperarTarjetaNueva(page, antes);
@@ -161,9 +162,12 @@ test("E5: tras reiniciar el falso (el cursor caduca) la entrada recupera, sin du
   expect(await requests(page).count()).toBe(antes.length + 1);
 });
 
-test("E6: AI pending: la Job window de la request nueva abre sin sugerencias y sin marcas de IA", async ({ page }) => {
+test("E6: AI pending: con la IA lenta la Job window de la request nueva abre sin sugerencias y sin marcas de IA, con AI pending en sus campos (OPR-36)", async ({ page }) => {
   await page.goto(`/job/${requestId}`);
   await expect(page.getByTestId("encabezado")).toBeVisible();
+  await expect(page.getByTestId("campo-property")).toContainText("AI pending");
+  await expect(page.getByTestId("campo-service")).toContainText("AI pending");
+  await expect(page.getByTestId("ia-marca")).toHaveCount(0);
   await expect(page.getByTestId("marca-ai")).toHaveCount(0);
   await expect(page.locator('[data-ranura="conversacion"]').getByTestId("borrador-ia")).toHaveCount(0);
 });

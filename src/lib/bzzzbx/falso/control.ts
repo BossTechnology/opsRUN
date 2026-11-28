@@ -9,6 +9,7 @@ import { aplicarForzarEntrega } from "./controles-entrega";
 import { VALORES_DE_CUANDO, type CuandoFalla } from "./instrucciones-falsas";
 
 import type { Falso } from "./index";
+import { aplicarControlDeIa } from "./controles-ia";
 
 type Resultado =
   | { ok: true; bzzzbx_message_id?: string; bzzzbx_thread_id?: string }
@@ -21,6 +22,8 @@ const esObjeto = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 
 export function aplicarControl(falso: Falso, pedido: unknown): Resultado {
   if (!esObjeto(pedido)) return { ok: false, error: "pedido inválido" };
+  const deIa = aplicarControlDeIa(falso, pedido);
+  if (deIa) return deIa;
   try {
     switch (pedido.accion) {
       case "cambiar":

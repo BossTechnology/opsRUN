@@ -4,6 +4,7 @@
  * guarda ni se escribe: la ventana solo lee.
  */
 import type { Insignia } from "../alertas/tipos";
+import type { VistaIa } from "../analisis-ia/tipos";
 import type { Coincidencia } from "../fase-a/enlace";
 import type { AlertResult, CleanerTeam, Contact, Photo } from "../bzzzbx/tipos";
 import type { PoVigente } from "../billing/po";
@@ -16,6 +17,8 @@ export type FilaVentana = FilaRequest & {
   bzzzbx_contact_id: string | null;
   bzzzbx_team_id: string | null;
   access_notes: string | null;
+  /** Camas del borrador (OPR-36: la IA las propone y el operador las corrige). */
+  beds?: number | null;
   /** `change_seq` de la request: lo que vio el operador (S-12). Texto: es un bigint. */
   change_seq: string;
   /** Cuándo capturó el operador el PO en opsRUN (OPR-32). */
@@ -179,6 +182,11 @@ export type VentanaJob = {
     tieneEquipo: boolean;
     respuestaDelCleaner: RespuestaDelCleaner | null;
     sugerencias: SugerenciaAbierta[];
+    /**
+     * El análisis de IA de la request (OPR-36 §10), solo en Requests: por campo, "AI pending", vacío o con su
+     * sugerencia abierta. null fuera de Requests o si no se leyó.
+     */
+    ia?: VistaIa | null;
     /** Los jobs a los que Change linked job puede cambiar el enlace (OPR-29); vacío si no hay o no se pudieron leer. */
     candidatosDeCambio: CandidatoDeCambio[];
     /** BzzzBX devolvió el máximo de `buscarJobs`: puede haber más candidatos que no llegaron. */

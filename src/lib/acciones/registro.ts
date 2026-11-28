@@ -21,6 +21,7 @@ import type { Etapa } from "../tablero/tipos";
 
 import { crearEjecutoresDeEnlace, TEXTO_SIN_OTRO_JOB } from "./enlace";
 import { crearEjecutoresDeEtapas, TEXTO_ADD_PO, TEXTO_SIN_ALERTA, TEXTO_YA_VALIDADO } from "./etapas";
+import { crearEjecutoresDeIa } from "./ia";
 import {
   crearEjecutoresDeRequests,
   TEXTO_SIN_CLIENTE,
@@ -44,6 +45,10 @@ const requests = crearEjecutoresDeRequests(async () => (await import("../request
 // OPR-30 a OPR-32: Clear alert, Mark as OSS, Approve & confirm, Enter PO y Validate. En la Fase A solo
 // escriben en opsRUN (ninguna es una instrucción a BzzzBX); el módulo de servidor se carga al correr.
 const etapas = crearEjecutoresDeEtapas(async () => (await import("../etapas/servidor")).dependenciasDeEtapas());
+
+// OPR-36: Accept, Change y Reject de una sugerencia de IA. Solo escribe en opsRUN (no es una instrucción a
+// BzzzBX); el módulo de servidor se carga al correr.
+const ia = crearEjecutoresDeIa(async () => (await import("../analisis-ia/decidir-servidor")).datosDeDecision());
 
 export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
   // Requests (OPR-28)
@@ -138,6 +143,19 @@ export const REGISTRO_DE_ACCIONES: DefinicionAccion[] = [
     necesitaBzzzbx: false,
     interna: true,
     ejecutor: enlace.reject_job_link,
+  },
+  {
+    // Interna: Accept, Change y Reject por campo de la IA (OPR-36 §10.2). No sale en la action bar. La decisión es del
+    // operador y no necesita BzzzBX: corre con BzzzBX caído. La versión de la request sí cuenta (concurrencia por defecto).
+    codigo: "decide_ai_suggestion",
+    etiqueta: "Decide AI suggestion",
+    descripcion: "Accept, change or reject what the AI proposed for a field.",
+    etapas: ["requests"],
+    enRelease: true,
+    motivo: "opcional",
+    necesitaBzzzbx: false,
+    interna: true,
+    ejecutor: ia.decide_ai_suggestion,
   },
   // Scheduled (OPR-29). En la Fase A el job se reprograma o se cancela en las herramientas de PINCH
   // y opsRUN lo observa: se ven en gris y nunca corren (OPR-30, P-10).

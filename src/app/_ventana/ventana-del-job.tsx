@@ -13,7 +13,7 @@ import type { IdPestana, VentanaJob } from "@/lib/ventana/tipos";
 
 import { ProveedorDeAcciones } from "./accion-de-la-ventana";
 import { ActorDemo } from "./actor-demo";
-import { confirmarEnlace, rechazarEnlace } from "./acciones";
+import { confirmarEnlace, decidirSugerenciaDeIa, rechazarEnlace } from "./acciones";
 import { BarraAcciones } from "./barra-acciones";
 import { Encabezado } from "./encabezado";
 import { PanelPropiedad } from "./paneles";
@@ -75,7 +75,7 @@ function panelesDe(v: VentanaJob): Partial<Record<IdPestana, ReactNode>> {
             <EnlaceDeLaRequest ventana={v} />
           </Suspense>
         ) : null}
-        <PanelPropiedad ventana={v} />
+        <PanelPropiedad ventana={v} decidir={decidirSugerenciaDeIa.bind(null, v.requestId, v.version)} />
       </>
     ),
     // Needs action ya leído y descontado (OPR-34 §5); la ranura lee Waiting y Resolved en su propia transacción.

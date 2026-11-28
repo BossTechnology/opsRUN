@@ -17,7 +17,7 @@ export const esIdDeRequest = (valor: string) => UUID.test(valor);
 /** La fila del tablero de OPR-25 con `where r.id = $1`, más lo propio de la ventana. */
 export const CONSULTA_FILA_VENTANA = `
 select ${COLUMNAS_FILA},
-       r.bzzzbx_contact_id, r.bzzzbx_team_id, r.access_notes,
+       r.bzzzbx_contact_id, r.bzzzbx_team_id, r.access_notes, r.beds::int as beds,
        r.change_seq::text as change_seq,
        to_char(r.entered_po_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as entered_po_at,
        r.oss_source::text as oss_source,

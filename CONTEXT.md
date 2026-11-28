@@ -71,8 +71,8 @@ Los términos del producto van en inglés, tal como los ve el operador. Lo que d
 | Conversation | Un solo hilo por job: request original, correos, textos y notas internas, con su estado de entrega. | OPR-27 |
 | Composer | Caja para escribir en la conversación, con tres modos: Customer (correo), Cleaner (texto) y Note. | OPR-27 |
 | Audit | Registro ordenado de cada evento y acción del job, con persona y motivo. | OPR-35 |
-| AI-marked field | Campo llenado por la IA que se ve marcado como AI hasta que el operador lo confirma o lo corrige. | OPR-28, OPR-36 |
-| AI pending | Estado de los campos cuando la IA tarda o está caída; el operador trabaja a mano. | OPR-36 |
+| AI-marked field | Campo del borrador que la IA llenó (o con una sugerencia suya sin decidir) y se ve con el chip AI, con su motivo ("Why?") y Accept, Change y Reject, hasta que el operador lo confirma, lo corrige o lo rechaza. Solo se llenan campos vacíos, sin confirmación vigente que los cubra y que el operador no haya decidido antes. | OPR-28, OPR-36 |
+| AI pending | Texto gris que ocupa el lugar del valor de un campo vacío de la pestaña de la propiedad (solo en Requests) mientras no hay análisis, el último sigue pendiente, falló o venció. No se guarda: se calcula al leer. No deshabilita nada; el operador trabaja a mano. | OPR-36 |
 | Focused / Global | Alcance de Rosie: Focused sigue el filtro de operador y Global ve toda la operación. | OPR-38 |
 | Board | El tablero: barra superior, riel izquierdo y las cinco columnas con sus tarjetas. Se actualiza solo en menos de 1 minuto. | OPR-25 |
 | Card | La tarjeta de una request o job en el tablero: nombre y número, estado bajo el número, ciudad, type \| service, chat, flags (PO, PO missing, OSS) y color. | OPR-25 |
@@ -167,8 +167,11 @@ Términos de la entrada de correo y del ciclo de fondo. Detalle en `docs/spec/op
 | Término | Significado | Dónde aparece |
 |---|---|---|
 | Entrada de correo | El proceso de sistema `entrada_correo`: lee los correos entrantes nuevos del puerto de lectura de BzzzBX y le pide a la base (`opsrun.ingest_request_email`) que cree la request del hilo, vincule la respuesta o diga que ya estaba. Nunca lee Gmail ni guarda nada de PINCH: a la base solo viajan el ID del mensaje, el del hilo y la hora. | OPR-15, `src/lib/entrada/` |
-| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. Sus tareas hoy: la entrada de correo, la reconciliación de envíos, el observador de etapas y el registrador de alertas. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
+| Ciclo de fondo | La única pieza de opsRUN que corre trabajo propio en el servidor de Next: arrancada por `instrumentation`, corre varias tareas, cada una con su cadencia y una vuelta a la vez. Sus tareas hoy: la entrada de correo, la reconciliación de envíos, el observador de etapas, el registrador de alertas y el análisis de IA. Ninguna tarjeta abre un temporizador propio. | ADR 0006, `src/lib/ciclo/` |
 | Marca de agua | Desde dónde recupera la entrada al arrancar o tras `CursorCaducado`: la última `request.received_at` menos 24 h. Sin ninguna request, no recupera nada (la entrada empieza en "ahora"). | OPR-15 §4.3 |
+| Análisis de IA | La tarea `analisis_ia` del ciclo de fondo (cada 5 s): abre un `ai_analysis` por request nueva, se lo pide a BzzzBX con crosswalk IDs (nunca el correo), sigue los pendientes y guarda el resultado (`opsrun.record_ai_analysis`, actor de sistema). Sus sugerencias llenan los campos vacíos del borrador y se ven AI-marked; nunca crea confirmaciones ni instrucciones ni cambia dueño, estado o job (guard G19). A lo sumo dos por request. | OPR-36, ADR 0006 |
+| Barrido de análisis | Lo que hace la tarea `analisis_ia` en cada vuelta además de las requests que la entrada despertó: propone las requests `open` de las últimas 24 h sin análisis `pending` ni `completed`, hasta 20. Encuentra lo que se perdió si el proceso cayó. La base decide si toca (`start_ai_analysis`). | OPR-36 |
+| Límite del análisis | 120 s desde `requested_at` sin resultado: el análisis termina `timed_out` (también con BzzzBX caído). El reintento automático sale a los 60 s del fallo; no hay botón "Retry AI". | OPR-36 |
 | Email received | Evento de Audit (`email_received`) cuando la entrada vincula una respuesta del cliente a la request de su hilo. El primer correo deja Request received. | OPR-15 P-4, OPR-35 |
 
 ## Fuera de alcance de V1.1 beta

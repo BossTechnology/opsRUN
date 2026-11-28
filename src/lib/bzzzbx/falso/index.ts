@@ -4,10 +4,12 @@
  */
 import { datosIniciales } from "./datos";
 import { EntregaFalsa } from "./entrega-falsa";
+import { IaFalsa } from "./ia-falsa";
 import { InstruccionesFalsas } from "./instrucciones-falsas";
 import { LecturaFalsa } from "./lectura-falsa";
 import { relojDelSistema, type Reloj } from "./reloj";
 
+export { IaFalsa, GUIONES, type Guion } from "./ia-falsa";
 export { InstruccionesFalsas, MARCA_ERROR, type CuandoFalla, type ErrorForzado } from "./instrucciones-falsas";
 export { LecturaFalsa } from "./lectura-falsa";
 export { RelojManual, relojDelSistema, type Reloj } from "./reloj";
@@ -20,7 +22,7 @@ export type OpcionesFalso = {
   pasoMs?: number;
 };
 
-export type Falso = { lectura: LecturaFalsa; instrucciones: InstruccionesFalsas; entrega: EntregaFalsa; reloj: Reloj };
+export type Falso = { lectura: LecturaFalsa; instrucciones: InstruccionesFalsas; entrega: EntregaFalsa; ia: IaFalsa; reloj: Reloj };
 
 export function crearFalso(opciones: OpcionesFalso = {}): Falso {
   const reloj = opciones.reloj ?? relojDelSistema;
@@ -28,5 +30,6 @@ export function crearFalso(opciones: OpcionesFalso = {}): Falso {
   const instrucciones = new InstruccionesFalsas(reloj, lectura, { pasoMs: opciones.pasoMs });
   const entrega = new EntregaFalsa(reloj, lectura, opciones.pasoMs);
   lectura.engancharEntrega(entrega);
-  return { lectura, instrucciones, entrega, reloj };
+  const ia = new IaFalsa(reloj);
+  return { lectura, instrucciones, entrega, ia, reloj };
 }

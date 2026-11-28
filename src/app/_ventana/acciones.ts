@@ -38,6 +38,24 @@ export async function rechazarEnlace(
 }
 
 /**
+ * Accept, Change y Reject de una sugerencia de IA (OPR-36 §10.2): pasa por `ejecutarAccion` con la acción interna
+ * `decide_ai_suggestion`, así hereda el chequeo de disponibilidad, la versión, el actor y el refresco.
+ */
+export async function decidirSugerenciaDeIa(
+  requestId: string,
+  version: string,
+  entrada: { suggestionId: string; decision: "accepted" | "corrected" | "rejected"; finalValue?: unknown },
+): Promise<ResultadoAccion> {
+  return ejecutarAccion({
+    requestId,
+    codigo: "decide_ai_suggestion",
+    motivo: null,
+    datos: { suggestion_id: entrada.suggestionId, decision: entrada.decision, ...(entrada.finalValue === undefined ? {} : { final_value: entrada.finalValue }) },
+    version,
+  });
+}
+
+/**
  * El selector "Acting as" de la demo local (P-2). Falla cerrado: sin las tres
  * condiciones (`actorDemoActivo`) no hace nada, y solo acepta a un operador
  * activo de la base que tenga `auth_user_id`.

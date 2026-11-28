@@ -1,7 +1,7 @@
 # OPR-36 — Análisis de la request por IA, por adelantado y con fallback
 
 - **Tarjeta:** OPR-36 (P5 · AI request analysis through BzzzBX, ahead of time, with fallback). Depende de OPR-11 (credenciales y límites del servicio de Claude en el servidor de BzzzBX), OPR-6 (contrato de BzzzBX, incluida la ruta de IA) y OPR-15 (entrada de correo). De esas, solo OPR-15 está en `main`; OPR-11 y OPR-6 son externas y están pendientes.
-- **Estado:** borrador para revisión de Henry. No hay código ni migración escritos. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§18).
+- **Estado:** aprobado por Henry el 2026-11-27, con P-0 a P-12 según las recomendaciones (§18.1). En construcción en la rama `opr-36-analisis-ia`. Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§18).
 - **Construye sobre:** el modelo de datos (spec OPR-20 §3.9 y §4: `ai_analysis`, `ai_suggestion`, `ai_field`, la vista `request_ai_marks`, `record_ai_analysis` prevista), la entrada de correo (spec OPR-15 §7: el enganche `alCrearRequest` vacío y el barrido de requests `open` sin `ai_analysis`), el ciclo de fondo único (ADR 0006), los puertos de BzzzBX y su falso (ADR 0005, spec OPR-22, P-3: la IA va por la capa de IA de BzzzBX, no por el outbox), las confirmaciones de Requests (spec OPR-28 §5.4: cerrar sugerencias al confirmar, `ai_fields_of`, G13; S-8: la forma de `value` la fija esta tarjeta) y la conversación (spec OPR-27 §5.5: los borradores de IA, que no cambian).
 - **Tarjeta en Relevo:** leída (OPR-36, 2026-11-27). De ella salen: cada correo de request sale **al llegar** por BzzzBX al servicio de Claude para analizar propiedad, espacio y unidad, camas, servicio, fecha, ventana, notas e instrucciones de acceso, número de PO, la persona real detrás de direcciones de sistema o de portal, y si el correo pide varios jobs; los resultados se guardan y se ven como campos AI-marked; el operador confirma o corrige y la corrección queda registrada; si la IA tarda o no está, los campos quedan vacíos con "AI pending" y el operador trabaja a mano. "Hecho cuando": correo analizado en menos de 1 minuto desde que llega; E2E-8, E2E-10 y E2E-11. **No se pudieron leer** el Release Definition §7.1 y §7.2, el User Guide §4.3 y §12.5 ni el texto de E2E-8, E2E-10 y E2E-11 (no están en este repo, que es público) [S-1].
 - **Fuera de alcance:** las sugerencias de cleaner y los borradores de respuesta (OPR-37: `cleaner_team`, `draft_*`, que ya se muestran en la conversación desde OPR-27), la lectura de la respuesta del cleaner (`cleaner_reply`, OPR-17), separar una request de varios jobs en varias requests, editar el borrador con búsqueda libre de cliente, propiedad o servicio (`update_request_detail`, pendiente de OPR-28), Rosie (OPR-38), medir las metas de velocidad (OPR-39; aquí solo se guardan las horas que necesita) y volver a analizar cuando el cliente responde en el hilo [S-2].
@@ -519,3 +519,21 @@ E2E-8, E2E-10 y E2E-11 son del Release Definition, que no se pudo leer; se asume
 - **P-12. Varios jobs.** **Recomiendo solo el aviso con Got it / Not multiple**; separar la request queda fuera de V1.1 beta. Alternativa: un botón para crear las requests hermanas, que choca con "un hilo, una request" (spec OPR-15 §5.2) y con G15.
 
 Con las recomendaciones, OPR-36 trae **una migración** (§8.1), un puerto nuevo con su falso y su prueba de contrato, la tarea `analisis_ia` del ciclo, el enganche de la entrada, la UI de la pestaña de la propiedad, un guard pgTAP y la ampliación de G13 y G16.
+
+### 18.1 Decisiones (2026-11-27)
+
+Henry aprobó el spec con P-0 a P-12 según las recomendaciones. Quedó así:
+
+- **P-0:** la migración de §8.1 va (`20261207120000_analisis_ia.sql`): `instruction_id` nullable, el check `ai_analysis_completed_at`, el índice único parcial, `start_ai_analysis`, `record_ai_analysis`, `decide_ai_suggestion` y los helpers. Sin tablas, columnas, tipos ni catálogos nuevos. Errores `OP045` a `OP049`.
+- **P-1:** `ai_analysis.instruction_id` admite `null`; la clave con BzzzBX es el `ai_analysis.id`.
+- **P-2:** puerto asíncrono: pedir y consultar, con clave idempotente.
+- **P-3:** a BzzzBX viajan solo crosswalk IDs (mensaje, hilo, clave y campos); BzzzBX lee el correo.
+- **P-4:** el análisis llena el borrador con la propuesta principal, solo en campos vacíos, sin confirmación vigente que los cubra y sin decisión previa del operador (§5.3).
+- **P-5:** Accept, Change y Reject por campo con `decide_ai_suggestion`; la búsqueda libre queda para `update_request_detail`.
+- **P-6:** los campos de la tarjeta, incluido `sender`; `cleaner_team` y los borradores esperan a OPR-37.
+- **P-7:** cadencia de 5 s, límite de 120 s, un reintento automático a los 60 s, a lo sumo dos análisis por request y sin botón "Retry AI".
+- **P-8:** el resultado tardío sobre lo ya firmado se guarda `superseded`.
+- **P-9:** el motivo se guarda con tope de 200 caracteres.
+- **P-10:** la seed agrega un análisis `completed` sin sugerencias y sin Audit a R2, R7 y R8.
+- **P-11:** "AI pending" solo en la Job window; la tarjeta del tablero sigue con `— —`.
+- **P-12:** varios jobs es solo un aviso con Got it / Not multiple.

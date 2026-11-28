@@ -91,7 +91,10 @@ conBase("seed y falso: IDs que la seed arma en la base", () => {
       const enLaBase = rows.map((r) => r.id).filter((id): id is string => !!id);
       expect(enLaBase.length).toBeGreaterThan(20);
       const ids = idsDelFalso();
-      expect(enLaBase.filter((id) => !ids.has(id))).toEqual([]);
+      // Las pruebas de integración de la entrada (`it…`) y del análisis de IA (`ia…`) crean requests propias mientras corren y
+      // las borran al terminar (otros archivos de Vitest corren en paralelo): no son de la seed.
+      const deOtraPrueba = /^bx-(?:msg|thread)-(?:it|ia)[0-9a-z]+-/;
+      expect(enLaBase.filter((id) => !ids.has(id) && !deOtraPrueba.test(id))).toEqual([]);
     } finally {
       await cliente.end();
     }

@@ -11,6 +11,7 @@
  */
 import { describe } from "vitest";
 
+import { probarContratoDeIa, type EntornoDeIa } from "./contrato/ia.contrato";
 import { probarContratoDeInstrucciones, type EntornoDeInstrucciones } from "./contrato/instrucciones.contrato";
 import { probarContratoDeLectura, type EntornoDeLectura } from "./contrato/lectura.contrato";
 
@@ -23,4 +24,5 @@ function entornoReal(): never {
 describe.skipIf(!activo)("BzzzBX real", () => {
   probarContratoDeLectura("real", async (): Promise<EntornoDeLectura> => entornoReal());
   probarContratoDeInstrucciones("real", async (): Promise<EntornoDeInstrucciones> => entornoReal());
+  probarContratoDeIa("real", async (): Promise<EntornoDeIa> => entornoReal());
 });

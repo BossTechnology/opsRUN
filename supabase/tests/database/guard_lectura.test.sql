@@ -60,9 +60,9 @@ values ('b0000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-0000000
 insert into opsrun.alert_occurrence (bzzzbx_alert_id, request_id, rule_id, rule_version, level, reason_text, opened_at)
 values ('bx-alert-t001', 'b0000000-0000-4000-8000-000000000001', 'OPS-002', '1', 'amber', 'Abierta hace 2 h.', now());
 
-insert into opsrun.ai_analysis (id, request_id, instruction_id, status)
+insert into opsrun.ai_analysis (id, request_id, instruction_id, status, completed_at)
 values ('e0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-        'c0000000-0000-4000-8000-000000000002', 'completed');
+        'c0000000-0000-4000-8000-000000000002', 'completed', now());
 
 insert into opsrun.ai_suggestion (request_id, ai_analysis_id, field, value)
 values ('b0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'unit', '"4B"');

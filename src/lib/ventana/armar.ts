@@ -7,6 +7,7 @@
  */
 import { alertasDeLaRequest, insigniaDe } from "../alertas/armar";
 import type { EsperaDeOpsrun } from "../alertas/tipos";
+import type { VistaIa } from "../analisis-ia/tipos";
 import { poVigente } from "../billing/po";
 import type { AlertResult, Job } from "../bzzzbx/tipos";
 import { esReglaLimpiable } from "../etapas/reglas";
@@ -50,6 +51,8 @@ export type EntradaVentana = {
   respuestaDelCleaner?: RespuestaDelCleaner | null;
   /** Sugerencias de IA abiertas de los campos del borrador (OPR-28): las que marcan AI en los paneles. */
   sugerencias?: SugerenciaAbierta[];
+  /** El análisis de IA ya armado (OPR-36), solo para una request open; el servidor lo arma con lo leído de BzzzBX. */
+  ia?: VistaIa | null;
   /** Los jobs a los que Change linked job puede cambiar el enlace (OPR-29); el servidor los lee solo en Scheduled o con el job cancelado. */
   candidatosDeCambio?: CandidatoDeCambio[];
   candidatosTruncado?: boolean;
@@ -200,6 +203,7 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
       tieneEquipo: Boolean(fila.bzzzbx_team_id),
       respuestaDelCleaner: entrada.respuestaDelCleaner ?? null,
       sugerencias: entrada.sugerencias ?? [],
+      ia: entrada.ia ?? null,
       candidatosDeCambio: entrada.candidatosDeCambio ?? [],
       candidatosTruncado: entrada.candidatosTruncado ?? false,
     },
