@@ -178,12 +178,69 @@ describe("armarHilo: el estado de entrega (§4.3)", () => {
     ["queued", "Queued", "normal"],
     ["sent", "Sent", "normal"],
     ["delivered", "Delivered", "normal"],
-    ["failed", "Not delivered", "error"],
-  ] as const)("un mensaje saliente %s se ve %s", (delivery, texto, tono) => {
+    ["failed", "Failed", "error"],
+    ["bounced", "Bounced", "error"],
+  ] as const)("un mensaje saliente %s se ve %s, con su valor crudo de entrega", (delivery, texto, tono) => {
     const m = saliente(delivery);
     const v: Vinculo = { ...vinculoTexto, bzzzbx_message_id: m.bzzzbx_message_id, bzzzbx_thread_id: "bx-thread-0002", channel: "email" };
     const h = hilo({ vinculos: [vinculoOriginal, v], mensajes: [original, m] });
-    expect(h.entradas.find((e) => e.id === `msg:${m.bzzzbx_message_id}`)!.estado).toEqual({ texto, tono });
+    const e = h.entradas.find((x) => x.id === `msg:${m.bzzzbx_message_id}`)!;
+    expect(e.estado).toEqual({ texto, tono });
+    expect(e.entrega).toBe(delivery);
+  });
+
+  it.each([
+    ["failed", "Failed · Invalid number."],
+    ["bounced", "Bounced · Mailbox does not exist."],
+  ] as const)("un saliente %s con el motivo del proveedor lo muestra después de un punto medio", (delivery, texto) => {
+    const m = { ...saliente(delivery), delivery_detail: delivery === "failed" ? "Invalid number." : "Mailbox does not exist." };
+    const h = hilo({ mensajes: [original, m], vinculos: [vinculoOriginal, { ...vinculoTexto, bzzzbx_message_id: m.bzzzbx_message_id, bzzzbx_thread_id: "bx-thread-0002", channel: "email" }] });
+    expect(h.entradas.find((x) => x.id === `msg:${m.bzzzbx_message_id}`)!.estado).toEqual({ texto, tono: "error" });
+  });
+
+  it.each([null, undefined, "   "])("sin motivo útil (%j) se ve solo Failed", (detalle) => {
+    const m = { ...saliente("failed"), delivery_detail: detalle };
+    const h = hilo({ mensajes: [original, m] });
+    expect(h.entradas.find((x) => x.id === `msg:${m.bzzzbx_message_id}`)!.estado).toEqual({ texto: "Failed", tono: "error" });
+  });
+
+  describe("Edit and resend de un mensaje saliente que no llegó (OPR-19 §6.1)", () => {
+    const vinculado = (m: Message) => ({ ...vinculoTexto, bzzzbx_message_id: m.bzzzbx_message_id, bzzzbx_thread_id: m.bzzzbx_thread_id, channel: m.channel });
+
+    it.each(["failed", "bounced"] as const)("un correo saliente %s ofrece copiar su cuerpo al modo Customer", (delivery) => {
+      const m = saliente(delivery);
+      const h = hilo({ mensajes: [original, m], vinculos: [vinculoOriginal, vinculado(m)] });
+      expect(h.entradas.find((e) => e.id === `msg:${m.bzzzbx_message_id}`)!.reenviar).toEqual({ modo: "customer", cuerpo: m.body });
+    });
+
+    it("un texto saliente failed ofrece copiar su cuerpo al modo Cleaner", () => {
+      const t: Message = { ...texto, delivery: "failed" };
+      const h = hilo({ mensajes: [original, t] });
+      expect(h.entradas.find((e) => e.id === "msg:bx-msg-0102")!.reenviar).toEqual({ modo: "cleaner", cuerpo: t.body });
+    });
+
+    it.each(["queued", "sent", "delivered"] as const)("un saliente %s no lo ofrece", (delivery) => {
+      const m = saliente(delivery);
+      const h = hilo({ mensajes: [original, m], vinculos: [vinculoOriginal, vinculado(m)] });
+      expect(h.entradas.find((e) => e.id === `msg:${m.bzzzbx_message_id}`)!.reenviar).toBeNull();
+    });
+
+    it("un entrante nunca lo ofrece, ni el original, aunque su delivery diga failed", () => {
+      const h = hilo({ mensajes: [{ ...original, delivery: "failed" }, { ...respuesta, delivery: "bounced" }] });
+      expect(h.entradas.find((e) => e.id === "msg:bx-msg-0002")!.reenviar).toBeNull();
+      expect(h.entradas.find((e) => e.id === "msg:bx-msg-8001")!.reenviar).toBeNull();
+      expect(h.entradas.find((e) => e.id === "msg:bx-msg-0002")!.entrega).toBeNull();
+    });
+  });
+
+  it("el destinatario de un saliente: el correo, o el equipo y su teléfono; nunca en un entrante ni en una nota", () => {
+    const m = saliente("sent");
+    const h = hilo({ mensajes: [original, texto, m], equiposPorTelefono: { "+1 555 0111": "Team Alpha" } });
+    expect(h.entradas.find((e) => e.id === `msg:${m.bzzzbx_message_id}`)!.destinatario).toBe("contact.one@example.test");
+    expect(h.entradas.find((e) => e.id === "msg:bx-msg-0102")!.destinatario).toBe("Team Alpha · +1 555 0111");
+    expect(hilo({ mensajes: [original, texto] }).entradas.find((e) => e.id === "msg:bx-msg-0102")!.destinatario).toBe("+1 555 0111");
+    expect(h.entradas.find((e) => e.id === "msg:bx-msg-0002")!.destinatario).toBeNull();
+    expect(h.entradas.find((e) => e.id === "note:n1")!.destinatario).toBeNull();
   });
 
   it.each([

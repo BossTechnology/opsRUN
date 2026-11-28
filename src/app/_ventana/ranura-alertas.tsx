@@ -14,6 +14,7 @@ async function ContenidoAlertas(props: PropsRanuraAlertas) {
     abiertas: props.alertas,
     zona: props.zona,
     bzzzbxDisponible: props.bzzzbx.disponible,
+    etapa: props.etapa,
   });
   return <VistaAlertasPestana vista={vista} etapa={props.etapa} bzzzbx={props.bzzzbx} />;
 }

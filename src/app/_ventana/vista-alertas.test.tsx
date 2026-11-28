@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { armarAlertas } from "@/lib/alertas/armar";
-import type { EsperaDeOpsrun, OcurrenciaDeOpsrun, VistaAlertas } from "@/lib/alertas/tipos";
+import type { EsperaDeOpsrun, MensajeDeAlerta, OcurrenciaDeOpsrun, VistaAlertas } from "@/lib/alertas/tipos";
 import { accionesVisibles } from "@/lib/acciones/disponibilidad";
 import type { EntradaAccion, ResultadoAccion } from "@/lib/acciones/tipos";
 import type { AlertResult } from "@/lib/bzzzbx/tipos";
@@ -68,8 +68,11 @@ const espera: EsperaDeOpsrun = {
   new_window_end: null,
 };
 
-function vistaDe(v: VentanaJob, extra: { ocurrencias?: OcurrenciaDeOpsrun[]; esperas?: EsperaDeOpsrun[] } = {}): VistaAlertas {
-  return armarAlertas({ abiertas: v.alertasLeidas, ocurrencias: extra.ocurrencias ?? [], esperas: extra.esperas ?? [], equipos: { "bx-team-0001": "Team Alpha" }, ahora: AHORA, zona: "UTC" });
+function vistaDe(
+  v: VentanaJob,
+  extra: { ocurrencias?: OcurrenciaDeOpsrun[]; esperas?: EsperaDeOpsrun[]; mensajes?: Record<string, MensajeDeAlerta> } = {},
+): VistaAlertas {
+  return armarAlertas({ abiertas: v.alertasLeidas, ocurrencias: extra.ocurrencias ?? [], esperas: extra.esperas ?? [], equipos: { "bx-team-0001": "Team Alpha" }, mensajes: extra.mensajes, ahora: AHORA, zona: "UTC" });
 }
 
 function pintar(v: VentanaJob, extra: Parameters<typeof vistaDe>[1] = {}, { actorId = OPS_UNO, conBarra = false }: { actorId?: string | null; conBarra?: boolean } = {}) {
@@ -255,7 +258,10 @@ describe("pestaña Alerts: el botón de cada alerta (§5.3)", () => {
           <li data-entrada="msg:otro" tabIndex={-1} />
         </ol>
         <ProveedorDeAcciones acciones={accionesVisibles(v)}>
-          <VistaAlertasPestana vista={vistaDe({ ...v, alertasLeidas: [alerta] })} etapa={v.etapa} />
+          <VistaAlertasPestana
+            vista={vistaDe({ ...v, alertasLeidas: [alerta] }, { mensajes: { "bx-msg-0299": { encontrado: true, destinatario: "Team Alpha · +1 555 0111", modo: { disponible: true } } } })}
+            etapa={v.etapa}
+          />
         </ProveedorDeAcciones>
       </>,
     );
@@ -263,5 +269,64 @@ describe("pestaña Alerts: el botón de cada alerta (§5.3)", () => {
     expect(boton.textContent).toBe("Edit and resend");
     fireEvent.click(boton);
     expect(document.activeElement).toBe(screen.getByTestId("reenviar"));
+  });
+
+  describe("Message not delivered en la pestaña (OPR-19 §6.2 y §6.3)", () => {
+    const mensajeAlerta: AlertResult = { bzzzbx_alert_id: "bx-alert-7302", sujeto: { tipo: "message", bzzzbx_message_id: "bx-msg-0299" }, rule_id: "MSG-001", rule_version: "1", level: "red", reason_text: "Text to Team Alpha failed: Invalid number.", opened_at: hace(5), cleared_at: null };
+    const con = (mensaje: MensajeDeAlerta | undefined) => {
+      const v = ventana(2);
+      pintar({ ...v, alertasLeidas: [mensajeAlerta] }, mensaje ? { mensajes: { "bx-msg-0299": mensaje } } : {});
+    };
+
+    it("la fila trae el destinatario de solo lectura y el arreglo; otra regla no", () => {
+      con({ encontrado: true, destinatario: "Team Alpha · +1 555 0111", modo: { disponible: true } });
+      expect(screen.getByTestId("alerta-destinatario").textContent).toBe("To: Team Alpha · +1 555 0111");
+      expect(screen.getByTestId("alerta-arreglo").textContent).toBe("Check the address or number and resend.");
+      expect(screen.getByTestId("alerta-destinatario").querySelector("input, button, a")).toBeNull();
+      cleanup();
+      const v = ventana(1);
+      pintar(v);
+      expect(screen.queryByTestId("alerta-destinatario")).toBeNull();
+      expect(screen.queryByTestId("alerta-arreglo")).toBeNull();
+    });
+
+    it("sin haber leído el mensaje, el destinatario se ve — — y el botón en gris con BzzzBX unavailable", () => {
+      con(undefined);
+      expect(screen.getByTestId("alerta-destinatario").textContent).toBe("To: — —");
+      expect((screen.getByTestId("alerta-boton") as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId("alerta-boton-nota").textContent).toBe("BzzzBX unavailable");
+    });
+
+    it.each([
+      ["el modo Customer apagado: sin hilo", "No email thread for this request"],
+      ["el modo Cleaner apagado: sin cleaner", "Choose a cleaner first"],
+      ["el job cancelado", "Job cancelled"],
+    ])("con %s el botón queda en gris con el mismo motivo y no mueve el foco", (_caso, razon) => {
+      con({ encontrado: true, destinatario: "x", modo: { disponible: false, razon } });
+      const boton = screen.getByTestId("alerta-boton") as HTMLButtonElement;
+      expect(boton.disabled).toBe(true);
+      expect(screen.getByTestId("alerta-boton-nota").textContent).toBe(razon);
+    });
+
+    it("un mensaje que BzzzBX no conoce: en gris con 'Message not found in BzzzBX'", () => {
+      con({ encontrado: false, destinatario: null, modo: { disponible: false, razon: "Message not found in BzzzBX" } });
+      expect((screen.getByTestId("alerta-boton") as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId("alerta-boton-nota").textContent).toBe("Message not found in BzzzBX");
+    });
+
+    it("sin la entrada en el hilo no hace nada, y si el Edit and resend del mensaje está en gris, el foco va a la entrada", () => {
+      con({ encontrado: true, destinatario: "x", modo: { disponible: true } });
+      render(
+        <ol>
+          <li data-entrada="msg:bx-msg-0299" tabIndex={-1} data-testid="entrada-falsa">
+            <button type="button" data-testid="reenviar" disabled>
+              Edit and resend
+            </button>
+          </li>
+        </ol>,
+      );
+      fireEvent.click(screen.getByTestId("alerta-boton"));
+      expect(document.activeElement).toBe(screen.getByTestId("entrada-falsa"));
+    });
   });
 });

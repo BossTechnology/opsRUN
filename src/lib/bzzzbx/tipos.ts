@@ -108,8 +108,17 @@ export type Message = {
   subject: string | null;
   body: string;
   sent_at: string;
-  delivery: "queued" | "sent" | "delivered" | "failed";
+  /**
+   * El estado de entrega (OPR-19, §4.2). `bounced`: el proveedor de correo devolvió el mensaje (dirección inválida,
+   * buzón inexistente); solo tiene sentido en un correo. `failed`: el proveedor no lo entregó. PROVISIONAL hasta OPR-6.
+   */
+  delivery: "queued" | "sent" | "delivered" | "failed" | "bounced";
+  /** El motivo del proveedor en palabras ("Invalid number."), solo para mostrar. Ausente o null: no viene. Nunca se guarda. PROVISIONAL hasta OPR-6. */
+  delivery_detail?: string | null;
 };
+
+/** Los estados de entrega de un mensaje, para quien los recorra (contrato, falso). */
+export const ESTADOS_DE_ENTREGA = ["queued", "sent", "delivered", "failed", "bounced"] as const satisfies readonly Message["delivery"][];
 
 /** Paid de QuickBooks; frescura ≤ 1 h (Runbook §4.1). */
 export type Payment = {

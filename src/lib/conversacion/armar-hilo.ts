@@ -57,7 +57,13 @@ const ETIQUETAS: Record<TipoDeEntrada, string> = {
   note: "Internal note",
 };
 
-/** El estado de entrega de un mensaje leído (§4.3). */
+/** "Failed" o "Bounced", con el motivo del proveedor si vino (OPR-19 §4.2). */
+const conDetalle = (etiqueta: string, detalle: string | null | undefined) => {
+  const motivo = detalle?.trim();
+  return motivo ? `${etiqueta} · ${motivo}` : etiqueta;
+};
+
+/** El estado de entrega de un mensaje leído (§4.3, OPR-19 §4.2). */
 function estadoDeMensaje(m: Message): EntradaDeHilo["estado"] {
   if (m.direction === "inbound") return { texto: "Received", tono: "normal" };
   switch (m.delivery) {
@@ -68,9 +74,14 @@ function estadoDeMensaje(m: Message): EntradaDeHilo["estado"] {
     case "delivered":
       return { texto: "Delivered", tono: "normal" };
     case "failed":
-      return { texto: "Not delivered", tono: "error" };
+      return { texto: conDetalle("Failed", m.delivery_detail), tono: "error" };
+    case "bounced":
+      return { texto: conDetalle("Bounced", m.delivery_detail), tono: "error" };
   }
 }
+
+/** Un saliente que no llegó: se puede copiar su cuerpo al Composer (OPR-19 §6.1). */
+const noLlego = (m: Message) => m.direction === "outbound" && (m.delivery === "failed" || m.delivery === "bounced");
 
 /** El estado de un envío que todavía no es un mensaje (§4.3). */
 function estadoDeEnvio(e: EnvioDeOpsrun): NonNullable<EntradaDeHilo["estado"]> {
@@ -100,6 +111,13 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
     return (direccion === "inbound" ? equipos[m.from] : m.to.length === 1 ? equipos[m.to[0]!] : undefined) ?? (bruto || null);
   };
 
+  /** "To": el correo, o el equipo y su teléfono en un texto (OPR-19 §6.2). Solo para mostrar. */
+  const destinatario = (m: Message): string | null => {
+    if (m.to.length === 0) return null;
+    if (m.channel !== "text") return m.to.join(", ");
+    return m.to.map((t) => (equipos[t] ? `${equipos[t]} · ${t}` : t)).join(", ");
+  };
+
   const porId = new Map(mensajes.map((m) => [m.bzzzbx_message_id, m]));
   const vinculados = new Set(vinculos.map((v) => v.bzzzbx_message_id));
   const hilosDeLaRequest = new Set(vinculos.map((v) => v.bzzzbx_thread_id).filter((h): h is string => h !== null));
@@ -108,6 +126,7 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
 
   const deMensaje = (m: Message, esOriginal: boolean): EntradaDeHilo => {
     const tipo: TipoDeEntrada = esOriginal ? "original" : m.channel;
+    const saliente = m.direction === "outbound";
     return {
       id: `msg:${m.bzzzbx_message_id}`,
       tipo,
@@ -120,7 +139,9 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
       cuerpo: m.body,
       noEncontrado: false,
       estado: estadoDeMensaje(m),
-      reenviar: null,
+      entrega: saliente ? m.delivery : null,
+      destinatario: saliente ? destinatario(m) : null,
+      reenviar: !esOriginal && noLlego(m) ? { modo: m.channel === "email" ? "customer" : "cleaner", cuerpo: m.body } : null,
     };
   };
 
@@ -143,6 +164,8 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
         cuerpo: null,
         noEncontrado: true,
         estado: null,
+        entrega: null,
+        destinatario: null,
         reenviar: null,
       });
     }
@@ -181,6 +204,8 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
       cuerpo: e.body,
       noEncontrado: false,
       estado: estadoDeEnvio(e),
+      entrega: null,
+      destinatario: null,
       reenviar: e.status === "failed" ? { modo: e.tipo === "send_email" ? "customer" : "cleaner", cuerpo: e.body } : null,
     });
   }
@@ -200,6 +225,8 @@ export function armarHilo(entrada: EntradaDeArmarHilo): HiloArmado {
       cuerpo: n.body,
       noEncontrado: false,
       estado: { texto: "Internal · not sent", tono: "normal" },
+      entrega: null,
+      destinatario: null,
       reenviar: null,
     });
   }

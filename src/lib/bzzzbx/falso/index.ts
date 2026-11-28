@@ -3,6 +3,7 @@
  * OPSRUN_SERVIDOR=1 la fábrica no lo deja elegir (`../index.ts`).
  */
 import { datosIniciales } from "./datos";
+import { EntregaFalsa } from "./entrega-falsa";
 import { InstruccionesFalsas } from "./instrucciones-falsas";
 import { LecturaFalsa } from "./lectura-falsa";
 import { relojDelSistema, type Reloj } from "./reloj";
@@ -19,11 +20,13 @@ export type OpcionesFalso = {
   pasoMs?: number;
 };
 
-export type Falso = { lectura: LecturaFalsa; instrucciones: InstruccionesFalsas; reloj: Reloj };
+export type Falso = { lectura: LecturaFalsa; instrucciones: InstruccionesFalsas; entrega: EntregaFalsa; reloj: Reloj };
 
 export function crearFalso(opciones: OpcionesFalso = {}): Falso {
   const reloj = opciones.reloj ?? relojDelSistema;
   const lectura = new LecturaFalsa(reloj, datosIniciales(reloj.ahora()), opciones.tamanoDeLote);
   const instrucciones = new InstruccionesFalsas(reloj, lectura, { pasoMs: opciones.pasoMs });
-  return { lectura, instrucciones, reloj };
+  const entrega = new EntregaFalsa(reloj, lectura, opciones.pasoMs);
+  lectura.engancharEntrega(entrega);
+  return { lectura, instrucciones, entrega, reloj };
 }

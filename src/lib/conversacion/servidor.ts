@@ -21,14 +21,30 @@ export function olvidarConversaciones(): void {
   global.__opsrunMemoriaConversacion = new Map();
 }
 
+/** Los hilos de la request, el original primero: los mismos que arma la Job window desde `request_message`. */
+const hilosDe = (vinculos: { bzzzbx_thread_id: string | null }[]) => [
+  ...new Set(vinculos.map((v) => v.bzzzbx_thread_id).filter((h): h is string => h !== null)),
+];
+
+/**
+ * `hilos` es opcional: sin él salen de los vínculos de la request (la pestaña Alerts los necesita para saber si el
+ * modo Customer está disponible, OPR-19 §6.3, y su ranura no los recibe). Misma lectura, misma memoria.
+ */
 export async function obtenerConversacion(entrada: {
   requestId: string;
   etapa: string;
-  hilos: string[];
+  hilos?: string[];
   puedeEnviar: boolean;
   zona: string;
 }): Promise<DatosDeConversacion | null> {
   const opsrun = await comoOpsrunApp((db) => leerConversacionDeOpsrun(db, entrada.requestId));
   if (!opsrun) return null;
-  return leerConversacion({ ...entrada, opsrun, lectura: lecturaOAusente(), ahora: new Date(), memoria: memoria() });
+  return leerConversacion({
+    ...entrada,
+    hilos: entrada.hilos ?? hilosDe(opsrun.vinculos),
+    opsrun,
+    lectura: lecturaOAusente(),
+    ahora: new Date(),
+    memoria: memoria(),
+  });
 }

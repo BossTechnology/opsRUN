@@ -48,6 +48,11 @@ export type DatosDelRegistrador = {
   requestsActivas(): Promise<{ id: string; bzzzbx_job_id: string | null }[]>;
   /** Los hilos de esas requests (`request_message.bzzzbx_thread_id`), para las alertas de sus mensajes (pasada completa). */
   hilosActivos(): Promise<string[]>;
+  /**
+   * Los mensajes salientes vinculados a esas mismas requests (`request_message`, `direction = 'outbound'`): un texto no
+   * tiene hilo, así que la pasada completa mira por aquí las alertas de los que fallaron (OPR-19, P-5).
+   */
+  mensajesSalientesActivos(): Promise<string[]>;
   /** Los `bzzzbx_alert_id` de las ocurrencias abiertas en opsRUN (pasada completa, por id). */
   alertasAbiertas(): Promise<string[]>;
   /** De esos ids de request, los que existen. */
@@ -67,12 +72,20 @@ export type DependenciasDelRegistrador = {
   lectura: LecturaBzzzbx;
   datos: DatosDelRegistrador;
   log?: Pick<Console, "info" | "warn" | "error">;
+  /** El reloj, en milisegundos; por defecto `Date.now`. Solo para el plazo del reintento (OPR-19, P-5). */
+  ahora?: () => number;
 };
 
 export type ResultadoDeVuelta =
   | { estado: "ok"; completa: boolean; leidas: number; registradas: number; saltadas: number }
   | { estado: "no_disponible" }
   | { estado: "cursor_caducado" };
+
+/**
+ * Cuánto se reintenta una alerta de mensaje que todavía no lleva a ninguna request (OPR-19, P-5, S-8): un texto que
+ * falla antes de que la reconciliación cree su `request_message`. Pasado el plazo se suelta con log.
+ */
+export const PLAZO_DE_REINTENTO_MS = 10 * 60_000;
 
 /** Lotes de cambios que mira como mucho en una vuelta. */
 export const LOTES_POR_VUELTA = 10;
@@ -96,6 +109,11 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
   let caido = false;
   /** Alertas sin request ya avisadas: no se repite el log en cada vuelta (S-3). */
   const sinRequestAvisadas = new Set<string>();
+  /**
+   * Alertas de mensaje que todavía no llevan a ninguna request y cuándo se vieron la primera vez (OPR-19, P-5). En
+   * memoria, como el cursor: si el proceso reinicia, la pasada completa las vuelve a ver por el mensaje de su request.
+   */
+  const sinRequestPorAhora = new Map<string, number>();
 
   async function leerPorId(lectura: LecturaBzzzbx, ids: string[]): Promise<Leido<AlertResult>[]> {
     const leidas: Leido<AlertResult>[] = [];
@@ -123,6 +141,16 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
     }
     for (const hilo of await datos.hilosActivos()) {
       for (const m of await lectura.listarPor("message", { bzzzbx_thread_id: hilo })) {
+        for (const a of await lectura.listarPor("alert_result", { sujeto: { tipo: "message", bzzzbx_message_id: m.bzzzbx_message_id } })) {
+          alertas.set(a.bzzzbx_alert_id, a);
+        }
+      }
+    }
+    // Los salientes que no llegaron de las requests activas: un texto no tiene hilo (OPR-19, P-5).
+    const salientes = await datos.mensajesSalientesActivos();
+    for (let i = 0; i < salientes.length; i += POR_LECTURA) {
+      for (const m of await lectura.obtenerVarios("message", salientes.slice(i, i + POR_LECTURA))) {
+        if (m.direction !== "outbound" || (m.delivery !== "failed" && m.delivery !== "bounced")) continue;
         for (const a of await lectura.listarPor("alert_result", { sujeto: { tipo: "message", bzzzbx_message_id: m.bzzzbx_message_id } })) {
           alertas.set(a.bzzzbx_alert_id, a);
         }
@@ -187,6 +215,7 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
   /** Registra las alertas una por una, cada una en su transacción. Lanza ante un error que sí se reintenta. */
   async function registrar(deps: DependenciasDelRegistrador, alertas: Leido<AlertResult>[]) {
     const { datos, log = console } = deps;
+    const ahora = (deps.ahora ?? Date.now)();
     const requests = await requestsDe(deps, alertas);
     let registradas = 0;
     let saltadas = 0;
@@ -198,6 +227,16 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
         if (!sinRequestAvisadas.has(a.bzzzbx_alert_id)) {
           sinRequestAvisadas.add(a.bzzzbx_alert_id);
           log.warn(`[opsRUN] alertas: la alerta ${a.bzzzbx_alert_id} no es de ninguna request; no se registra`);
+        }
+        // Una alerta de mensaje puede llegar antes que el vínculo de su request: se reintenta un tiempo (OPR-19, P-5).
+        if (a.sujeto.tipo === "message") {
+          const desde = sinRequestPorAhora.get(a.bzzzbx_alert_id);
+          if (desde === undefined) {
+            sinRequestPorAhora.set(a.bzzzbx_alert_id, ahora);
+          } else if (ahora - desde >= PLAZO_DE_REINTENTO_MS) {
+            sinRequestPorAhora.delete(a.bzzzbx_alert_id);
+            log.warn(`[opsRUN] alertas: la alerta ${a.bzzzbx_alert_id} sigue sin request tras ${PLAZO_DE_REINTENTO_MS / 60_000} min; se suelta`);
+          }
         }
         saltadas += 1;
         continue;
@@ -214,6 +253,7 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
           opened_at: a.opened_at,
           cleared_at: a.cleared_at,
         });
+        sinRequestPorAhora.delete(a.bzzzbx_alert_id);
         registradas += 1;
       } catch (e) {
         const codigo = codigoDe(e);
@@ -244,6 +284,16 @@ export function crearRegistrador(dependencias: () => DependenciasDelRegistrador)
       const cambios = await cambiosDeAlertas(lectura, cursor);
       siguiente = cambios.cursor;
       alertas = await leerPorId(lectura, cambios.ids);
+    }
+
+    // Las alertas de mensaje que esperan su request se vuelven a leer en cada vuelta, hasta que el vínculo aparezca o venza el plazo.
+    const yaLeidas = new Set(alertas.map((a) => a.bzzzbx_alert_id));
+    const porReintentar = [...sinRequestPorAhora.keys()].filter((id) => !yaLeidas.has(id));
+    if (porReintentar.length > 0) {
+      const releidas = await leerPorId(lectura, porReintentar);
+      const vistas = new Set(releidas.map((a) => a.bzzzbx_alert_id));
+      for (const id of porReintentar) if (!vistas.has(id)) sinRequestPorAhora.delete(id); // BzzzBX ya no la conoce
+      alertas.push(...releidas);
     }
 
     const { registradas, saltadas } = await registrar(deps, alertas);

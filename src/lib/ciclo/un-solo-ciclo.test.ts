@@ -20,6 +20,12 @@
  *     `datos-sql`) ni a `upsert_alert_occurrence`: el historial de alertas lo anota
  *     la tarea `registrador_alertas` del ciclo, nunca un GET. `lib/alertas/armar`,
  *     `consultas` y `reglas` son de lectura y sí se pueden importar.
+ *  5. (OPR-19) Las lecturas incluyen los módulos de lectura de Alerts
+ *     (`lib/alertas/*` salvo el registrador, su tarea y sus datos SQL), los de la
+ *     conversación (`lib/conversacion/*` salvo los ejecutores de envío) y las
+ *     ranuras de la Job window (`app/_ventana/ranura*`, `app/_conversacion/ranura*`):
+ *     el estado de entrega se lee al pintar y ninguna de esas lecturas llama al
+ *     registrador ni a la reconciliación.
  *
  * Descubre en vez de enumerar: recorre `src/` y mira cada archivo. Se ve fallar
  * en cada corrida: arma un `src/` de prueba con un temporizador propio y una
@@ -72,7 +78,11 @@ const SIN_COMENTARIOS = (texto: string) => texto.replace(/\/\*[\s\S]*?\*\//g, ""
 function esLectura(rel: string, texto: string): boolean {
   if (/^app\/(?:.*\/)?route\.(ts|tsx)$/.test(rel)) return /export\s+(?:async\s+)?(?:function\s+GET\b|const\s+GET\b)|export\s*\{[^}]*\bGET\b/.test(SIN_COMENTARIOS(texto));
   if (/^app\/(?:.*\/)?(?:page|layout|default|template|loading|not-found)\.tsx$/.test(rel)) return true;
-  return rel.startsWith("lib/tablero/") || rel.startsWith("lib/ventana/") || /^lib\/conversacion\/leer[^/]*\.ts$/.test(rel);
+  if (rel.startsWith("lib/tablero/") || rel.startsWith("lib/ventana/")) return true;
+  // OPR-19: la conversación (menos lo que envía) y Alerts (menos lo que escribe: el registrador, su tarea y sus datos SQL).
+  if (/^lib\/conversacion\/(?!ejecutores|reales|registro)[^/]+\.ts$/.test(rel)) return true;
+  if (/^lib\/alertas\/(?!registrador|tarea|datos-sql)[^/]+\.ts$/.test(rel)) return true;
+  return /^app\/(?:_ventana|_conversacion)\/ranura[^/]*\.tsx$/.test(rel);
 }
 
 /** Lecturas que importan o llaman a la reconciliación de envíos. */
@@ -126,6 +136,27 @@ describe("G16: un solo ciclo de fondo", () => {
     expect(lecturasQueRegistranAlertas(RAIZ)).toEqual([]);
   });
 
+  it("descubre lecturas de verdad: Alerts, la conversación y sus ranuras cuentan, y el registrador y los ejecutores no (OPR-19)", () => {
+    const lecturas = archivos(RAIZ)
+      .map((r) => ({ rel: relative(RAIZ, r).split(sep).join("/"), texto: readFileSync(r, "utf8") }))
+      .filter((a) => esLectura(a.rel, a.texto))
+      .map((a) => a.rel);
+    for (const esperada of [
+      "lib/alertas/servidor.ts",
+      "lib/alertas/armar.ts",
+      "lib/alertas/consultas.ts",
+      "lib/conversacion/servidor.ts",
+      "lib/conversacion/armar-hilo.ts",
+      "app/_ventana/ranura-alertas.tsx",
+      "app/_conversacion/ranura.tsx",
+    ]) {
+      expect(lecturas).toContain(esperada);
+    }
+    for (const escritora of ["lib/alertas/registrador.ts", "lib/alertas/tarea.ts", "lib/alertas/datos-sql.ts", "lib/conversacion/ejecutores.ts"]) {
+      expect(lecturas).not.toContain(escritora);
+    }
+  });
+
   it("descubre lecturas de verdad: la ruta del sondeo y el tablero cuentan", () => {
     const lecturas = archivos(RAIZ)
       .map((r) => ({ rel: relative(RAIZ, r).split(sep).join("/"), texto: readFileSync(r, "utf8") }))
@@ -168,6 +199,14 @@ describe("G16: un solo ciclo de fondo", () => {
     poner("app/api/accion/alertas/route.ts", 'import { tareaRegistradorAlertas } from "@/lib/alertas/tarea";\nexport const POST = tareaRegistradorAlertas;\n');
     poner("lib/ventana/comentario.ts", "// upsert_alert_occurrence solo en un comentario\nexport const z = 1;\n");
     poner("lib/alertas/tarea.ts", "export const tareaRegistradorAlertas = () => ({});\n");
+    // OPR-19: las lecturas de Alerts y de la conversación, y las ranuras, también se descubren.
+    poner("lib/alertas/servidor.ts", 'import { crearRegistrador } from "./registrador";\nexport const x = crearRegistrador;\n');
+    poner("lib/alertas/datos-sql.ts", 'export const sql = "select opsrun.upsert_alert_occurrence($1)";\n');
+    poner("lib/alertas/registrador.ts", 'export const crearRegistrador = () => ({});\n');
+    poner("lib/conversacion/servidor.ts", 'import { reconciliarSiToca } from "../instrucciones/servidor";\nexport const y = reconciliarSiToca;\n');
+    poner("lib/conversacion/ejecutores.ts", 'export const sql = "select opsrun.send_text($1)"; export const z = reconciliarInstrucciones;\n');
+    poner("app/_conversacion/ranura.tsx", 'import { tareaReconciliacionEnvios } from "@/lib/instrucciones/reconciliacion";\nexport const R = tareaReconciliacionEnvios;\n');
+    poner("app/_ventana/ranura-audit.tsx", 'export const A = () => null;\n');
 
     afterAll(() => rmSync(falsa, { recursive: true, force: true }));
 
@@ -180,13 +219,15 @@ describe("G16: un solo ciclo de fondo", () => {
     });
 
     it("detecta una lectura que importa o llama al registrador de alertas, y no un POST, ni un comentario, ni las lecturas de Alerts", () => {
-      expect(lecturasQueRegistranAlertas(falsa)).toEqual(["app/api/tablero/mas/route.ts", "app/api/tablero/otro/route.ts"]);
+      expect(lecturasQueRegistranAlertas(falsa)).toEqual(["app/api/tablero/mas/route.ts", "app/api/tablero/otro/route.ts", "lib/alertas/servidor.ts"]);
     });
 
     it("detecta una lectura que reconcilia (GET, página o módulo de lectura), y no un POST, ni un comentario, ni el módulo de la tarea", () => {
       expect(lecturasQueReconcilian(falsa)).toEqual([
+        "app/_conversacion/ranura.tsx",
         "app/api/otro/route.ts",
         "app/tablero/page.tsx",
+        "lib/conversacion/servidor.ts",
         "lib/ventana/leer.ts",
       ]);
     });

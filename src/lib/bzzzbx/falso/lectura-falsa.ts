@@ -51,6 +51,9 @@ let correosNuevos = 0;
 /** Por proceso: dos falsos nunca comparten generación (spec OPR-15, E5). */
 let generacionesDadas = 0;
 
+/** Lo que `entrega-falsa.ts` registra en la lectura (OPR-19). */
+export type GanchoDeEntrega = { alGuardar(entidad: string, valor: Record<string, unknown>): void; alLeer(): void };
+
 const FORMA_CURSOR = /^lf1\.(\d+)\.(\d+)$/;
 
 export class LecturaFalsa implements LecturaBzzzbx {
@@ -60,6 +63,8 @@ export class LecturaFalsa implements LecturaBzzzbx {
   private generacion = ++generacionesDadas;
   private ultimaVersion = 0;
   private caido = false;
+  /** Quien se entera de lo que se guarda y se pone al día antes de leer (`entrega-falsa.ts`, OPR-19). */
+  private gancho: GanchoDeEntrega | null = null;
 
   constructor(
     private readonly reloj: Reloj,
@@ -217,6 +222,11 @@ export class LecturaFalsa implements LecturaBzzzbx {
     return { bzzzbx_message_id: mensaje.bzzzbx_message_id, bzzzbx_thread_id: mensaje.bzzzbx_thread_id! };
   }
 
+  /** Registra a quien se entera de cada guardado y antes de cada lectura (la entrega de los salientes, OPR-19). */
+  engancharEntrega(gancho: GanchoDeEntrega): void {
+    this.gancho = gancho;
+  }
+
   /** BzzzBX caído: toda llamada lanza `BzzzbxNoDisponible` hasta volver a false. */
   noDisponible(caido: boolean): void {
     this.caido = caido;
@@ -253,6 +263,7 @@ export class LecturaFalsa implements LecturaBzzzbx {
     const version = this.versionNueva();
     this.tabla(entidad).set(id, { ...valor, version });
     this.registro.push({ entidad, id, version });
+    this.gancho?.alGuardar(entidad, valor);
   }
 
   private tabla(entidad: Entidad): Map<string, Fila> {
@@ -282,6 +293,7 @@ export class LecturaFalsa implements LecturaBzzzbx {
 
   private exigirDisponible(): void {
     if (this.caido) throw new BzzzbxNoDisponible();
+    this.gancho?.alLeer();
   }
 }
 

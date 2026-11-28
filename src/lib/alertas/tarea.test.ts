@@ -23,6 +23,7 @@ function preparar() {
   const datos: DatosDelRegistrador = {
     requestsActivas,
     hilosActivos: vi.fn(async () => []),
+    mensajesSalientesActivos: vi.fn(async () => []),
     alertasAbiertas: vi.fn(async () => []),
     requestsExistentes: vi.fn(async (ids: string[]) => new Set(ids)),
     requestsDeJobs: vi.fn(async () => new Map()),

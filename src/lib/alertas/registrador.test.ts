@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { crearFalso, RelojManual } from "../bzzzbx/falso";
 
 import {
+  PLAZO_DE_REINTENTO_MS,
   crearRegistrador,
   type AlertaARegistrar,
   type DatosDelRegistrador,
@@ -30,7 +31,9 @@ const REQUESTS = [
   { id: R(8), bzzzbx_job_id: null },
 ];
 
-function preparar(opciones: { abiertasEnOpsrun?: string[]; falla?: (a: AlertaARegistrar) => unknown } = {}) {
+function preparar(
+  opciones: { abiertasEnOpsrun?: string[]; falla?: (a: AlertaARegistrar) => unknown; salientesActivos?: string[]; mensajesVinculados?: Map<string, string> } = {},
+) {
   const falso = crearFalso({ reloj: new RelojManual(new Date("2026-11-27T15:00:00Z")) });
   const registradas: AlertaARegistrar[] = [];
   const registrar = vi.fn(async (a: AlertaARegistrar) => {
@@ -43,17 +46,20 @@ function preparar(opciones: { abiertasEnOpsrun?: string[]; falla?: (a: AlertaARe
     requestsActivas: vi.fn(async () => REQUESTS),
     // Los hilos de la seed: el del correo original de cada request (`bx-thread-000N`).
     hilosActivos: vi.fn(async () => REQUESTS.map((r) => `bx-thread-000${r.id.slice(-1)}`)),
+    mensajesSalientesActivos: vi.fn(async () => opciones.salientesActivos ?? ["bx-msg-0102"]),
     alertasAbiertas: vi.fn(async () => opciones.abiertasEnOpsrun ?? []),
     requestsExistentes: vi.fn(async (ids: string[]) => new Set(ids.filter((id) => REQUESTS.some((r) => r.id === id)))),
     requestsDeJobs: vi.fn(async (jobs: string[]) => new Map(REQUESTS.filter((r) => r.bzzzbx_job_id && jobs.includes(r.bzzzbx_job_id)).map((r) => [r.bzzzbx_job_id!, r.id]))),
     // R2 tiene vinculado su texto saliente y un hilo propio.
-    requestsDeMensajes: vi.fn(async (ids: string[]) => new Map(ids.filter((id) => id === "bx-msg-0102").map((id) => [id, R(2)]))),
+    requestsDeMensajes: vi.fn(async (ids: string[]) => new Map(ids.filter((id) => id === "bx-msg-0102" || opciones.mensajesVinculados?.has(id)).map((id) => [id, opciones.mensajesVinculados?.get(id) ?? R(2)]))),
     requestsDeHilos: vi.fn(async (hilos: string[]) => new Map(hilos.filter((h) => h === "bx-thread-0002").map((h) => [h, R(2)]))),
     registrar,
   };
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-  const deps = vi.fn((): DependenciasDelRegistrador => ({ lectura: falso.lectura, datos, log }));
-  return { falso, datos, registrar, registradas, deps, log, registrador: crearRegistrador(deps) };
+  let reloj = Date.parse("2026-11-27T15:00:00Z");
+  const deps = vi.fn((): DependenciasDelRegistrador => ({ lectura: falso.lectura, datos, log, ahora: () => reloj }));
+  const pasar = (ms: number) => void (reloj += ms);
+  return { falso, datos, registrar, registradas, deps, log, pasar, registrador: crearRegistrador(deps) };
 }
 
 const mensaje = (id: string, hilo: string | null = null) =>
@@ -67,7 +73,8 @@ const mensaje = (id: string, hilo: string | null = null) =>
     subject: null,
     body: "Hola",
     sent_at: "2026-11-27T15:00:00.000Z",
-    delivery: "failed" as const,
+    // No "failed": el falso abriría por su cuenta la alerta de ese mensaje (OPR-19, P-4) y estas pruebas ponen la suya.
+    delivery: "sent" as const,
   });
 
 const alertaNueva = (id: string, parche: Record<string, unknown> = {}) => ({
@@ -317,5 +324,100 @@ describe("registrador de alertas: cursor, BzzzBX caído y errores", () => {
     }
     await registrador.vuelta();
     expect(maximo).toBe(1);
+  });
+});
+
+describe("registrador de alertas: una alerta de mensaje que todavía no lleva a una request (OPR-19, P-5)", () => {
+  /** Un texto de otro job que opsRUN todavía no vinculó: el falso abre su alerta al fallar, antes de que exista su `request_message`. */
+  const textoSinVincular = (falso: ReturnType<typeof preparar>["falso"], id = "bx-msg-0300") => {
+    falso.lectura.poner("message", { ...mensaje(id), delivery: "sent" });
+    falso.lectura.cambiar("message", id, { delivery: "failed", delivery_detail: "Invalid number." });
+  };
+
+  it("se reintenta en las vueltas siguientes y se escribe una sola vez cuando aparece el vínculo", async () => {
+    const vinculos = new Map<string, string>();
+    const { registrador, registrar, registradas, falso, pasar, log } = preparar({ mensajesVinculados: vinculos });
+    await registrador.vuelta();
+    registrar.mockClear();
+    registradas.length = 0;
+
+    textoSinVincular(falso);
+    expect(await registrador.vuelta()).toMatchObject({ estado: "ok", registradas: 0, saltadas: 1 });
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ estado: "ok", registradas: 0, saltadas: 1 });
+    expect(registrar).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledTimes(1);
+
+    // La reconciliación crea el vínculo (el cambio de alerta ya pasó: solo el reintento la puede ver).
+    vinculos.set("bx-msg-0300", R(2));
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ estado: "ok", registradas: 1, saltadas: 0 });
+    expect(registradas.map((a) => [a.bzzzbx_alert_id, a.request_id, a.bzzzbx_message_id])).toEqual([["bx-alert-msg-0300", R(2), "bx-msg-0300"]]);
+
+    // Una vez escrita, no se reintenta más.
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ registradas: 0, saltadas: 0, leidas: 0 });
+    expect(registrar).toHaveBeenCalledTimes(1);
+  });
+
+  it("pasado el plazo se suelta con log y no se vuelve a leer", async () => {
+    const { registrador, registrar, falso, pasar, log } = preparar();
+    await registrador.vuelta();
+    registrar.mockClear();
+    textoSinVincular(falso);
+    await registrador.vuelta();
+    pasar(PLAZO_DE_REINTENTO_MS - 1);
+    expect(await registrador.vuelta()).toMatchObject({ saltadas: 1 });
+    pasar(1);
+    expect(await registrador.vuelta()).toMatchObject({ saltadas: 1 });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("se suelta"));
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ leidas: 0, saltadas: 0 });
+    expect(registrar).not.toHaveBeenCalled();
+  });
+
+  it("una alerta de un job o de una request sin request no se reintenta: solo las de mensaje", async () => {
+    const { registrador, falso, pasar } = preparar();
+    await registrador.vuelta();
+    falso.lectura.poner("alert_result", alertaNueva("bx-alert-9020", { sujeto: { tipo: "job", bzzzbx_job_id: "bx-job-9999" } }));
+    expect(await registrador.vuelta()).toMatchObject({ saltadas: 1 });
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ leidas: 0, saltadas: 0 });
+  });
+
+  it("con BzzzBX caído no se pierde la espera: al volver sigue reintentando", async () => {
+    const vinculos = new Map<string, string>();
+    const { registrador, registradas, falso, pasar } = preparar({ mensajesVinculados: vinculos });
+    await registrador.vuelta();
+    textoSinVincular(falso);
+    await registrador.vuelta();
+    falso.lectura.noDisponible(true);
+    pasar(15_000);
+    expect(await registrador.vuelta()).toEqual({ estado: "no_disponible" });
+    falso.lectura.noDisponible(false);
+    vinculos.set("bx-msg-0300", R(2));
+    pasar(15_000);
+    expect(await registrador.vuelta()).toMatchObject({ registradas: 1 });
+    expect(registradas.at(-1)).toMatchObject({ bzzzbx_alert_id: "bx-alert-msg-0300" });
+  });
+});
+
+describe("registrador de alertas: la pasada completa mira los salientes que fallaron (OPR-19, P-5)", () => {
+  it("encuentra la alerta de un texto saliente fallido de una request activa, aunque no tenga hilo ni cambio que la anuncie", async () => {
+    const { registrador, registradas, falso } = preparar();
+    // Antes de arrancar: opsRUN estaba parado cuando el texto de R2 falló y la alerta abrió.
+    falso.lectura.cambiar("message", "bx-msg-0102", { delivery: "failed", delivery_detail: "Invalid number." });
+    expect(registrador.cursor).toBeNull();
+    await registrador.vuelta();
+    expect(registradas.map((a) => [a.bzzzbx_alert_id, a.request_id, a.bzzzbx_message_id])).toContainEqual(["bx-alert-msg-0102", R(2), "bx-msg-0102"]);
+  });
+
+  it("solo mira los salientes que no llegaron: uno entregado no se consulta por sujeto mensaje", async () => {
+    const { registrador, falso } = preparar();
+    const listar = vi.spyOn(falso.lectura, "listarPor");
+    await registrador.vuelta();
+    const porMensaje = listar.mock.calls.filter(([entidad, filtro]) => entidad === "alert_result" && (filtro as { sujeto: { tipo: string } }).sujeto.tipo === "message");
+    // Los de los hilos de la seed (bx-msg-0001 a 0009 por hilo) sí; el texto entregado de R2 (bx-msg-0102), no.
+    expect(porMensaje.some(([, filtro]) => JSON.stringify(filtro).includes("bx-msg-0102"))).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import { MENSAJE_NO_ENCONTRADO } from "@/lib/conversacion/armar-hilo";
-import type { EntradaDeHilo } from "@/lib/conversacion/tipos";
+import type { DisponibilidadDelModo } from "@/lib/conversacion/composer";
+import type { EntradaDeHilo, ModoComposer } from "@/lib/conversacion/tipos";
 
 type Props = {
   entradas: EntradaDeHilo[];
@@ -7,6 +8,11 @@ type Props = {
   mensajesNoDisponibles: boolean;
   /** `Edit and resend`: copia el cuerpo al Composer en el mismo modo. */
   onReenviar: (modo: "customer" | "cleaner", cuerpo: string) => void;
+  /**
+   * Lo que puede enviar el Composer en cada modo (OPR-19 §6.1 y §6.3): Edit and resend solo se puede pulsar si el modo
+   * de su canal está disponible; si no, queda en gris con el mismo motivo. Sin esta prop, todos disponibles.
+   */
+  modos?: Record<ModoComposer, DisponibilidadDelModo>;
 };
 
 /**
@@ -16,7 +22,7 @@ type Props = {
  * pruebas no dependan del color. Los cuerpos son texto plano (S-5): React los
  * escapa, nunca se interpreta HTML.
  */
-export function Hilo({ entradas, mensajesNoDisponibles, onReenviar }: Props) {
+export function Hilo({ entradas, mensajesNoDisponibles, onReenviar, modos }: Props) {
   return (
     <div className="hilo-marco">
       {mensajesNoDisponibles ? (
@@ -35,6 +41,7 @@ export function Hilo({ entradas, mensajesNoDisponibles, onReenviar }: Props) {
             tabIndex={-1}
             data-tipo={e.tipo}
             data-direccion={e.direccion}
+            data-entrega={e.entrega ?? undefined}
           >
             <div className="entrada-cabecera">
               <span className="entrada-etiqueta" data-testid="etiqueta">
@@ -64,19 +71,47 @@ export function Hilo({ entradas, mensajesNoDisponibles, onReenviar }: Props) {
                 {e.estado.texto}
               </p>
             ) : null}
-            {e.reenviar ? (
-              <button
-                type="button"
-                className="entrada-reenviar"
-                data-testid="reenviar"
-                onClick={() => onReenviar(e.reenviar!.modo, e.reenviar!.cuerpo)}
-              >
-                Edit and resend
-              </button>
-            ) : null}
+            {e.reenviar ? <Reenviar entrada={e} disponibilidad={modos?.[e.reenviar.modo]} onReenviar={onReenviar} /> : null}
           </li>
         ))}
       </ol>
     </div>
+  );
+}
+
+/**
+ * Edit and resend (spec OPR-27 §4.3, OPR-19 §6.1 y §6.3): copia el cuerpo al Composer en el modo del canal. Hereda
+ * la disponibilidad de ese modo: con BzzzBX caído, el job cancelado, sin hilo o sin cleaner queda en gris con el
+ * mismo motivo. Pulsarlo nunca envía: solo llena el Composer; sale algo si el operador pulsa Send.
+ */
+function Reenviar({
+  entrada,
+  disponibilidad,
+  onReenviar,
+}: {
+  entrada: EntradaDeHilo;
+  disponibilidad: DisponibilidadDelModo | undefined;
+  onReenviar: Props["onReenviar"];
+}) {
+  const reenviar = entrada.reenviar!;
+  const apagado = disponibilidad && !disponibilidad.disponible ? disponibilidad.razon : null;
+  return (
+    <span className="entrada-reenviar-zona">
+      <button
+        type="button"
+        className="entrada-reenviar"
+        data-testid="reenviar"
+        disabled={apagado !== null}
+        aria-describedby={apagado ? `reenviar-razon-${entrada.id}` : undefined}
+        onClick={() => onReenviar(reenviar.modo, reenviar.cuerpo)}
+      >
+        Edit and resend
+      </button>
+      {apagado ? (
+        <span className="nota-gris" id={`reenviar-razon-${entrada.id}`} data-testid="reenviar-razon">
+          {apagado}
+        </span>
+      ) : null}
+    </span>
   );
 }
