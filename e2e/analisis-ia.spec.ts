@@ -238,7 +238,7 @@ test("I6: corregir queda registrado: Change de las camas a 2 y Save quitan el ch
   await actuarComo(page, OPS_UNO);
 
   await page.getByRole("button", { name: "Change AI beds" }).click();
-  await page.getByLabel("Beds").fill("2");
+  await page.getByRole("spinbutton", { name: "Beds" }).fill("2");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(chip(page, "beds")).toHaveCount(0);
   await expect(campo(page, "beds")).toContainText("2");
