@@ -48,6 +48,8 @@ export type PropsPanelAccion = {
   ventana: VentanaJob;
   /** Quién actúa (el operador de la transacción), para "Assign to me"; null si no hay. */
   actorId?: string | null;
+  /** Lo que un botón de la pestaña Alerts le prellena a la acción (OPR-34 §5.3); null si la eligió el operador. */
+  inicial?: Record<string, unknown> | null;
   onCambio: (datos: Record<string, unknown>, completo: boolean) => void;
 };
 

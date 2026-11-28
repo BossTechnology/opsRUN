@@ -3,6 +3,7 @@
  * que piden las requests de opsRUN y arma el tablero. Si BzzzBX no responde,
  * usa lo último leído (en memoria del proceso, nunca en la base) y lo avisa.
  */
+import type { EsperaDeOpsrun } from "../alertas/tipos";
 import { esNoDisponible } from "../bzzzbx/errores";
 import type { LecturaBzzzbx } from "../bzzzbx/puertos";
 
@@ -20,7 +21,11 @@ export async function leerDeBzzzbx(filas: FilaRequest[], lectura: LecturaBzzzbx)
   const jobIds = unicos(filas.map((f) => f.bzzzbx_job_id));
   const hilos = unicos(filas.map((f) => f.bzzzbx_thread_id));
 
-  const [jobs, pagos, salud, eventos, mensajes, alertas] = await Promise.all([
+  // Las de sujeto mensaje no se piden por sujeto: opsRUN sabe cuáles están abiertas (`alert_occurrence`) y las
+  // relee por id (OPR-34, P-3). Su estado sigue siendo el vivo de BzzzBX; la ocurrencia solo dice cuáles mirar.
+  const idsDeMensaje = unicos(filas.flatMap((f) => f.alertas_de_mensaje));
+
+  const [jobs, pagos, salud, eventos, mensajes, alertas, deMensaje] = await Promise.all([
     lectura.obtenerVarios("job", jobIds),
     lectura.obtenerVarios("payment", jobIds),
     lectura.obtenerVarios("job_health", jobIds),
@@ -30,6 +35,7 @@ export async function leerDeBzzzbx(filas: FilaRequest[], lectura: LecturaBzzzbx)
       ...filas.map((f) => lectura.listarPor("alert_result", { sujeto: { tipo: "request", request_id: f.id } })),
       ...jobIds.map((id) => lectura.listarPor("alert_result", { sujeto: { tipo: "job", bzzzbx_job_id: id } })),
     ]),
+    idsDeMensaje.length > 0 ? lectura.obtenerVarios("alert_result", idsDeMensaje) : [],
   ]);
 
   const [properties, customers, services] = await Promise.all([
@@ -47,7 +53,7 @@ export async function leerDeBzzzbx(filas: FilaRequest[], lectura: LecturaBzzzbx)
     salud,
     eventos: eventos.flat(),
     mensajes: mensajes.flat(),
-    alertas: alertas.flat(),
+    alertas: [...new Map([...alertas.flat(), ...deMensaje].map((a) => [a.bzzzbx_alert_id, a])).values()],
   };
 }
 
@@ -57,18 +63,23 @@ export async function leerTablero({
   ahora,
   zona,
   memoria,
+  esperas,
+  operadores,
 }: {
   filas: FilaRequest[];
   lectura: LecturaBzzzbx;
   ahora: Date;
   zona: string;
   memoria: MemoriaTablero;
+  /** Lo de opsRUN para el panel de Alerts (OPR-34): preguntas abiertas al cleaner y operadores activos. */
+  esperas?: EsperaDeOpsrun[];
+  operadores?: { id: string; nombre: string }[];
 }): Promise<Tablero> {
   try {
     const leidos = await leerDeBzzzbx(filas, lectura);
     memoria.leidos = leidos;
     memoria.en = ahora.toISOString();
-    return armarTablero({ filas, leidos, ahora, zona, bzzzbx: { disponible: true, actualizadoEn: memoria.en } });
+    return armarTablero({ filas, leidos, ahora, zona, bzzzbx: { disponible: true, actualizadoEn: memoria.en }, esperas, operadores });
   } catch (e) {
     if (!esNoDisponible(e)) throw e;
     return armarTablero({
@@ -77,6 +88,8 @@ export async function leerTablero({
       ahora,
       zona,
       bzzzbx: { disponible: false, actualizadoEn: memoria.en },
+      esperas,
+      operadores,
     });
   }
 }

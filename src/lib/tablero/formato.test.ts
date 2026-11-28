@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fechaYVentana, hora, horaConFecha, iniciales, horaOFecha } from "./formato";
+import { duracion, fechaYVentana, hora, horaConFecha, iniciales, horaOFecha } from "./formato";
 
 const UTC = "UTC";
 
@@ -37,5 +37,19 @@ describe("formato del tablero", () => {
     expect(iniciales("Ops Uno")).toBe("OU");
     expect(iniciales("finance")).toBe("F");
     expect(iniciales("  Ana  María  Pérez ")).toBe("AP");
+  });
+
+  it("duracion: minutos, horas con minutos, horas redondas y días (OPR-34 §5.1)", () => {
+    const D = "2026-11-27T10:00:00Z";
+    const luego = (min: number) => new Date(Date.parse(D) + min * 60_000);
+    expect(duracion(D, luego(0))).toBe("0 min");
+    expect(duracion(D, luego(45))).toBe("45 min");
+    expect(duracion(D, luego(65))).toBe("1 h 5 min");
+    expect(duracion(D, luego(120))).toBe("2 h");
+    expect(duracion(D, luego(24 * 60))).toBe("1 d");
+    expect(duracion(D, luego(27 * 60))).toBe("1 d 3 h");
+    // Nunca negativa, y acepta un instante ISO.
+    expect(duracion(D, luego(-5))).toBe("0 min");
+    expect(duracion(D, "2026-11-27T11:10:00Z")).toBe("1 h 10 min");
   });
 });

@@ -38,6 +38,64 @@ export function importadoresIndebidos(fuentes: { ruta: string; texto: string }[]
     .map(({ ruta }) => ruta);
 }
 
+/**
+ * Lo mismo para el registrador de alertas de OPR-34 (P-2): `lib/alertas/registrador`,
+ * `tarea` y `datos-sql` son el registrador y su escritura; `armar`, `consultas`,
+ * `reglas` y `tipos` son de lectura y los importa cualquiera. Solo el arranque del
+ * ciclo importa la tarea.
+ */
+const IMPORTA_EL_REGISTRADOR = /\b(?:from|import)\s*\(?\s*["'][^"']*alertas\/(?:registrador|tarea|datos-sql)[^"']*["']/;
+
+/** Los archivos que importan el registrador de alertas y no deberían. */
+export function importadoresIndebidosDelRegistrador(fuentes: { ruta: string; texto: string }[]): string[] {
+  return fuentes
+    .filter(({ ruta }) => !ruta.startsWith("lib/alertas/") && !/\.test\.tsx?$/.test(ruta) && !ES_ARRANQUE.test(ruta))
+    .filter(({ texto }) => IMPORTA_EL_REGISTRADOR.test(texto))
+    .map(({ ruta }) => ruta);
+}
+
+describe("el registrador de alertas solo corre en segundo plano (OPR-34, P-2)", () => {
+  const fuentes = archivos(RAIZ).map((ruta) => ({ ruta: relative(RAIZ, ruta).split("\\").join("/"), texto: readFileSync(ruta, "utf8") }));
+
+  it("el guard tiene qué mirar: el registrador existe y se recorre todo src/", () => {
+    expect(fuentes.some((f) => f.ruta === "lib/alertas/registrador.ts")).toBe(true);
+    expect(fuentes.some((f) => f.ruta === "lib/alertas/tarea.ts")).toBe(true);
+    expect(fuentes.length).toBeGreaterThan(100);
+  });
+
+  it("ningún archivo de lectura, ruta, página o ranura lo importa", () => {
+    expect(importadoresIndebidosDelRegistrador(fuentes)).toEqual([]);
+  });
+
+  it("el arranque del ciclo sí registra su tarea", () => {
+    const arranque = fuentes.find((f) => f.ruta === "lib/ciclo/arranque.ts");
+    expect(arranque?.texto).toMatch(IMPORTA_EL_REGISTRADOR);
+    expect(arranque?.texto).toContain("tareaRegistradorAlertas()");
+  });
+
+  it("se ve fallar: una ruta de lectura o una ranura que lo importe se detecta; el arranque, su módulo y las lecturas de Alerts no", () => {
+    const malo = { ruta: "app/api/tablero/cambios/route.ts", texto: `import { tareaRegistradorAlertas } from "@/lib/alertas/tarea";` };
+    expect(importadoresIndebidosDelRegistrador([malo])).toEqual(["app/api/tablero/cambios/route.ts"]);
+    expect(importadoresIndebidosDelRegistrador([{ ruta: "app/_ventana/ranura-alertas.tsx", texto: `const m = await import("../../lib/alertas/registrador");` }])).toEqual([
+      "app/_ventana/ranura-alertas.tsx",
+    ]);
+    expect(importadoresIndebidosDelRegistrador([{ ruta: "lib/tablero/leer.ts", texto: `import { crearDatosDelRegistrador } from "../alertas/datos-sql";` }])).toEqual([
+      "lib/tablero/leer.ts",
+    ]);
+    const bien = [
+      { ruta: "lib/ciclo/arranque.ts", texto: `import { tareaRegistradorAlertas } from "../alertas/tarea";` },
+      { ruta: "instrumentation.ts", texto: `import { tareaRegistradorAlertas } from "@/lib/alertas/tarea";` },
+      { ruta: "lib/alertas/tarea.ts", texto: `import { crearRegistrador } from "./registrador";` },
+      { ruta: "lib/alertas/registrador.test.ts", texto: `import { crearRegistrador } from "./registrador";` },
+      { ruta: "lib/tablero/armar.ts", texto: `import { alertasDeLaRequest } from "../alertas/armar";` },
+      { ruta: "app/_ventana/ranura-alertas.tsx", texto: `import { leerAlertas } from "@/lib/alertas/consultas";` },
+    ];
+    expect(importadoresIndebidosDelRegistrador(bien)).toEqual([]);
+    // Otro módulo del ciclo (no el arranque) tampoco puede.
+    expect(importadoresIndebidosDelRegistrador([{ ruta: "lib/ciclo/ciclo.ts", texto: `import { x } from "../alertas/tarea";` }])).toEqual(["lib/ciclo/ciclo.ts"]);
+  });
+});
+
 describe("el observador solo corre en segundo plano", () => {
   const fuentes = archivos(RAIZ).map((ruta) => ({ ruta: relative(RAIZ, ruta).split("\\").join("/"), texto: readFileSync(ruta, "utf8") }));
 

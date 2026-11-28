@@ -62,6 +62,7 @@ async function leerEntrada(requestId: string): Promise<Omit<EntradaVentana, "tab
     bzzzbx,
     respuestaDelCleaner: confirmar.respuestaDelCleaner,
     sugerencias: confirmar.sugerencias,
+    esperas: deOpsrun.esperas,
   };
 }
 

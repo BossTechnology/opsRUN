@@ -5,6 +5,8 @@
  * La etapa, el nombre y el estado salen de `armarTablero` (OPR-25), con la
  * misma request como única fila: la ventana y la tarjeta nunca discrepan.
  */
+import { alertasDeLaRequest, insigniaDe } from "../alertas/armar";
+import type { EsperaDeOpsrun } from "../alertas/tipos";
 import { poVigente } from "../billing/po";
 import type { AlertResult, Job } from "../bzzzbx/tipos";
 import { esReglaLimpiable } from "../etapas/reglas";
@@ -47,6 +49,8 @@ export type EntradaVentana = {
   respuestaDelCleaner?: RespuestaDelCleaner | null;
   /** Sugerencias de IA abiertas de los campos del borrador (OPR-28): las que marcan AI en los paneles. */
   sugerencias?: SugerenciaAbierta[];
+  /** Las preguntas abiertas al cleaner (Waiting): dan la insignia gris de Alerts, no abren la ventana en Alerts (OPR-34, P-4 y P-5). */
+  esperas?: EsperaDeOpsrun[];
 };
 
 export const NO_DISPONIBLE_EN_RELEASE = "Not available in this release";
@@ -102,7 +106,13 @@ export function armarVentana(entrada: EntradaVentana): VentanaJob {
 
   const abiertas = alertasAbiertas(entrada);
   const alertas = abiertas.map(vistaDeAlerta);
-  const pestanas = armarPestanas({ etapa, nombre: nombreDePestana(espacio, property?.name), conteo: alertas.length });
+  const pestanas = armarPestanas({
+    etapa,
+    nombre: nombreDePestana(espacio, property?.name),
+    conteo: alertas.length,
+    insignia: insigniaDe(abiertas, entrada.esperas?.length ?? 0),
+    idsRojos: abiertas.filter((a) => a.level === "red").map((a) => a.bzzzbx_alert_id),
+  });
   const inicial = elegirInicial(pestanas, entrada.tab);
 
   const maximo = Math.max(1, ...operadores.map((o) => o.abiertas));
@@ -213,32 +223,17 @@ function instanteDeFin(fila: FilaVentana, leidos: LeidosVentana): string | null 
 }
 
 /**
- * Alertas abiertas de la request, de su job o de un mensaje de su hilo (S-8). Una
- * alerta que el operador ya limpió en opsRUN no cuenta aunque BzzzBX la siga dando
- * abierta (OPR-30, P-7).
+ * Alertas abiertas de la request, de su job o de un mensaje suyo (OPR-34 §3.2):
+ * la misma función que usan el tablero, la barra y el panel. Una alerta que
+ * opsRUN ya tiene resuelta de cualquier forma no cuenta aunque BzzzBX la siga
+ * dando abierta (OPR-30, P-7).
  */
 export function alertasAbiertas({
   fila,
   leidos,
   hilos,
 }: Pick<EntradaVentana, "fila" | "leidos" | "hilos">): AlertResult[] {
-  const limpiadas = new Set(fila.alertas_limpiadas);
-  const mensajes = new Set(
-    leidos.mensajes.filter((m) => m.bzzzbx_thread_id !== null && hilos.includes(m.bzzzbx_thread_id)).map((m) => m.bzzzbx_message_id),
-  );
-  return leidos.alertas
-    .filter((a) => {
-      if (a.cleared_at !== null || limpiadas.has(a.bzzzbx_alert_id)) return false;
-      switch (a.sujeto.tipo) {
-        case "request":
-          return a.sujeto.request_id === fila.id;
-        case "job":
-          return fila.bzzzbx_job_id !== null && a.sujeto.bzzzbx_job_id === fila.bzzzbx_job_id;
-        case "message":
-          return mensajes.has(a.sujeto.bzzzbx_message_id);
-      }
-    })
-    .sort((a, b) => a.opened_at.localeCompare(b.opened_at) || a.bzzzbx_alert_id.localeCompare(b.bzzzbx_alert_id));
+  return alertasDeLaRequest({ fila, alertas: leidos.alertas, hilos, mensajes: leidos.mensajes });
 }
 
 const vistaDeAlerta = (a: AlertResult): AlertaVista => ({
@@ -254,10 +249,14 @@ function armarPestanas({
   etapa,
   nombre,
   conteo,
+  insignia,
+  idsRojos,
 }: {
   etapa: EtapaVentana;
   nombre: string;
   conteo: number;
+  insignia: Pestana["insignia"];
+  idsRojos: string[];
 }): Pestana[] {
   const desdeScheduled = etapa !== "requests";
   const desdeInProgress = etapa === "in_progress" || etapa === "complete" || etapa === "validation";
@@ -268,7 +267,7 @@ function armarPestanas({
   pestanas.push(
     { id: "dollar", nombre: "$", deshabilitada: true, titulo: NO_DISPONIBLE_EN_RELEASE },
     { id: "people", nombre: "People", deshabilitada: true, titulo: NO_DISPONIBLE_EN_RELEASE },
-    { id: "alerts", nombre: "Alerts", deshabilitada: false, conteo },
+    { id: "alerts", nombre: "Alerts", deshabilitada: false, conteo, insignia, idsRojos },
   );
   return pestanas;
 }

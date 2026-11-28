@@ -8,6 +8,7 @@
  * arranca explícitamente con `crearCiclo()` y sus propias tareas. Se apaga con
  * `OPSRUN_CICLO_DE_FONDO=0`.
  */
+import { tareaRegistradorAlertas } from "../alertas/tarea";
 import { tareaEntradaCorreo } from "../entrada/servidor";
 import { tareaReconciliacionEnvios } from "../instrucciones/reconciliacion";
 import { tareaObservadorEtapas } from "../observados/tarea";
@@ -16,9 +17,9 @@ import { crearCiclo, type Ciclo, type Tarea } from "./ciclo";
 
 type Entorno = Record<string, string | undefined>;
 
-/** Las tareas de opsRUN. Aquí se suman el registrador de alertas (OPR-34) y las que vengan. */
+/** Las tareas de opsRUN. Una tarjeta que necesite trabajo de fondo suma la suya aquí. */
 export function tareasDeOpsrun(): Tarea[] {
-  return [tareaEntradaCorreo(), tareaReconciliacionEnvios(), tareaObservadorEtapas()];
+  return [tareaEntradaCorreo(), tareaReconciliacionEnvios(), tareaObservadorEtapas(), tareaRegistradorAlertas()];
 }
 
 /** Por qué no debe correr, o null si puede. */

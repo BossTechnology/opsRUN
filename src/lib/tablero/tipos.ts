@@ -2,6 +2,7 @@
  * Modelo del tablero (spec OPR-25). Lo arma `armarTablero` con lo de opsRUN y
  * lo leído de BzzzBX; los componentes solo lo pintan.
  */
+import type { PanelAlertas } from "../alertas/tipos";
 import type {
   AlertResult,
   Customer,
@@ -59,6 +60,11 @@ export type FilaRequest = {
    * se descuentan aunque BzzzBX las siga dando abiertas (P-7).
    */
   alertas_limpiadas: string[];
+  /**
+   * `bzzzbx_alert_id` de las ocurrencias abiertas en opsRUN cuyo sujeto es un
+   * mensaje: el tablero las relee por id (OPR-34, P-3) para contarlas.
+   */
+  alertas_de_mensaje: string[];
   /** Hilo del correo original (`request_message.is_original`). */
   bzzzbx_thread_id: string | null;
 };
@@ -127,5 +133,9 @@ export type Columna = {
 export type Tablero = {
   columnas: Columna[];
   alertasAbiertas: ResumenAlertas;
+  /** Lo que lista el panel de Alerts de la barra (OPR-34 §6): Needs action y Waiting de toda la operación. */
+  panelAlertas: PanelAlertas;
+  /** Los `bzzzbx_alert_id` rojos de Needs action de toda la operación: lo que compara `usarPulso`. */
+  idsRojos: string[];
   bzzzbx: { disponible: boolean; actualizadoEn: string | null };
 };

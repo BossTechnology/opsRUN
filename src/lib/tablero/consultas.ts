@@ -2,6 +2,7 @@
  * Lo que el tablero lee de opsRUN, como `opsrun_app` y en solo lectura. Las
  * fechas salen como texto para que `pg` no las pase por la zona del proceso.
  */
+import type { EsperaDeOpsrun } from "../alertas/tipos";
 import type { Tx } from "../db/pool";
 
 import type { FilaRequest } from "./tipos";
@@ -29,6 +30,9 @@ export const COLUMNAS_FILA = `r.id::text,
        coalesce((select array_agg(a.bzzzbx_alert_id order by a.bzzzbx_alert_id)
                    from opsrun.alert_occurrence as a
                   where a.request_id = r.id and a.resolved_at is not null), '{}'::text[]) as alertas_limpiadas,
+       coalesce((select array_agg(a.bzzzbx_alert_id order by a.bzzzbx_alert_id)
+                   from opsrun.alert_occurrence as a
+                  where a.request_id = r.id and a.resolved_at is null and a.bzzzbx_message_id is not null), '{}'::text[]) as alertas_de_mensaje,
        m.bzzzbx_thread_id`;
 
 export const DESDE_FILA = `from opsrun.request as r
@@ -44,11 +48,41 @@ select ${COLUMNAS_FILA}
 ${DESDE_FILA}
 order by r.r_number`;
 
+/**
+ * Las preguntas al cleaner sin cerrar de toda la operación (Waiting del panel de
+ * Alerts, OPR-34 §6.2). Usa el índice parcial `cleaner_confirmation_waiting_idx`.
+ */
+export const CONSULTA_ESPERAS = `
+select c.id::text, c.request_id::text, c.purpose::text, c.bzzzbx_team_id, c.status::text,
+       ${iso("c.asked_at")} as asked_at,
+       c.new_service_date::text as new_service_date,
+       to_char(c.new_window_start, 'HH24:MI') as new_window_start,
+       to_char(c.new_window_end, 'HH24:MI') as new_window_end
+from opsrun.cleaner_confirmation as c
+where c.status in ('asked', 'replied')
+order by c.asked_at, c.id`;
+
+/** Los operadores activos, para el filtro Assigned to del panel de Alerts. */
+export const CONSULTA_OPERADORES_ACTIVOS = `
+select o.id::text as id, o.display_name as nombre
+from opsrun.operator as o
+where o.active
+order by o.display_name, o.id`;
+
 /** Cambia con cada escritura de opsRUN: Audit es append-only y toda acción deja uno. */
 export const CONSULTA_MARCA = `select coalesce(max(id), 0)::text as marca from opsrun.audit_event`;
 
 export async function leerFilas(db: Tx): Promise<FilaRequest[]> {
   return (await db.query<FilaRequest>(CONSULTA_FILAS)).rows;
+}
+
+export type LecturaDelPanel = { esperas: EsperaDeOpsrun[]; operadores: { id: string; nombre: string }[] };
+
+/** Lo de opsRUN que pide el panel de Alerts, una consulta tras otra (pg no admite concurrentes en un cliente). */
+export async function leerParaElPanel(db: Tx): Promise<LecturaDelPanel> {
+  const esperas = await db.query<EsperaDeOpsrun>(CONSULTA_ESPERAS);
+  const operadores = await db.query<{ id: string; nombre: string }>(CONSULTA_OPERADORES_ACTIVOS);
+  return { esperas: esperas.rows, operadores: operadores.rows };
 }
 
 export async function leerMarca(db: Tx): Promise<string> {
