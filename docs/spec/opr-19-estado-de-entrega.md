@@ -1,7 +1,7 @@
 # OPR-19 — Estado de entrega y alerta "Message not delivered"
 
 - **Tarjeta:** OPR-19 (C · Delivery status and "Message not delivered" alert). Leída en Relevo el 2026-11-27. Depende, según la tarjeta, de C · Email sending (OPR-16), C · Texting both ways (OPR-17) y P4 · Alerts tab (OPR-34). `PLAN.md` §5 ya anota que no lista la regla que calcula la alerta (OPR-33). La tarjeta es información; este spec manda sobre la construcción.
-- **Estado:** borrador para Henry. **No hay código ni migración escritos.** Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§13).
+- **Estado:** aprobado por Henry el 2026-11-27, con todas las recomendaciones (P-0 a P-8; ver §14). Lo marcado **[S-n]** es un supuesto; lo marcado **P-n** es una pregunta para Henry, con mi recomendación primero (§13).
 - **Hecho cuando (tarjeta):** un texto a un número inválido y un correo a una dirección inválida salen como "failed" y abren la alerta. Qué parte se acepta en la Fase A y qué parte espera la Fase B está en §3.
 - **Construye sobre (en `main`):** el puerto de BzzzBX y su falso (`src/lib/bzzzbx/`, ADR 0005, spec OPR-22), la conversación con su estado de entrega y Edit and resend (`docs/spec/opr-27-conversacion.md` §4.3 y S-6, `src/lib/conversacion/armar-hilo.ts`), el despacho y la reconciliación de envíos como tarea del ciclo de fondo (`src/lib/instrucciones/`, spec OPR-27 §7, ADR 0006) y el modelo de datos (`request_message`, `instruction`, `alert_occurrence`, `audit_event`, spec OPR-20).
 - **Depende de un spec aprobado y sin fusionar, sin redefinirlo:** `docs/spec/opr-34-alerts.md` (aprobado el 2026-11-27, en construcción en otro PR). Este spec usa sus conceptos (las secciones Needs action, Waiting y Resolved, el criterio único "qué alertas son de una request", el registrador de alertas del ciclo, el reparto regla → acción que la arregla, la constante provisional de la regla Message not delivered de su P-12 y el reparto de §4.1 que da "Fixed by action") y **no supone nombres de archivo** del código que esa implementación todavía no fusionó.
@@ -303,3 +303,19 @@ Contra el build de producción, la seed y el falso, con `OPSRUN_ACTOR_DEMO=1` y 
 - **P-6. ¿Cambia la seed?** **Recomiendo no:** los E2E arman sus casos con `/api/falso` y la seed de OPR-34 no se toca. Alternativa: un correo rebotado con su alerta abierta en una request de la seed, para la demo de la Fase A, que obliga a coordinar ids y conteos con las pruebas de OPR-34.
 - **P-7. ¿Y el aviso de rebote que llega como correo?** **Recomiendo pedirle a BzzzBX en OPR-6** que informe el rebote en el `delivery` del mensaje original y que no proyecte el aviso del servidor de correo como correo entrante del hilo (o que lo marque), para que la entrada de correo (OPR-15) no lo vincule como respuesta del cliente ni abra una request con él. Alternativa: filtrarlo en opsRUN por remitente, que adivina formatos de un proveedor.
 - **P-8. ¿Cómo se acepta el Hecho cuando?** **Recomiendo partirlo (§3.3):** el correo se acepta en la Fase A en staging con un correo enviado desde el buzón compartido, y el texto en la Fase B (OPR-40), o antes si OPR-17 vincula los textos enviados desde las herramientas de PINCH. Alternativa: aceptar los dos juntos en la Fase B.
+
+## 14. Decisiones de Henry (2026-11-27)
+
+Henry aprobó el spec con **todas las recomendaciones**, P-0 a P-8:
+
+| # | Decisión |
+|---|---|
+| P-0 | Sin migración. `OP050` a `OP054` quedan reservados y sin uso |
+| P-1 | OPR-19 entrega en la Fase A lo de §3.1 |
+| P-2 | Etiquetas "Failed" y "Bounced", con el motivo del proveedor |
+| P-3 | Se le pide a BzzzBX en OPR-6 que un destino inválido deje un `Message` fallido; mientras tanto, el rechazo se ve "Failed" sin alerta |
+| P-4 | El falso solo abre la alerta; no la cierra |
+| P-5 | El registrador de OPR-34 gana el reintento acotado y los salientes fallidos en la pasada completa |
+| P-6 | Sin cambios en la seed |
+| P-7 | Se le pide a BzzzBX en OPR-6 que el rebote vaya en el `delivery` del mensaje original |
+| P-8 | El Hecho cuando se parte según §3.3 |
