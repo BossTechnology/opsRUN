@@ -84,6 +84,7 @@ EOF
 cat >"$CONFIG/entorno.conf" <<EOF
 OPSRUN_DB_HOST=$DB
 OPSRUN_GOTRUE_URL=http://auth.opsrun.test
+OPSRUN_ZONA_HORARIA=America/New_York
 EOF
 printf 'OPSRUN_APP_USUARIO=opsrun_app\nOPSRUN_APP_CLAVE=opsrun_app_local\n' >"$CONFIG/secretos/app.conf"
 printf 'OPSRUN_MIGRADOR_URL=postgres://opsrun_migrador:opsrun_migrador_local@%s:5432/postgres\n' "$DB" \
