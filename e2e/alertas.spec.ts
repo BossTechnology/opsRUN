@@ -33,6 +33,8 @@ const MIN = 60_000;
 const hace = (ms: number) => new Date(Date.now() - ms).toISOString();
 const GUARDADO = { timeout: 20_000 };
 const UNA_VUELTA = { timeout: 60_000 };
+/** Id de alerta (o evento) propio de cada intento: lo que el registrador ya vio y resolvió no se reabre, y el reintento del grupo serial lo reusaría. */
+const unico = (base: string, intento: number) => `${base}-${intento}`;
 
 async function control(page: Page, pedido: Record<string, unknown>) {
   const r = await page.request.post("/api/falso", { data: pedido });
@@ -66,9 +68,11 @@ const cerrar = (page: Page, id: string) =>
 
 const pestana = (page: Page, id: string) => page.locator(`[data-testid="pestana"][data-pestana="${id}"]`);
 const insignia = (page: Page) => page.getByTestId("conteo-alertas");
-const needs = (page: Page) => page.getByTestId("alertas-needs-action");
-const waiting = (page: Page) => page.getByTestId("alertas-waiting");
-const resueltas = (page: Page) => page.getByTestId("alertas-resolved");
+// Solo cuenta la copia que se ve: con el servidor lento, el HTML en streaming deja un instante la sección dos veces en el DOM
+// (la oculta que React aún no movió y la ya puesta), y un clic o un texto sobre las dos falla por "resolved to 2 elements".
+const needs = (page: Page) => page.getByTestId("alertas-needs-action").filter({ visible: true });
+const waiting = (page: Page) => page.getByTestId("alertas-waiting").filter({ visible: true });
+const resueltas = (page: Page) => page.getByTestId("alertas-resolved").filter({ visible: true });
 const deRegla = (seccion: Locator, regla: string) => seccion.locator(`[data-testid="alerta"][data-regla="${regla}"]`);
 const deAlerta = (seccion: Locator, id: string) => seccion.locator(`[data-testid="alerta"][data-alerta="${id}"]`);
 const resultado = (page: Page) => page.getByTestId("resultado-accion");
@@ -148,7 +152,7 @@ test("L1: las secciones de la pestaña: Needs action, Waiting y Resolved con qui
   await expect(deRegla(resueltas(page), "TRN-005").getByTestId("alerta-quien")).toHaveText("Fixed by Finance Uno · PO entered");
 });
 
-test("L2: la insignia: ámbar con 1, gris con Waiting, sin insignia, y una roja nueva la hace latir", async ({ page }) => {
+test("L2: la insignia: ámbar con 1, gris con Waiting, sin insignia, y una roja nueva la hace latir", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   await abrir(page, R(1));
   await expect(insignia(page)).toHaveText("1");
@@ -168,7 +172,7 @@ test("L2: la insignia: ámbar con 1, gris con Waiting, sin insignia, y una roja 
 
   // R1 con la ventana abierta y una roja nueva: roja con 2 y latiendo, con la animación de 3 ciclos.
   await abrir(page, R(1));
-  await poner(page, "bx-alert-0201", { tipo: "request", request_id: R(1) }, "OPS-002", "red", "Open for 2 days.");
+  await poner(page, unico("bx-alert-0201", testInfo.retry), { tipo: "request", request_id: R(1) }, "OPS-002", "red", "Open for 2 days.");
   await expect(insignia(page)).toHaveText("2", UNA_VUELTA);
   await expect(insignia(page)).toHaveAttribute("data-nivel", "red");
   await expect(insignia(page)).toHaveAttribute("data-pulso", "si");
@@ -176,12 +180,12 @@ test("L2: la insignia: ámbar con 1, gris con Waiting, sin insignia, y una roja 
   await expect(page.getByRole("tab", { name: "Alerts, 2 need action, red" })).toBeVisible();
 });
 
-test("L2: con prefers-reduced-motion el color cambia y no hay animación", async ({ page }) => {
+test("L2: con prefers-reduced-motion el color cambia y no hay animación", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await abrir(page, R(1));
   await expect(insignia(page)).toHaveText("1");
-  await poner(page, "bx-alert-0202", { tipo: "request", request_id: R(1) }, "OPS-002", "red", "Open for 2 days.");
+  await poner(page, unico("bx-alert-0202", testInfo.retry), { tipo: "request", request_id: R(1) }, "OPS-002", "red", "Open for 2 days.");
   await expect(insignia(page)).toHaveAttribute("data-nivel", "red", UNA_VUELTA);
   await expect(insignia(page)).toHaveAttribute("data-pulso", "si");
   await expect(insignia(page)).toHaveCSS("animation-name", "none");
@@ -333,19 +337,15 @@ test("L10: Message not delivered cuenta en la tarjeta, la columna y la barra, y 
   await expect(page.getByTestId("panel-confirm-cleaner")).toBeVisible();
 });
 
-test("L11: el botón no corre lo que no está disponible: Go lo rechaza el servidor, con su motivo y sin escribir nada", async ({ page }) => {
+test("L11: el botón no corre lo que no está disponible: Go lo rechaza el servidor, con su motivo y sin escribir nada", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
-  await poner(page, "bx-alert-1101", { tipo: "request", request_id: R(1) }, "OPS-002", "amber", "Open for 2 days.");
+  await poner(page, unico("bx-alert-1101", testInfo.retry), { tipo: "request", request_id: R(1) }, "OPS-002", "amber", "Open for 2 days.");
   await abrir(page, R(1), "alerts");
   await actuarComo(page, OPS_UNO);
-  // En CI el selector y el sondeo de 15 s refrescan la ventana y el DOM llega a tener dos copias de Needs action (el
-  // error de la corrida fue "resolved to 2 elements": los botones nth(1) y nth(3) de dos copias con OPS-001 y OPS-002).
-  // Solo cuenta la copia que se ve, y se lee una vez.
-  const necesitan = needs(page).filter({ visible: true }).first();
-  const boton = deRegla(necesitan, "OPS-002").getByTestId("alerta-boton");
+  const boton = deRegla(needs(page), "OPS-002").getByTestId("alerta-boton");
   await expect(boton).toHaveText("Schedule");
   await expect(boton).toBeDisabled();
-  await expect(deRegla(necesitan, "OPS-002").getByTestId("alerta-boton-nota")).toHaveText("Confirm who it is from first");
+  await expect(deRegla(needs(page), "OPS-002").getByTestId("alerta-boton-nota")).toHaveText("Confirm who it is from first");
 
   // Lo que la base tiene de R1 que no son las alertas del registrador (esas llegan solas).
   const propias = () =>
@@ -378,14 +378,14 @@ test("L11: el botón no corre lo que no está disponible: Go lo rechaza el servi
   expect(await instrucciones()).toBe(instruccionesAntes);
 });
 
-test("L12: con BzzzBX caído: Needs action con lo último leído y la franja, Waiting y Resolved completos, Clear alert en gris, y el panel con su aviso", async ({ page }) => {
+test("L12: con BzzzBX caído: Needs action con lo último leído y la franja, Waiting y Resolved completos, Clear alert en gris, y el panel con su aviso", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
-  await poner(page, "bx-alert-1201", { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "MEC-003", "amber", "Running 45 min over the window.");
+  await poner(page, unico("bx-alert-1201", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "MEC-003", "amber", "Running 45 min over the window.");
   // Se leen con BzzzBX arriba: lo último leído queda en memoria.
   await abrir(page, R(1), "alerts");
   await expect(deRegla(needs(page), "OPS-001")).toBeVisible();
   await abrir(page, R(4), "alerts");
-  await expect(deAlerta(needs(page), "bx-alert-1201")).toBeVisible();
+  await expect(deAlerta(needs(page), unico("bx-alert-1201", testInfo.retry))).toBeVisible();
   await page.goto("/");
   const total = await totalDeLaBarra(page);
 
@@ -402,10 +402,10 @@ test("L12: con BzzzBX caído: Needs action con lo último leído y la franja, Wa
     // R4: Resolved completo, y Clear alert en gris con "BzzzBX unavailable".
     await abrir(page, R(4), "alerts");
     await expect(deRegla(resueltas(page), "OPS-010")).toHaveCount(2);
-    const limpiar = deAlerta(needs(page), "bx-alert-1201").getByTestId("alerta-boton");
+    const limpiar = deAlerta(needs(page), unico("bx-alert-1201", testInfo.retry)).getByTestId("alerta-boton");
     await expect(limpiar).toHaveText("Clear alert");
     await expect(limpiar).toBeDisabled();
-    await expect(deAlerta(needs(page), "bx-alert-1201").getByTestId("alerta-boton-nota")).toHaveText("BzzzBX unavailable");
+    await expect(deAlerta(needs(page), unico("bx-alert-1201", testInfo.retry)).getByTestId("alerta-boton-nota")).toHaveText("BzzzBX unavailable");
     // El panel de la barra: lo último conocido, con su aviso.
     await page.goto("/");
     await page.getByTestId("alertas-operacion").click();
@@ -422,25 +422,26 @@ test("L12: con BzzzBX caído: Needs action con lo último leído y la franja, Wa
   await expect(page.getByRole("dialog", { name: "Alerts" }).getByTestId("panel-alertas-franja")).toHaveCount(0);
   await abrir(page, R(4), "alerts");
   await expect(page.getByTestId("alertas-franja")).toHaveCount(0);
-  await expect(deAlerta(needs(page), "bx-alert-1201").getByTestId("alerta-boton")).toBeEnabled();
+  await expect(deAlerta(needs(page), unico("bx-alert-1201", testInfo.retry)).getByTestId("alerta-boton")).toBeEnabled();
 });
 
-test("L13: registra con el tablero cerrado: la alerta queda en alert_occurrence y en Audit sin que nadie mire", async ({ page }) => {
+test("L13: registra con el tablero cerrado: la alerta queda en alert_occurrence y en Audit sin que nadie mire", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   // Sin ninguna página abierta: solo el stand-in cambia y la base se consulta, no la interfaz.
-  await poner(page, "bx-alert-1301", { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
+  await poner(page, unico("bx-alert-1301", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-002", "amber", "Open for 2 days.");
   await expect
-    .poll(() => contar("select count(*)::text as n from opsrun.alert_occurrence where bzzzbx_alert_id = 'bx-alert-1301' and request_id = $1", [R(3)]), UNA_VUELTA)
+    .poll(() => contar("select count(*)::text as n from opsrun.alert_occurrence where bzzzbx_alert_id = $1 and request_id = $2", [unico("bx-alert-1301", testInfo.retry), R(3)]), UNA_VUELTA)
     .toBe(1);
   expect(
     await contar(
       `select count(*)::text as n from opsrun.audit_event as e join opsrun.alert_occurrence as a on a.id = e.alert_occurrence_id
-        where a.bzzzbx_alert_id = 'bx-alert-1301' and e.event_type = 'alert_opened' and e.actor_kind = 'bzzzbx'`,
+        where a.bzzzbx_alert_id = $1 and e.event_type = 'alert_opened' and e.actor_kind = 'bzzzbx'`,
+      [unico("bx-alert-1301", testInfo.retry)],
     ),
   ).toBe(1);
   // Después se abre la ventana de R3: la alerta ya está en Needs action y en Audit.
   await abrir(page, R(3), "alerts");
-  await expect(deAlerta(needs(page), "bx-alert-1301")).toBeVisible();
+  await expect(deAlerta(needs(page), unico("bx-alert-1301", testInfo.retry))).toBeVisible();
   await abrir(page, R(3), "audit");
   await expect(filaDeAudit(page, "Alert opened", 0)).toBeVisible();
   await expect(page.locator('[data-ranura="audit"]').getByText("OPS-002 Request open too long").first()).toBeVisible();
@@ -448,15 +449,15 @@ test("L13: registra con el tablero cerrado: la alerta queda en alert_occurrence 
 
 test("L6 (E2E-3): OPS-010 Delayed: sin botón, 'Clears at check-in', y con el check-in queda Cleared automatically", async ({ page }, testInfo) => {
   test.setTimeout(180_000);
-  test.skip((await ocurrencia("bx-alert-0600")) !== undefined && testInfo.retry === 0, "La OPS-010 de R3 ya se resolvió en esta base: se necesita una base nueva");
+  test.skip((await ocurrencia(unico("bx-alert-0600", 0))) !== undefined && testInfo.retry === 0, "La OPS-010 de R3 ya se resolvió en esta base: se necesita una base nueva");
   const checkIn = () =>
     control(page, {
       accion: "poner",
       entidad: "jobtracker_event",
-      valor: { bzzzbx_event_id: "bx-evt-0601", bzzzbx_job_id: "bx-job-0003", kind: "checked_in", occurred_at: hace(MIN) },
+      valor: { bzzzbx_event_id: unico("bx-evt-0601", testInfo.retry), bzzzbx_job_id: "bx-job-0003", kind: "checked_in", occurred_at: hace(MIN) },
     });
 
-  await poner(page, "bx-alert-0600", { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-010", "red", "Not started by 1:00 PM.", 20 * MIN);
+  await poner(page, unico("bx-alert-0600", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0003" }, "OPS-010", "red", "Not started by 1:00 PM.", 20 * MIN);
   // La tarjeta dice Delayed, y la barra y la columna Scheduled cuentan una roja.
   await page.goto("/");
   const r3 = tarjeta(page, R(3));
@@ -465,17 +466,17 @@ test("L6 (E2E-3): OPS-010 Delayed: sin botón, 'Clears at check-in', y con el ch
   await expect(page.getByTestId("alertas-operacion")).toHaveAttribute("data-nivel", "red");
   // La pestaña la muestra sin botón y con "Clears at check-in".
   await abrir(page, R(3), "alerts");
-  const fila = deAlerta(needs(page), "bx-alert-0600");
+  const fila = deAlerta(needs(page), unico("bx-alert-0600", testInfo.retry));
   await expect(fila).toContainText("OPS-010 Delayed");
   await expect(fila.getByTestId("alerta-boton")).toHaveCount(0);
   await expect(fila.getByTestId("alerta-sin-boton")).toHaveText("Clears at check-in");
 
   // El check-in llega y Signal Maker la cierra: Resolved, "Cleared automatically".
   await checkIn();
-  await cerrar(page, "bx-alert-0600");
-  await expect(deAlerta(resueltas(page), "bx-alert-0600")).toBeVisible(UNA_VUELTA);
-  await expect(deAlerta(resueltas(page), "bx-alert-0600").getByTestId("alerta-quien")).toHaveText("Cleared automatically");
-  expect((await ocurrencia("bx-alert-0600"))?.resolution).toBe("auto_cleared");
+  await cerrar(page, unico("bx-alert-0600", testInfo.retry));
+  await expect(deAlerta(resueltas(page), unico("bx-alert-0600", testInfo.retry))).toBeVisible(UNA_VUELTA);
+  await expect(deAlerta(resueltas(page), unico("bx-alert-0600", testInfo.retry)).getByTestId("alerta-quien")).toHaveText("Cleared automatically");
+  expect((await ocurrencia(unico("bx-alert-0600", testInfo.retry)))?.resolution).toBe("auto_cleared");
   // Audit: Alert opened y Alert resolved, con Observed donde toca (el check-in lo observa el ciclo).
   await abrir(page, R(3), "audit");
   await expect(filaDeAudit(page, "Alert opened")).toBeVisible();
@@ -485,8 +486,8 @@ test("L6 (E2E-3): OPS-010 Delayed: sin botón, 'Clears at check-in', y con el ch
 
 test("L7 (E2E-4): MEC-003 Running long: Clear alert desde la alerta, con motivo, y deja de contar aunque el falso la dé abierta", async ({ page }, testInfo) => {
   test.setTimeout(180_000);
-  test.skip((await ocurrencia("bx-alert-0008")) !== undefined && testInfo.retry === 0, "La MEC-003 nueva de R4 ya se limpió en esta base: se necesita una base nueva");
-  await poner(page, "bx-alert-0008", { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "MEC-003", "amber", "Running 50 min over the window.", 10 * MIN);
+  test.skip((await ocurrencia(unico("bx-alert-0008", 0))) !== undefined && testInfo.retry === 0, "La MEC-003 nueva de R4 ya se limpió en esta base: se necesita una base nueva");
+  await poner(page, unico("bx-alert-0008", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "MEC-003", "amber", "Running 50 min over the window.", 10 * MIN);
 
   await page.goto("/");
   const antesBarra = await totalDeLaBarra(page);
@@ -497,9 +498,9 @@ test("L7 (E2E-4): MEC-003 Running long: Clear alert desde la alerta, con motivo,
   await actuarComo(page, OPS_UNO);
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
   // El botón abre Clear alert con esa alerta elegida; sin motivo, Go está deshabilitado.
-  await deAlerta(needs(page), "bx-alert-0008").getByTestId("alerta-boton").click();
+  await deAlerta(needs(page), unico("bx-alert-0008", testInfo.retry)).getByTestId("alerta-boton").click();
   await expect(page.getByTestId("panel-accion")).toHaveAttribute("data-accion", "clear_alert");
-  await expect(page.locator('[data-testid="alerta-limpiable"][data-alerta="bx-alert-0008"]')).toBeVisible();
+  await expect(page.locator(`[data-testid="alerta-limpiable"][data-alerta="${unico("bx-alert-0008", testInfo.retry)}"]`)).toBeVisible();
   await expect(page.getByTestId("go")).toBeDisabled();
   await page.getByTestId("motivo").fill("   ");
   await expect(page.getByTestId("go")).toBeDisabled();
@@ -510,8 +511,8 @@ test("L7 (E2E-4): MEC-003 Running long: Clear alert desde la alerta, con motivo,
 
   // Resolved "Cleared by Ops Uno" con su motivo, aunque el falso la siga dando abierta.
   await abrir(page, R(4), "alerts");
-  await expect(deAlerta(needs(page), "bx-alert-0008")).toHaveCount(0);
-  const resuelta = deAlerta(resueltas(page), "bx-alert-0008");
+  await expect(deAlerta(needs(page), unico("bx-alert-0008", testInfo.retry))).toHaveCount(0);
+  const resuelta = deAlerta(resueltas(page), unico("bx-alert-0008", testInfo.retry));
   await expect(resuelta.getByTestId("alerta-quien")).toHaveText("Cleared by Ops Uno");
   await expect(resuelta.getByTestId("alerta-razon")).toHaveText("Reason: Large unit, called ahead.");
   // Deja de contar en la tarjeta, la columna y la barra.
@@ -525,20 +526,20 @@ test("L7 (E2E-4): MEC-003 Running long: Clear alert desde la alerta, con motivo,
 
 test("L8 (E2E-5 y E2E-6): fotos: Mark as OSS desde la alerta queda Fixed by action; las fotos que llegan la dejan Cleared automatically", async ({ page }, testInfo) => {
   test.setTimeout(240_000);
-  test.skip((await ocurrencia("bx-alert-0801")) !== undefined && testInfo.retry === 0, "Las alertas de fotos de R4 ya se resolvieron en esta base: se necesita una base nueva");
+  test.skip((await ocurrencia(unico("bx-alert-0801", 0))) !== undefined && testInfo.retry === 0, "Las alertas de fotos de R4 ya se resolvieron en esta base: se necesita una base nueva");
   // R4 termina: Complete (R5 ya está aprobada y no admite Mark as OSS).
   await control(page, {
     accion: "poner",
     entidad: "jobtracker_event",
-    valor: { bzzzbx_event_id: "bx-evt-0801", bzzzbx_job_id: "bx-job-0004", kind: "completed", occurred_at: hace(2 * MIN) },
+    valor: { bzzzbx_event_id: unico("bx-evt-0801", testInfo.retry), bzzzbx_job_id: "bx-job-0004", kind: "completed", occurred_at: hace(2 * MIN) },
   });
-  await poner(page, "bx-alert-0801", { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "ORG-002", "amber", "No photos after the job.", 5 * MIN);
+  await poner(page, unico("bx-alert-0801", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "ORG-002", "amber", "No photos after the job.", 5 * MIN);
 
   await abrir(page, R(4));
   await actuarComo(page, OPS_UNO);
   await expect(page.getByTestId("stage")).toHaveText("Complete");
   await expect(pestana(page, "alerts")).toHaveAttribute("aria-selected", "true");
-  const fila = deAlerta(needs(page), "bx-alert-0801");
+  const fila = deAlerta(needs(page), unico("bx-alert-0801", testInfo.retry));
   await expect(fila).toContainText("ORG-002 No photos");
   await fila.getByTestId("alerta-boton").click();
   await expect(page.getByTestId("panel-accion")).toHaveAttribute("data-accion", "mark_oss");
@@ -548,22 +549,22 @@ test("L8 (E2E-5 y E2E-6): fotos: Mark as OSS desde la alerta queda Fixed by acti
   await expect(resultado(page)).toHaveText("Saved", GUARDADO);
 
   // Signal Maker la cierra: "Fixed by Ops Uno · Marked as OSS".
-  await cerrar(page, "bx-alert-0801");
-  await expect(deAlerta(resueltas(page), "bx-alert-0801").getByTestId("alerta-quien")).toContainText("Fixed by Ops Uno · Marked as OSS", UNA_VUELTA);
-  expect((await ocurrencia("bx-alert-0801"))?.resolution).toBe("fixed_by_action");
+  await cerrar(page, unico("bx-alert-0801", testInfo.retry));
+  await expect(deAlerta(resueltas(page), unico("bx-alert-0801", testInfo.retry)).getByTestId("alerta-quien")).toContainText("Fixed by Ops Uno · Marked as OSS", UNA_VUELTA);
+  expect((await ocurrencia(unico("bx-alert-0801", testInfo.retry)))?.resolution).toBe("fixed_by_action");
 
   // E2E-6: ORG-003 Partial photos; llega la foto After y Signal Maker la cierra: Cleared automatically.
-  await poner(page, "bx-alert-0802", { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "ORG-003", "amber", "Only the before photo.", 0);
+  await poner(page, unico("bx-alert-0802", testInfo.retry), { tipo: "job", bzzzbx_job_id: "bx-job-0004" }, "ORG-003", "amber", "Only the before photo.", 0);
   await abrir(page, R(4), "alerts");
-  await expect(deAlerta(needs(page), "bx-alert-0802")).toContainText("ORG-003 Partial photos");
+  await expect(deAlerta(needs(page), unico("bx-alert-0802", testInfo.retry))).toContainText("ORG-003 Partial photos");
   await control(page, {
     accion: "poner",
     entidad: "photo",
-    valor: { bzzzbx_photo_id: "bx-photo-0802", bzzzbx_job_id: "bx-job-0004", phase: "after", taken_at: hace(MIN / 2), ref: "stand-in:photo/bx-photo-0802" },
+    valor: { bzzzbx_photo_id: unico("bx-photo-0802", testInfo.retry), bzzzbx_job_id: "bx-job-0004", phase: "after", taken_at: hace(MIN / 2), ref: "stand-in:photo/bx-photo-0802" },
   });
-  await cerrar(page, "bx-alert-0802");
-  await expect(deAlerta(resueltas(page), "bx-alert-0802").getByTestId("alerta-quien")).toHaveText("Cleared automatically", UNA_VUELTA);
-  expect((await ocurrencia("bx-alert-0802"))?.resolution).toBe("auto_cleared");
+  await cerrar(page, unico("bx-alert-0802", testInfo.retry));
+  await expect(deAlerta(resueltas(page), unico("bx-alert-0802", testInfo.retry)).getByTestId("alerta-quien")).toHaveText("Cleared automatically", UNA_VUELTA);
+  expect((await ocurrencia(unico("bx-alert-0802", testInfo.retry)))?.resolution).toBe("auto_cleared");
 });
 
 test("L9 (E2E-7): TRN-005 PO missing: sube a roja, Enter PO desde la alerta y queda Fixed by action; Validate deja de estar en gris", async ({ page }, testInfo) => {
