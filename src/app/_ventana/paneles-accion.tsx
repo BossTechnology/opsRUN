@@ -7,6 +7,7 @@ import { reglaConNombre } from "@/lib/alertas/reglas";
 import { PO_MAX } from "@/lib/etapas/reglas";
 import type { CampoPropiedad, VentanaJob } from "@/lib/ventana/tipos";
 
+import { ETIQUETA_COINCIDENCIA, TEXTO_TRUNCADO } from "./ranura-enlace";
 import "./etapas.css";
 
 /**
@@ -29,6 +30,7 @@ const CAMPOS_DE_IA: Record<CampoPropiedad["clave"], string[]> = {
   cleaner: ["cleaner_team"],
   po: ["po_number"],
   access: ["access_notes"],
+  linked: [],
 };
 
 function MarcaAI({ razones }: { razones: string[] }) {
@@ -327,6 +329,56 @@ export function PanelEnterPo({ ventana, onCambio }: PropsPanelAccion) {
   );
 }
 
+/**
+ * Change linked job (OPR-29, §8.1): los jobs de PINCH a los que se puede cambiar el enlace (los mismos candidatos de
+ * la ranura del enlace, con Suggested y por qué coinciden, sin el job actual), y se elige uno. El motivo es
+ * obligatorio y lo pide la barra. Lo que se elige es solo el crosswalk ID: el servidor vuelve a leer los dos jobs.
+ */
+export function PanelRelinkJob({ ventana, onCambio }: PropsPanelAccion) {
+  const { candidatosDeCambio: lista, candidatosTruncado } = ventana.datos;
+  const [elegido, setElegido] = useState<string | null>(null);
+  // Si el elegido dejó de ser candidato (se refrescó la ventana), se desmarca.
+  const valido = elegido !== null && lista.some((c) => c.bzzzbxJobId === elegido) ? elegido : null;
+
+  useEffect(() => {
+    onCambio(valido ? { bzzzbx_job_id: valido } : {}, valido !== null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valido]);
+
+  return (
+    <fieldset className="panel-relink-job" data-testid="panel-relink-job">
+      <legend>Link this request to</legend>
+      {candidatosTruncado ? (
+        <p className="aviso-truncado" role="status" data-testid="aviso-truncado-cambio">
+          {TEXTO_TRUNCADO}
+        </p>
+      ) : null}
+      <ul className="lista-candidatos" aria-label="Jobs">
+        {lista.map((c) => (
+          <li key={c.bzzzbxJobId} className="candidato" data-testid="candidato-cambio" data-job={c.bzzzbxJobId} data-sugerido={c.sugerido}>
+            <label>
+              <input type="radio" name="job" checked={valido === c.bzzzbxJobId} onChange={() => setElegido(c.bzzzbxJobId)} />
+              <strong>{c.jobNumber}</strong>
+              {c.sugerido ? (
+                <span className="etiqueta-sugerido" data-testid="sugerido-cambio">
+                  Suggested
+                </span>
+              ) : null}
+              <span>{c.fecha}</span>
+              <span>{c.cleaner}</span>
+            </label>
+            <ul className="candidato-coincidencias" aria-label="Why it matches">
+              {c.coincide.map((x) => (
+                <li key={x}>{ETIQUETA_COINCIDENCIA[x]}</li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
+  );
+}
+
 /** El panel de cada acción que lo tiene, por código. Las demás no piden nada más que el motivo. */
 export const PANELES_DE_ACCION: Record<string, ComponentType<PropsPanelAccion>> = {
   assign: PanelAssign,
@@ -337,4 +389,5 @@ export const PANELES_DE_ACCION: Record<string, ComponentType<PropsPanelAccion>> 
   mark_oss: PanelMarkOss,
   approve_confirm: PanelApprove,
   write_po: PanelEnterPo,
+  relink_job: PanelRelinkJob,
 };

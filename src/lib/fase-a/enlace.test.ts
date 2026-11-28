@@ -29,6 +29,8 @@ function preparar(cambios: Partial<RequestParaEnlace> = {}, opciones: { rechazad
   const request: RequestParaEnlace = {
     id: R2,
     status: "open",
+    bzzzbx_job_id: null,
+    change_seq: "1",
     received_at: new Date(reloj.ahora().getTime() - 3 * 3_600_000).toISOString(),
     bzzzbx_customer_id: "bx-cust-0001",
     bzzzbx_property_id: "bx-prop-0002",
@@ -44,8 +46,10 @@ function preparar(cambios: Partial<RequestParaEnlace> = {}, opciones: { rechazad
     leerRequest: vi.fn(async (id: string) => (id === request.id ? request : null)),
     jobsEnlazadosAOtra: vi.fn(async (_requestId: string, ids: string[]) => new Set(ids.filter((id) => enlazadosAOtra.has(id)))),
     jobsRechazados: vi.fn(async () => new Set(opciones.rechazados ?? [])),
+    jobsReenlazados: vi.fn(async () => new Set<string>()),
     enlazar: vi.fn(async () => {}),
     rechazar: vi.fn(async () => {}),
+    cambiar: vi.fn(async () => {}),
   } satisfies DatosDeEnlace;
   const buscar = vi.spyOn(falso.lectura, "buscarJobs");
   return { deps: { lectura: falso.lectura, datos }, datos, falso, buscar, dia };

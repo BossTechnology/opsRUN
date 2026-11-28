@@ -12,10 +12,20 @@
  */
 export const REGLA_MENSAJE_NO_ENTREGADO = "MSG-001";
 
+/**
+ * Delayed (OPR-29): un job Scheduled que no empezó a tiempo. La regla la calcula Signal Maker (OPR-33);
+ * opsRUN solo la lee. PROVISIONAL hasta OPR-4: el id y los textos de Audit (§5.3).
+ */
+export const REGLA_DELAYED = "OPS-010";
+/** Lo que dice la línea de Audit cuando Delayed abre: "Delayed · <el texto de Signal Maker>". */
+export const AUDIT_DELAYED_ABRE = "Delayed";
+/** Lo que dice la línea de Audit cuando el check-in la limpia sola. */
+export const AUDIT_DELAYED_SE_LIMPIA = { evento: "Started", complemento: "· Delayed cleared" } as const;
+
 export const NOMBRES_DE_REGLAS: Record<string, string> = {
   "OPS-001": "Unassigned request",
   "OPS-002": "Request open too long",
-  "OPS-010": "Delayed",
+  [REGLA_DELAYED]: "Delayed",
   "OPS-020": "Cleaner declined",
   "MEC-003": "Running long",
   "ORG-002": "No photos",
@@ -48,7 +58,7 @@ export type Arreglo =
 export const ARREGLO_DE_REGLA: Record<string, Arreglo> = {
   "OPS-001": { tipo: "accion", codigo: "assign", prellenado: "asignarme" },
   "OPS-002": { tipo: "accion", codigo: "schedule", prellenado: null },
-  "OPS-010": { tipo: "ninguno", texto: "Clears at check-in" },
+  [REGLA_DELAYED]: { tipo: "ninguno", texto: "Clears at check-in" },
   "OPS-020": { tipo: "accion", codigo: "confirm_cleaner", prellenado: null },
   "MEC-003": { tipo: "accion", codigo: "clear_alert", prellenado: "alerta" },
   "ORG-002": { tipo: "accion", codigo: "mark_oss", prellenado: null },
