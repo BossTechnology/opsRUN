@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { actuarComo, esperarVentanaLista } from "./ventana";
+
 /**
  * In Progress, Complete y Validation hasta Paid (OPR-30, OPR-31 y OPR-32,
  * criterios E1 a E9 del spec docs/spec/opr-30-31-32-etapas.md §10.3) contra el
@@ -70,14 +72,6 @@ const GUARDADO = { timeout: 20_000 };
 const opcion = (page: Page, codigo: string) => page.locator(`[data-testid="accion"] option[value="${codigo}"]`);
 const cursor = async (page: Page) => ((await (await page.request.get("/api/tablero/cambios")).json()) as { cursor: string }).cursor;
 
-async function actuarComo(page: Page, operadorId: string) {
-  const selector = page.getByLabel("Acting as");
-  await expect(async () => {
-    await selector.selectOption(operadorId);
-    await expect(selector).toHaveValue(operadorId, { timeout: 1000 });
-  }).toPass({ timeout: 10_000 });
-}
-
 /** Elige una acción en la action bar, esperando a que la página termine de hidratarse. */
 async function elegirAccion(page: Page, codigo: string) {
   await expect(async () => {
@@ -132,6 +126,8 @@ async function abrir(page: Page, id: string, tab?: string) {
   await page.goto(`/job/${id}${tab ? `?tab=${tab}` : ""}`);
   await expect(page.getByTestId("encabezado")).toBeVisible();
   await expect(page.getByTestId("barra-acciones")).toBeVisible();
+  // Con todo revelado: una actualización a media carga deja una ranura dos veces en el DOM (ver ./ventana.ts).
+  await esperarVentanaLista(page);
 }
 
 /** Recarga la ventana con lo que pasó en el origen (sin esperar al sondeo de 15 s). */

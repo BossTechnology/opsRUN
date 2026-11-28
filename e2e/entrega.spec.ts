@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { esperarVentanaLista } from "./ventana";
+
 /**
  * El estado de entrega y la alerta Message not delivered (OPR-19, criterios D1 a D10 de
  * docs/spec/opr-19-estado-de-entrega.md §10.3) contra el build de producción, la seed y
@@ -78,6 +80,8 @@ async function abrir(page: Page, tab?: string) {
   await page.goto(`/job/${R2}${tab ? `?tab=${tab}` : ""}`);
   await expect(page.getByTestId("encabezado")).toBeVisible();
   await expect(page.getByTestId("barra-acciones")).toBeVisible();
+  // Sin esto, una ranura en streaming puede estar dos veces en el DOM un instante (ver e2e/ventana.ts).
+  await esperarVentanaLista(page);
 }
 
 /** Recarga hasta que lo que dice la función sea lo esperado: el sondeo de la ventana tarda hasta 15 s y el ciclo, una vuelta. */
@@ -86,6 +90,7 @@ async function recargarHasta<T>(page: Page, leer: () => Promise<T>, esperado: T,
     .poll(
       async () => {
         await page.reload();
+        await esperarVentanaLista(page);
         // Una lectura que no responde en 5 s cuenta como "todavía no": la siguiente vuelta recarga y vuelve a mirar.
         return await Promise.race([leer().catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
       },
@@ -120,6 +125,7 @@ async function enviarDesdeOpsrun(page: Page, canal: "customer" | "cleaner", cuer
     .poll(
       async () => {
         await page.reload();
+        await esperarVentanaLista(page);
         const e = burbuja(page, cuerpo).first();
         id = ((await e.getAttribute("data-entrada")) ?? "").replace(/^msg:/, "");
         return /^bx-msg-9\d+$/.test(id);
