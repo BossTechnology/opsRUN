@@ -172,9 +172,9 @@ select throws_ok(
 insert into opsrun.instruction (id, request_id, type, idempotency_key, payload, actor_kind)
 values ('c0000000-0000-4000-8000-000000000021', 'b0000000-0000-4000-8000-000000000021',
         'ai_analyze_request', 'modelo-ai', '{}', 'system');
-insert into opsrun.ai_analysis (id, request_id, instruction_id, status)
+insert into opsrun.ai_analysis (id, request_id, instruction_id, status, completed_at)
 values ('e0000000-0000-4000-8000-000000000021', 'b0000000-0000-4000-8000-000000000021',
-        'c0000000-0000-4000-8000-000000000021', 'completed');
+        'c0000000-0000-4000-8000-000000000021', 'completed', now());
 insert into opsrun.ai_suggestion (id, request_id, ai_analysis_id, field, rank, value) values
   ('5a000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000021',
    'e0000000-0000-4000-8000-000000000021', 'unit', 1, '"4B"'),
