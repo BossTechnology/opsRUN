@@ -7,9 +7,14 @@ import type { EntradaAccion, ResultadoAccion } from "@/lib/acciones/tipos";
 import { TEXTO_PARA_UN_RELEASE_POSTERIOR, validarCuerpo } from "@/lib/conversacion/composer";
 import type { DatosDeConversacion } from "@/lib/conversacion/leer";
 import { LIMITE_DE_CARACTERES, type ModoComposer } from "@/lib/conversacion/tipos";
+import { placeholdersSinLlenar } from "@/lib/plantillas/llenar";
+import type { PlantillaOfrecida } from "@/lib/plantillas/disponibles";
+import { contarSms } from "@/lib/plantillas/sms";
 import { hora } from "@/lib/tablero/formato";
 
+import { Avisos } from "./avisos";
 import { Hilo } from "./hilo";
+import { BotonCopiar, Faltantes, MarcaDePlantilla, ReemplazoEnLinea, SelectorDePlantillas } from "./plantillas";
 import "./conversacion.css";
 
 type Props = {
@@ -38,6 +43,9 @@ function nuevoId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** La plantilla con que partió el mensaje de un modo (OPR-18): la clave y la versión viajan con Send, solo para el Audit. */
+type PlantillaElegida = { clave: string; version: number; nombre: string };
+
 /** Lo que dice el Composer de un resultado que no es un éxito; null si salió bien. */
 const mensajeDeError = (r: ResultadoAccion): string | null => (r.tipo === "rechazada" ? r.mensaje : null);
 
@@ -51,6 +59,11 @@ const mensajeDeError = (r: ResultadoAccion): string | null => (r.tipo === "recha
  *
  * Todo envío pasa por `ejecutarAccion`, que vuelve a calcular en el servidor
  * si el modo está disponible: deshabilitar un botón aquí no es la defensa.
+ *
+ * OPR-18: el botón Templates llena la caja con el texto del job (ya llenado en el servidor) y deja una marca
+ * "Template · …" mientras el mensaje parta de ella; Send manda lo que hay en la caja, con la clave y la versión de
+ * la marca, y se deshabilita mientras quede un `{{…}}` sin llenar. Copy copia la caja al portapapeles y nada más.
+ * Elegir una plantilla, Copy y el panel Notices no llaman a ninguna acción: solo Send lo hace.
  */
 export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) {
   const [modo, setModo] = useState<ModoComposer>("note");
@@ -61,6 +74,9 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
   // Borradores ya enviados o descartados: no se vuelven a ofrecer mientras llega el refresco.
   const [usados, setUsados] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // OPR-18: de qué plantilla partió el mensaje de cada modo, y la que espera que el operador decida si reemplaza lo que escribió.
+  const [elegidas, setElegidas] = useState<Record<ModoComposer, PlantillaElegida | null>>({ customer: null, cleaner: null, note: null });
+  const [porReemplazar, setPorReemplazar] = useState<{ modo: ModoComposer; plantilla: PlantillaOfrecida } | null>(null);
   const [enCurso, iniciar] = useTransition();
   // La clave de idempotencia de un Send: la misma mientras no cambie el cuerpo, para que un reintento no duplique (S-12).
   const clave = useRef<{ cuerpo: string; valor: string } | null>(null);
@@ -75,17 +91,38 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
 
   const limite = LIMITE_DE_CARACTERES[modo];
   const valido = validarCuerpo(modo, texto).ok;
-  const puedeEnviar = disponibilidad.disponible && valido && !enCurso;
+  // OPR-18: un mensaje no sale con un {{…}} sin llenar (P-9); el servidor lo vuelve a exigir con plantilla (OP056).
+  const faltan = modo === "note" ? [] : placeholdersSinLlenar(texto);
+  const puedeEnviar = disponibilidad.disponible && valido && faltan.length === 0 && !enCurso;
+  const plantillaElegida = modo === "note" ? null : elegidas[modo];
+  const delModoPorReemplazar = porReemplazar?.modo === modo ? porReemplazar : null;
 
   function escribir(valor: string) {
     if (borrador && sinTocar) setAdoptados({ ...adoptados, [modo]: borrador.id });
     setTextos({ ...textos, [modo]: valor });
+    // Vaciar la caja borra la asociación con la plantilla; editar no.
+    if (valor.trim() === "") setElegidas((e) => ({ ...e, [modo]: null }));
     setError(null);
   }
 
   function cambiarDeModo(nuevo: ModoComposer) {
     setModo(nuevo);
+    setPorReemplazar(null);
     setError(null);
+  }
+
+  function aplicarPlantilla(deModo: ModoComposer, p: PlantillaOfrecida) {
+    setTextos((t) => ({ ...t, [deModo]: p.texto }));
+    setElegidas((e) => ({ ...e, [deModo]: { clave: p.clave, version: p.version, nombre: p.nombre } }));
+    setPorReemplazar(null);
+    setError(null);
+  }
+
+  /** Con texto del operador en la caja, primero pregunta; un borrador de IA sin tocar o una caja vacía se llenan sin preguntar. */
+  function elegirPlantilla(p: PlantillaOfrecida) {
+    const escrito = textos[modo];
+    if (escrito !== null && escrito.trim() !== "") setPorReemplazar({ modo, plantilla: p });
+    else aplicarPlantilla(modo, p);
   }
 
   function usarBorrador() {
@@ -98,6 +135,8 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
     setModo(deModo);
     setTextos({ ...textos, [deModo]: cuerpo });
     setAdoptados({ ...adoptados, [deModo]: null });
+    setElegidas((e) => ({ ...e, [deModo]: null }));
+    setPorReemplazar(null);
     setError(null);
   }
 
@@ -107,13 +146,17 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
       setError(cuerpo.razon);
       return;
     }
-    if (enCurso || !disponibilidad.disponible) return;
+    if (enCurso || !disponibilidad.disponible || faltan.length > 0) return;
     const idBorrador = modo !== "note" && adoptado ? borrador!.id : null;
     const datosDeEnvio: Record<string, unknown> = { body: cuerpo.cuerpo };
     if (modo !== "note") {
       if (clave.current?.cuerpo !== cuerpo.cuerpo) clave.current = { cuerpo: cuerpo.cuerpo, valor: `msg-${nuevoId()}` };
       datosDeEnvio.idempotency_key = clave.current.valor;
       if (idBorrador) datosDeEnvio.ai_suggestion_id = idBorrador;
+      if (plantillaElegida) {
+        datosDeEnvio.template_key = plantillaElegida.clave;
+        datosDeEnvio.template_version = plantillaElegida.version;
+      }
     }
     const delModo = modo;
     iniciar(async () => {
@@ -134,6 +177,7 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
         clave.current = null;
         setError(null);
         setTextos((t) => ({ ...t, [delModo]: "" }));
+        setElegidas((e) => ({ ...e, [delModo]: null }));
         if (idBorrador) setUsados((u) => [...u, idBorrador]);
       } catch {
         setError("Something went wrong. Try again.");
@@ -191,6 +235,8 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
 
       <Hilo entradas={datos.entradas} mensajesNoDisponibles={datos.mensajesNoDisponibles} onReenviar={reenviar} modos={datos.modos} />
 
+      <Avisos avisos={datos.plantillas.avisos} bzzzbx={datos.bzzzbx} zona={zona} />
+
       <form
         className="composer"
         data-testid="composer"
@@ -200,6 +246,7 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
           enviar();
         }}
       >
+        <div className="composer-encabezado">
         <div className="composer-modos" role="radiogroup" aria-label="Write to">
           {MODOS.map((m) => {
             const d = datos.modos[m.id];
@@ -226,6 +273,15 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
               </button>
             );
           })}
+        </div>
+        {modo === "note" ? null : (
+          <SelectorDePlantillas
+            key={modo}
+            plantillas={datos.plantillas[modo]}
+            razonGris={disponibilidad.disponible ? null : disponibilidad.razon}
+            onElegir={elegirPlantilla}
+          />
+        )}
         </div>
 
         {modo === "note" ? null : (
@@ -259,6 +315,16 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
           </p>
         )}
 
+        {plantillaElegida ? (
+          <MarcaDePlantilla nombre={plantillaElegida.nombre} onQuitar={() => setElegidas((e) => ({ ...e, [modo]: null }))} />
+        ) : null}
+        {delModoPorReemplazar ? (
+          <ReemplazoEnLinea
+            onReemplazar={() => aplicarPlantilla(delModoPorReemplazar.modo, delModoPorReemplazar.plantilla)}
+            onCancelar={() => setPorReemplazar(null)}
+          />
+        ) : null}
+
         {borrador && adoptado ? (
           <div className="borrador-ia" data-testid="borrador-ia">
             <span className="marca-ia">AI draft</span>
@@ -285,13 +351,25 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
           disabled={!disponibilidad.disponible}
           onChange={(e) => escribir(e.target.value)}
         />
+        <Faltantes faltan={faltan} />
         <div className="composer-pie">
-          <span className={`contador${texto.length > limite ? " contador-excedido" : ""}`} data-testid="contador">
-            {texto.length}/{limite}
+          <span className="composer-cuenta">
+            <span className={`contador${texto.length > limite ? " contador-excedido" : ""}`} data-testid="contador">
+              {texto.length}/{limite}
+            </span>
+            {modo === "cleaner" ? (
+              <span className="contador-sms" data-testid="sms">
+                {" "}
+                · {contarSms(texto).mensajes} SMS
+              </span>
+            ) : null}
           </span>
-          <button type="submit" data-testid="enviar" disabled={!puedeEnviar}>
-            Send
-          </button>
+          <span className="composer-botones">
+            {modo === "note" ? null : <BotonCopiar texto={texto} testid="copiar" deshabilitado={texto === ""} />}
+            <button type="submit" data-testid="enviar" disabled={!puedeEnviar}>
+              Send
+            </button>
+          </span>
         </div>
         <p className="composer-error" role="alert" data-testid="error-composer" hidden={error === null}>
           {error}

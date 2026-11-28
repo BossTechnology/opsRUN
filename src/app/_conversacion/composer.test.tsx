@@ -50,6 +50,7 @@ function datos(parche: Partial<DatosDeConversacion> = {}): DatosDeConversacion {
     modos: disponibilidadDelComposer({ etapa: "requests", bzzzbxDisponible: true, hilos: ["bx-thread-0002"], equipoId: "bx-team-0001" }),
     para: { customer: { to: "contact.one@example.test", cc: "— —" }, cleaner: { nombre: "Team Alpha", telefono: "+1 555 0111" } },
     borradores: { customer: null, cleaner: null },
+    plantillas: { customer: [], cleaner: [], avisos: [] },
     abiertos: 0,
     ...parche,
   };

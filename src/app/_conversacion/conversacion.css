@@ -250,3 +250,147 @@
   color: var(--rojo);
   font-size: 0.85rem;
 }
+
+/* OPR-18: plantillas y avisos. */
+.ranura-conversacion .composer-encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ranura-conversacion .plantillas-selector {
+  position: relative;
+}
+
+.ranura-conversacion .plantillas-selector > button,
+.ranura-conversacion .boton-copiar {
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.ranura-conversacion .plantillas-selector > button:disabled,
+.ranura-conversacion .boton-copiar:disabled {
+  color: var(--tenue);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ranura-conversacion .plantillas-menu {
+  position: absolute;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  min-width: 12rem;
+  margin-top: 0.2rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.4rem;
+  background: var(--superficie);
+}
+
+.ranura-conversacion .plantillas-menu button {
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0.4rem 0.7rem;
+}
+
+.ranura-conversacion .plantillas-menu button:hover,
+.ranura-conversacion .plantillas-menu button:focus-visible {
+  background: var(--neutro-fondo);
+}
+
+.ranura-conversacion .marca-plantilla {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--borde);
+  background: var(--neutro-fondo);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.2rem 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ranura-conversacion .marca-plantilla button {
+  border: 0;
+  background: none;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+}
+
+.ranura-conversacion .plantillas-reemplazo,
+.ranura-conversacion .plantillas-faltan {
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.ranura-conversacion .plantillas-faltan {
+  color: var(--ambar);
+  font-weight: 700;
+}
+
+.ranura-conversacion .composer-cuenta {
+  display: inline-flex;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--tenue);
+}
+
+.ranura-conversacion .composer-botones {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.ranura-conversacion .avisos {
+  margin: 0 0 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.7rem;
+}
+
+.ranura-conversacion .avisos summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.ranura-conversacion .avisos-lista {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.ranura-conversacion .aviso {
+  display: grid;
+  gap: 0.2rem;
+  border-top: 1px dashed var(--borde);
+  padding-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.ranura-conversacion .aviso p {
+  margin: 0;
+}
+
+.ranura-conversacion .aviso-canal,
+.ranura-conversacion .aviso-estado {
+  color: var(--tenue);
+  font-size: 0.75rem;
+}
+
+.ranura-conversacion .aviso-texto {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ranura-conversacion .aviso .boton-copiar {
+  justify-self: start;
+  font-size: 0.75rem;
+}
