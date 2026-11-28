@@ -9,10 +9,12 @@ import "server-only";
  * escribe: una lectura nunca escribe.
  */
 import type { AlertResult } from "../bzzzbx/tipos";
+import { obtenerConversacion } from "../conversacion/servidor";
 import { nombresDeEquipos } from "../ventana/servidor";
 
-import { armarAlertas } from "./armar";
+import { armarAlertas, mensajesDeLasAlertas } from "./armar";
 import { leerAlertas } from "./consultas";
+import { arregloDe } from "./reglas";
 import type { VistaAlertas } from "./tipos";
 
 export type EntradaDeObtenerAlertas = {
@@ -23,10 +25,17 @@ export type EntradaDeObtenerAlertas = {
   zona: string;
   /** `PropsRanuraBase.bzzzbx.disponible`: con false no se pide ningún nombre. */
   bzzzbxDisponible: boolean;
+  /** `PropsRanuraBase.etapa`: con el job cancelado el Composer no envía y Edit and resend queda en gris. */
+  etapa?: string;
 };
 
-export async function obtenerAlertas({ requestId, abiertas, zona, bzzzbxDisponible }: EntradaDeObtenerAlertas): Promise<VistaAlertas> {
+export async function obtenerAlertas({ requestId, abiertas, zona, bzzzbxDisponible, etapa = "requests" }: EntradaDeObtenerAlertas): Promise<VistaAlertas> {
   const { ocurrencias, esperas } = await leerAlertas(requestId);
   const equipos = bzzzbxDisponible ? await nombresDeEquipos(esperas.map((e) => e.bzzzbx_team_id)) : {};
-  return armarAlertas({ abiertas, ocurrencias, esperas, equipos, ahora: new Date(), zona });
+  // Solo si hay una alerta de mensaje abierta: las demás pestañas no leen la conversación.
+  const hayDeMensaje = abiertas.some((a) => a.sujeto.tipo === "message" && arregloDe(a.rule_id).tipo === "reenviar");
+  const conversacion = hayDeMensaje
+    ? await obtenerConversacion({ requestId, etapa, puedeEnviar: bzzzbxDisponible && etapa !== "cancelled", zona })
+    : null;
+  return armarAlertas({ abiertas, ocurrencias, esperas, equipos, mensajes: mensajesDeLasAlertas(abiertas, conversacion), ahora: new Date(), zona });
 }

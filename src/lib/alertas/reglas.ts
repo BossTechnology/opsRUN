@@ -34,6 +34,14 @@ export const NOMBRES_DE_REGLAS: Record<string, string> = {
   [REGLA_MENSAJE_NO_ENTREGADO]: "Message not delivered",
 };
 
+/**
+ * Lo que la fila de la pestaña le dice al operador para arreglar la alerta, además del botón (OPR-19 §6.2). Texto
+ * fijo de la regla; PROVISIONAL hasta leer el Release Definition §5 (OPR-19, S-1).
+ */
+export const TEXTO_DEL_ARREGLO: Record<string, string> = {
+  [REGLA_MENSAJE_NO_ENTREGADO]: "Check the address or number and resend.",
+};
+
 export function reglaConNombre(ruleId: string): string {
   const nombre = NOMBRES_DE_REGLAS[ruleId];
   return nombre ? `${ruleId} ${nombre}` : ruleId;

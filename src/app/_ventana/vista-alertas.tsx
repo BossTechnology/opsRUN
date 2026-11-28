@@ -49,6 +49,16 @@ export function VistaAlertasPestana({ vista, etapa, bzzzbx }: Props) {
                 <p className="alerta-motivo" data-testid="alerta-motivo">
                   {f.motivo}
                 </p>
+                {f.destinatario ? (
+                  <p className="alerta-destinatario" data-testid="alerta-destinatario">
+                    {f.destinatario}
+                  </p>
+                ) : null}
+                {f.arreglo ? (
+                  <p className="alerta-arreglo" data-testid="alerta-arreglo">
+                    {f.arreglo}
+                  </p>
+                ) : null}
                 <p className="alerta-tiempo">
                   <span data-testid="alerta-duracion">{f.duracion}</span> ·{" "}
                   <time dateTime={f.abiertaIso} data-testid="alerta-abierta">

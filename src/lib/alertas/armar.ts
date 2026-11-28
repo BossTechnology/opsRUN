@@ -12,7 +12,11 @@ import type { AlertResult, Message } from "../bzzzbx/tipos";
 import { duracion, fechaYVentana, horaConFecha, horaOFecha } from "../tablero/formato";
 import { ETAPAS, SIN_VALOR, TITULOS, type Etapa, type FilaRequest } from "../tablero/tipos";
 
-import { arregloDe, reglaConNombre } from "./reglas";
+import { MENSAJE_NO_ENCONTRADO } from "../conversacion/armar-hilo";
+import type { DatosDeConversacion } from "../conversacion/leer";
+import { RAZON_BZZZBX_CAIDO } from "../conversacion/composer";
+
+import { arregloDe, reglaConNombre, TEXTO_DEL_ARREGLO } from "./reglas";
 import type {
   BotonDeAlerta,
   EsperaDeOpsrun,
@@ -22,6 +26,7 @@ import type {
   FilaDelPanel,
   FiltrosDelPanel,
   Insignia,
+  MensajeDeAlerta,
   OcurrenciaDeOpsrun,
   OpcionDeFiltro,
   PanelAlertas,
@@ -113,6 +118,8 @@ export type EntradaDeAlertas = {
   esperas: EsperaDeOpsrun[];
   /** Nombre del cleaner por `bzzzbx_team_id`, ya leído; sin nombre, "— —". */
   equipos: Record<string, string>;
+  /** Lo leído de BzzzBX de los mensajes de las alertas de mensaje, por `bzzzbx_message_id` (OPR-19). */
+  mensajes?: Record<string, MensajeDeAlerta>;
   ahora: Date;
   zona: string;
 };
@@ -120,8 +127,13 @@ export type EntradaDeAlertas = {
 const porNivelYAntiguedad = <T extends { nivel: "amber" | "red"; abiertaIso: string; id: string }>(a: T, b: T) =>
   Number(b.nivel === "red") - Number(a.nivel === "red") || a.abiertaIso.localeCompare(b.abiertaIso) || a.id.localeCompare(b.id);
 
-/** El botón que arregla la alerta: abre su acción en la action bar, sin ejecutar nada (§5.3). */
-export function botonDe(a: AlertResult): BotonDeAlerta {
+/**
+ * El botón que arregla la alerta: abre su acción en la action bar, sin ejecutar nada (§5.3). El de Message not
+ * delivered hereda del Composer (OPR-19 §6.3): habilitado si el modo de su canal está disponible; en gris con el
+ * mismo motivo si no; en gris con "Message not found in BzzzBX" si BzzzBX no conoce el mensaje. Sin lectura del
+ * mensaje, en gris con "BzzzBX unavailable": lo conservador.
+ */
+export function botonDe(a: AlertResult, mensaje?: MensajeDeAlerta): BotonDeAlerta {
   const arreglo = arregloDe(a.rule_id);
   switch (arreglo.tipo) {
     case "accion":
@@ -136,7 +148,15 @@ export function botonDe(a: AlertResult): BotonDeAlerta {
               : null,
       };
     case "reenviar":
-      return { tipo: "reenviar", mensajeId: a.sujeto.tipo === "message" ? a.sujeto.bzzzbx_message_id : null };
+      return {
+        tipo: "reenviar",
+        mensajeId: a.sujeto.tipo === "message" ? a.sujeto.bzzzbx_message_id : null,
+        estado: !mensaje
+          ? { disponible: false, razon: RAZON_BZZZBX_CAIDO }
+          : !mensaje.encontrado
+            ? { disponible: false, razon: MENSAJE_NO_ENCONTRADO }
+            : mensaje.modo,
+      };
     case "ninguno":
       return { tipo: "texto", texto: arreglo.texto };
   }
@@ -161,7 +181,30 @@ export function queSeEspera(e: EsperaDeOpsrun): string {
   return `Reschedule · ${fechaYVentana(e.new_service_date, e.new_window_start, e.new_window_end)}`;
 }
 
-export function armarAlertas({ abiertas, ocurrencias, esperas, equipos, ahora, zona }: EntradaDeAlertas): VistaAlertas {
+/**
+ * Lo que la fila de Message not delivered muestra del mensaje (OPR-19 §6.2 y §6.3): el destinatario, si BzzzBX
+ * conoce el mensaje y qué puede hacer el Composer en el modo de su canal. Sale de la misma lectura que la
+ * conversación (el mismo hilo, la misma memoria de lo último leído), sin una segunda ruta a BzzzBX.
+ */
+export function mensajesDeLasAlertas(abiertas: AlertResult[], conversacion: DatosDeConversacion | null): Record<string, MensajeDeAlerta> {
+  const salida: Record<string, MensajeDeAlerta> = {};
+  if (!conversacion) return salida;
+  for (const a of abiertas) {
+    if (a.sujeto.tipo !== "message" || arregloDe(a.rule_id).tipo !== "reenviar") continue;
+    const id = a.sujeto.bzzzbx_message_id;
+    const entrada = conversacion.entradas.find((e) => e.id === `msg:${id}`);
+    // Solo se declara desconocido un mensaje con BzzzBX respondiendo ahora: con BzzzBX caído, lo que falta no se sabe.
+    if (!entrada && conversacion.bzzzbx.disponible) {
+      salida[id] = { encontrado: false, destinatario: null, modo: { disponible: false, razon: MENSAJE_NO_ENCONTRADO } };
+      continue;
+    }
+    const modo = entrada?.tipo === "text" ? conversacion.modos.cleaner : conversacion.modos.customer;
+    salida[id] = { encontrado: true, destinatario: entrada?.destinatario ?? null, modo };
+  }
+  return salida;
+}
+
+export function armarAlertas({ abiertas, ocurrencias, esperas, equipos, mensajes = {}, ahora, zona }: EntradaDeAlertas): VistaAlertas {
   // Cuántas veces se abrió cada regla en la request, contando la que está abierta aunque opsRUN no la haya anotado todavía.
   const idsPorRegla = new Map<string, Set<string>>();
   for (const [regla, id] of [
@@ -176,18 +219,24 @@ export function armarAlertas({ abiertas, ocurrencias, esperas, equipos, ahora, z
   };
 
   const needsAction: FilaNeedsAction[] = abiertas
-    .map((a) => ({
-      id: a.bzzzbx_alert_id,
-      regla: a.rule_id,
-      nombreRegla: reglaConNombre(a.rule_id),
-      nivel: a.level,
-      motivo: a.reason_text,
-      abiertaTexto: `Opened ${horaConFecha(a.opened_at, ahora, zona)}`,
-      abiertaIso: a.opened_at,
-      duracion: `Open ${duracion(a.opened_at, ahora)}`,
-      repeticiones: repeticiones(a.rule_id),
-      boton: botonDe(a),
-    }))
+    .map((a) => {
+      const deMensaje = a.sujeto.tipo === "message" && arregloDe(a.rule_id).tipo === "reenviar";
+      const mensaje = a.sujeto.tipo === "message" ? mensajes[a.sujeto.bzzzbx_message_id] : undefined;
+      return {
+        id: a.bzzzbx_alert_id,
+        regla: a.rule_id,
+        nombreRegla: reglaConNombre(a.rule_id),
+        nivel: a.level,
+        motivo: a.reason_text,
+        abiertaTexto: `Opened ${horaConFecha(a.opened_at, ahora, zona)}`,
+        abiertaIso: a.opened_at,
+        duracion: `Open ${duracion(a.opened_at, ahora)}`,
+        repeticiones: repeticiones(a.rule_id),
+        destinatario: deMensaje ? `To: ${mensaje?.destinatario ?? SIN_VALOR}` : null,
+        arreglo: TEXTO_DEL_ARREGLO[a.rule_id] ?? null,
+        boton: botonDe(a, mensaje),
+      };
+    })
     .sort(porNivelYAntiguedad);
 
   const waiting: FilaWaiting[] = [...esperas]

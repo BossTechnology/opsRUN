@@ -12,10 +12,11 @@ import {
   armarAlertas,
   armarPanelAlertas,
   insigniaDe,
+  mensajesDeLasAlertas,
   type EntradaDeAlertasDeLaRequest,
 } from "./armar";
 import { REGLA_MENSAJE_NO_ENTREGADO } from "./reglas";
-import { SIN_FILTROS, type EsperaDeOpsrun, type FilaDelPanel, type OcurrenciaDeOpsrun, type PanelAlertas } from "./tipos";
+import { SIN_FILTROS, type EsperaDeOpsrun, type FilaDelPanel, type MensajeDeAlerta, type OcurrenciaDeOpsrun, type PanelAlertas } from "./tipos";
 
 const AHORA = new Date("2026-11-27T16:00:00Z");
 const hace = (min: number) => new Date(AHORA.getTime() - min * 60_000).toISOString();
@@ -271,9 +272,40 @@ describe("el botón de cada alerta (§5.3)", () => {
     expect(boton(alerta("x", { rule_id: "OPS-010" }))).toEqual({ tipo: "texto", texto: "Clears at check-in" });
   });
 
-  it("Message not delivered lleva el foco al mensaje", () => {
+  describe("Message not delivered (OPR-19 §6.2 y §6.3)", () => {
     const a = alerta("x", { rule_id: REGLA_MENSAJE_NO_ENTREGADO, sujeto: { tipo: "message", bzzzbx_message_id: "bx-msg-0201" } });
-    expect(boton(a)).toEqual({ tipo: "reenviar", mensajeId: "bx-msg-0201" });
+    const fila = (mensaje?: MensajeDeAlerta, abierta: AlertResult = a) =>
+      armarAlertas({ abiertas: [abierta], ocurrencias: [], esperas: [], equipos: {}, mensajes: mensaje ? { "bx-msg-0201": mensaje } : {}, ahora: AHORA, zona: "UTC" }).needsAction[0]!;
+
+    it("lleva el foco al mensaje y hereda la disponibilidad del modo de su canal", () => {
+      const f = fila({ encontrado: true, destinatario: "contact.one@example.test", modo: { disponible: true } });
+      expect(f.boton).toEqual({ tipo: "reenviar", mensajeId: "bx-msg-0201", estado: { disponible: true } });
+    });
+
+    it.each(["BzzzBX unavailable", "Job cancelled", "No email thread for this request", "Choose a cleaner first"])("con el modo apagado (%s) el botón queda en gris con el mismo motivo", (razon) => {
+      const f = fila({ encontrado: true, destinatario: "x", modo: { disponible: false, razon } });
+      expect(f.boton).toEqual({ tipo: "reenviar", mensajeId: "bx-msg-0201", estado: { disponible: false, razon } });
+    });
+
+    it("si BzzzBX no conoce el mensaje, en gris con 'Message not found in BzzzBX'", () => {
+      const f = fila({ encontrado: false, destinatario: null, modo: { disponible: true } });
+      expect(f.boton).toMatchObject({ estado: { disponible: false, razon: "Message not found in BzzzBX" } });
+    });
+
+    it("sin lectura del mensaje, en gris con 'BzzzBX unavailable' y el destinatario se ve — —", () => {
+      const f = fila(undefined);
+      expect(f.boton).toMatchObject({ estado: { disponible: false, razon: "BzzzBX unavailable" } });
+      expect(f.destinatario).toBe("To: — —");
+    });
+
+    it("la fila trae el destinatario y el arreglo, y las demás reglas no", () => {
+      const f = fila({ encontrado: true, destinatario: "Team Alpha · +1 555 0111", modo: { disponible: true } });
+      expect(f.destinatario).toBe("To: Team Alpha · +1 555 0111");
+      expect(f.arreglo).toBe("Check the address or number and resend.");
+      const otra = armarAlertas({ abiertas: [alerta("y", { rule_id: "OPS-001" })], ocurrencias: [], esperas: [], equipos: {}, ahora: AHORA, zona: "UTC" }).needsAction[0]!;
+      expect(otra.destinatario).toBeNull();
+      expect(otra.arreglo).toBeNull();
+    });
   });
 
   it("una regla que no conoce no trae botón", () => {
@@ -381,5 +413,37 @@ describe("el panel de la barra (§6)", () => {
   it("sin coincidencias: lo dice, y sin alertas en la operación no es un filtro que sobra", () => {
     expect(armarPanelAlertas(panel, { ...SIN_FILTROS, etapa: "validation" })).toMatchObject({ filas: [], sinCoincidencias: true });
     expect(armarPanelAlertas({ ...panel, filas: [], esperas: [] }, SIN_FILTROS)).toMatchObject({ filas: [], sinCoincidencias: false });
+  });
+});
+
+describe("mensajesDeLasAlertas: lo que la conversación dice de los mensajes de las alertas (OPR-19 §6.2 y §6.3)", () => {
+  const delMensaje = (id: string) => alerta(`a-${id}`, { rule_id: REGLA_MENSAJE_NO_ENTREGADO, sujeto: { tipo: "message", bzzzbx_message_id: id } });
+  const modos = {
+    customer: { disponible: true } as const,
+    cleaner: { disponible: false, razon: "Choose a cleaner first" } as const,
+    note: { disponible: true } as const,
+  };
+  const entrada = (id: string, tipo: "email" | "text", destinatario: string | null) => ({ id: `msg:${id}`, tipo, destinatario });
+  const conversacion = (entradas: ReturnType<typeof entrada>[], disponible = true) =>
+    ({ entradas, modos, bzzzbx: { disponible, actualizadoEn: null } }) as unknown as Parameters<typeof mensajesDeLasAlertas>[1];
+
+  it("el correo usa el modo Customer y el texto el Cleaner, con su destinatario", () => {
+    const c = conversacion([entrada("m1", "email", "contact.one@example.test"), entrada("m2", "text", "Team Alpha · +1 555 0111")]);
+    expect(mensajesDeLasAlertas([delMensaje("m1"), delMensaje("m2")], c)).toEqual({
+      m1: { encontrado: true, destinatario: "contact.one@example.test", modo: { disponible: true } },
+      m2: { encontrado: true, destinatario: "Team Alpha · +1 555 0111", modo: { disponible: false, razon: "Choose a cleaner first" } },
+    });
+  });
+
+  it("un mensaje que el hilo no tiene, con BzzzBX respondiendo, no se encontró; con BzzzBX caído no se declara", () => {
+    expect(mensajesDeLasAlertas([delMensaje("m9")], conversacion([]))).toEqual({
+      m9: { encontrado: false, destinatario: null, modo: { disponible: false, razon: "Message not found in BzzzBX" } },
+    });
+    expect(mensajesDeLasAlertas([delMensaje("m9")], conversacion([], false))).toMatchObject({ m9: { encontrado: true, destinatario: null } });
+  });
+
+  it("solo mira las alertas de mensaje de esta regla, y sin conversación no da nada", () => {
+    expect(mensajesDeLasAlertas([alerta("x")], conversacion([]))).toEqual({});
+    expect(mensajesDeLasAlertas([delMensaje("m1")], null)).toEqual({});
   });
 });

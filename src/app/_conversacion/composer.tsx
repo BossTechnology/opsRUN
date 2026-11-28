@@ -189,7 +189,7 @@ export function Conversacion({ datos, zona, ejecutar = ejecutarAccion }: Props) 
         </p>
       )}
 
-      <Hilo entradas={datos.entradas} mensajesNoDisponibles={datos.mensajesNoDisponibles} onReenviar={reenviar} />
+      <Hilo entradas={datos.entradas} mensajesNoDisponibles={datos.mensajesNoDisponibles} onReenviar={reenviar} modos={datos.modos} />
 
       <form
         className="composer"

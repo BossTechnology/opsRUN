@@ -306,7 +306,8 @@ test.describe.serial("Alerts: lo que se puede repetir", () => {
         subject: null,
         body: "Please confirm the unit.",
         sent_at: hace(10 * MIN),
-        delivery: "failed",
+        // "sent", no "failed": el falso abre por su cuenta la alerta de un saliente que falla (OPR-19, P-4) y esta prueba pone la suya.
+        delivery: "sent",
       },
     });
     await poner(page, noEntregada, { tipo: "message", bzzzbx_message_id: mensaje }, "MSG-001", "red", "Text not delivered.");

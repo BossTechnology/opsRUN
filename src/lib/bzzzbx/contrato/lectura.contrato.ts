@@ -17,6 +17,7 @@ import {
   BUSCAR_MENSAJES_MAX,
   CLAVE,
   ENTIDADES,
+  ESTADOS_DE_ENTREGA,
   type Cursor,
   type Entidad,
   type FiltroDeJobs,
@@ -34,6 +35,13 @@ export type EntornoDeLectura = {
   correoEntrante: string;
   /** Un job conocido, para `buscarJobs` (su cliente, propiedad y fecha se leen con `obtener`). */
   jobConPropiedad: { bzzzbx_job_id: string; bzzzbx_property_id: string };
+  /**
+   * OPR-19 (provisional hasta OPR-6): un correo saliente que rebotó, con el motivo del proveedor; ausente si el
+   * entorno no tiene uno. Contra el real, sale de los datos de prueba del laboratorio.
+   */
+  correoRebotado?: { bzzzbx_message_id: string; bzzzbx_thread_id: string; delivery_detail: string };
+  /** OPR-19: cambia el `delivery` de un mensaje conocido a `bounced`; ausente si no se puede. */
+  cambioDeEntrega?: { bzzzbx_message_id: string; provocar: () => Promise<void> };
   /** Provoca un cambio en el origen sobre una entidad conocida; ausente si no se puede. */
   cambio?: { entidad: Entidad; id: string; provocar: () => Promise<void> };
   /** Espera lo necesario para que un cambio llegue (el real tarda; el falso no). */
@@ -71,6 +79,46 @@ export function probarContratoDeLectura(nombre: string, crear: () => Promise<Ent
       expect(Number.isInteger(price.amount_cents)).toBe(true);
       expect(price.amount_cents).toBeGreaterThanOrEqual(0);
       expect(price.currency).toMatch(/^[A-Z]{3}$/);
+    });
+
+    describe("estado de entrega de un mensaje (OPR-19, provisional hasta OPR-6)", () => {
+      it("todo mensaje trae un delivery de los cinco y un delivery_detail que es texto, null o no viene", async () => {
+        const { lectura, relaciones } = await crear();
+        const mensajes = await lectura.listarPor("message", relaciones.message);
+        expect(mensajes.length).toBeGreaterThan(0);
+        for (const m of mensajes) {
+          expect(ESTADOS_DE_ENTREGA).toContain(m.delivery);
+          expect(["string", "undefined"]).toContain(m.delivery_detail === null ? "undefined" : typeof m.delivery_detail);
+        }
+      });
+
+      it("un correo rebotado se lee igual por obtener, obtenerVarios y listarPor, con su detalle", async () => {
+        const entorno = await crear();
+        if (!entorno.correoRebotado) return;
+        const { bzzzbx_message_id: id, bzzzbx_thread_id: hilo, delivery_detail } = entorno.correoRebotado;
+        const uno = await entorno.lectura.obtener("message", id);
+        const varios = await entorno.lectura.obtenerVarios("message", [id]);
+        const delHilo = (await entorno.lectura.listarPor("message", { bzzzbx_thread_id: hilo })).find((m) => m.bzzzbx_message_id === id);
+        for (const m of [uno, varios[0], delHilo]) {
+          expect(m).toBeDefined();
+          expect(m).not.toBeNull();
+          expect(m!.delivery).toBe("bounced");
+          expect(m!.delivery_detail).toBe(delivery_detail);
+          expect(m!.direction).toBe("outbound");
+        }
+      });
+
+      it("un cambio de delivery aparece en cambiosDesde y el mensaje queda bounced", async () => {
+        const entorno = await crear();
+        if (!entorno.cambioDeEntrega) return;
+        const { lectura } = entorno;
+        const { cursor } = await lectura.cambiosDesde(null);
+        await entorno.cambioDeEntrega.provocar();
+        await entorno.esperar?.();
+        const lote = await lectura.cambiosDesde(cursor);
+        expect(lote.cambios.map((c) => `${c.entidad}:${c.id}`)).toContain(`message:${entorno.cambioDeEntrega.bzzzbx_message_id}`);
+        expect((await lectura.obtener("message", entorno.cambioDeEntrega.bzzzbx_message_id))!.delivery).toBe("bounced");
+      });
     });
 
     it("da null para un ID desconocido", async () => {

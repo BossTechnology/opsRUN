@@ -83,7 +83,17 @@ export type EntradaDeHilo = {
   noEncontrado: boolean;
   /** El estado de entrega de §4.3; null si no aplica. */
   estado: { texto: string; tono: "normal" | "error" } | null;
-  /** `Edit and resend`: solo en un envío fallido (§4.3). */
+  /**
+   * El valor crudo de `Message.delivery` de un mensaje saliente (OPR-19 §6.1): para `data-entrega`, que los E2E leen
+   * sin depender del texto ni del color. Null en un entrante, una nota y un envío que todavía no es un mensaje.
+   */
+  entrega: "queued" | "sent" | "delivered" | "failed" | "bounced" | null;
+  /**
+   * A quién iba un mensaje saliente, de solo lectura (OPR-19 §6.2): el correo, o el equipo y su teléfono. Se lee de
+   * BzzzBX al pintar y nunca se guarda. Null si no se sabe o no es un saliente.
+   */
+  destinatario: string | null;
+  /** `Edit and resend`: en un envío fallido (§4.3) y en un mensaje saliente `failed` o `bounced` (OPR-19 §6.1). */
   reenviar: { modo: "customer" | "cleaner"; cuerpo: string } | null;
 };
 

@@ -146,8 +146,8 @@ Términos de la conversación del job. Detalle en `docs/spec/opr-27-conversacion
 | Término | Significado | Dónde aparece |
 |---|---|---|
 | Hilo | La columna de la conversación: un solo hilo por job con la Original request, los correos (Email), los textos (Text) y las notas (Internal note), por hora y con el estado de entrega de cada uno. Se arma con `armarHilo` (`src/lib/conversacion/`). | OPR-27 §4 |
-| Estado de entrega | Received (entrante), Sending… (instrucción pending), Sent, Queued, Delivered, Not delivered (BzzzBX), Failed (instrucción fallida, con Edit and resend), Couldn't confirm (timed out) o Internal · not sent (nota). | OPR-27 §4.3 |
-| Edit and resend | Botón de un envío Failed: copia su cuerpo al Composer en el mismo modo. Enviar crea una instrucción nueva; no reintenta la fallida. | OPR-27 S-6 |
+| Estado de entrega | Received (entrante), Sending… (instrucción pending), Queued, Sent, Delivered, Failed o Bounced (BzzzBX, con el motivo del proveedor; el correo que rebota es Bounced), Failed (instrucción fallida, con Edit and resend), Couldn't confirm (timed out) o Internal · not sent (nota). | OPR-27 §4.3, OPR-19 §4.2 |
+| Edit and resend | Botón de un envío Failed o de un mensaje saliente Failed o Bounced: copia su cuerpo al Composer en el modo de su canal, y solo se puede pulsar si el Composer puede enviar (si no, en gris con el mismo motivo). Enviar crea una instrucción nueva; no reintenta la fallida. | OPR-27 S-6, OPR-19 §6.1 |
 | AI draft | Borrador de respuesta (al cliente o al cleaner) que escribió la IA, sin decidir. Aparece en el Composer marcado "AI draft" y solo sale si el operador pulsa Send: se decide accepted (igual) o corrected (editado). Discard lo rechaza. Si la IA no produce borradores, el Composer funciona igual. | OPR-27 §5.5 |
 | Despacho de instrucciones | Entrega a BzzzBX las instrucciones `send_email` y `send_text` que ya existen en la base y las reconcilia con su estado (confirmed, failed, timed out). No crea instrucciones. Mínimo y provisional hasta OPR-23. | OPR-27 §7, `src/lib/instrucciones/` |
 ## Audit (OPR-35)
