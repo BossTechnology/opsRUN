@@ -176,7 +176,13 @@ export function armarIa(e: EntradaDeIa): VistaIa {
   const campos = Object.fromEntries(
     CAMPOS_DE_IA.map((campo): [CampoDeIa, VistaDeCampoIa] => [
       campo,
-      { campo, ...ETIQUETAS[campo], vacio: estaVacio(campo, e.borrador), abierta: abiertaDe(campo, e.sugerencias, e) },
+      {
+        campo,
+        ...ETIQUETAS[campo],
+        vacio: estaVacio(campo, e.borrador),
+        borrador: valorDelBorrador(campo, e.borrador),
+        abierta: abiertaDe(campo, e.sugerencias, e),
+      },
     ]),
   ) as Record<CampoDeIa, VistaDeCampoIa>;
 

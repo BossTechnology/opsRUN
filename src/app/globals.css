@@ -934,3 +934,74 @@ a.tarjeta:focus-visible {
   width: 100%;
   resize: vertical;
 }
+
+/* OPR-36: la IA en la pestaña de la propiedad (campos AI-marked, "AI pending" y el aviso de varios jobs). */
+.ia-pendiente {
+  color: var(--tenue);
+  font-style: italic;
+}
+
+.ia-campo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ia-propuesta,
+.ia-secundario {
+  font-size: 0.8rem;
+  color: var(--tenue);
+}
+
+.ia-enlace {
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--tenue);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.ia-controles {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+.ia-boton {
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ia-boton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ia-edicion {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.25rem;
+}
+
+.ia-opcion {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.ia-error {
+  color: var(--rojo);
+  font-size: 0.8rem;
+}
+
+.ia-aviso {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--tenue);
+  border-radius: 0.5rem;
+}

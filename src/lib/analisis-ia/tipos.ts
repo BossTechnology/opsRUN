@@ -74,6 +74,8 @@ export type VistaDeCampoIa = {
   nombreCorto: string;
   /** El borrador no tiene nada en las columnas de este campo. */
   vacio: boolean;
+  /** Lo que el borrador tiene hoy, con la forma de §4.1; null si está vacío. Es lo que Change edita. */
+  borrador: unknown;
   abierta: SugerenciaAbiertaDeIa | null;
 };
 
