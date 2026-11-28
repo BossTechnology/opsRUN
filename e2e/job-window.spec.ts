@@ -416,8 +416,11 @@ test("A13: un id que no es uuid o no existe, y un job cancelado", async ({ page 
   await control(page, { accion: "cambiar", entidad: "job", id: "bx-job-0003", parche: { status: "cancelled" } });
   await page.goto(`/job/${R(3)}`);
   await expect(page.getByTestId("stage")).toHaveText("Cancelled");
-  await expect(page.getByTestId("accion")).toBeDisabled();
-  await expect(page.locator('[data-testid="accion"] option:not([value=""])')).toHaveCount(0);
+  // Con el job cancelado solo queda Change linked job (OPR-29), y sin otro job al que cambiar sale en gris.
+  const opciones = page.locator('[data-testid="accion"] option:not([value=""])');
+  await expect(opciones).toHaveCount(1);
+  await expect(opciones).toHaveText("Change linked job — No other job to link");
+  await expect(opciones).toBeDisabled();
   await expect(page.getByTestId("go")).toBeDisabled();
 });
 
